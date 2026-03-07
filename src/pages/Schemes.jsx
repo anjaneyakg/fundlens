@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // After running your Colab pipeline, paste the Gist raw URL here:
-const DATA_URL = "YOUR_GIST_RAW_URL_HERE";
+const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 // e.g. "https://gist.githubusercontent.com/yourusername/abc123/raw/fundlens_schemes.json"
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
