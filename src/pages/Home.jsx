@@ -167,9 +167,9 @@ const TOOLS = [
   {
     icon: "💰",
     name: "Wealth Creator",
-    desc: "Project your SIP into a future corpus. What does ₹10,000/month become in 20 years?",
-    tag: "soon",
-    path: null,
+    desc: "Project your SIP into a future corpus. Forward and reverse calculator side by side — with inflation adjustment.",
+    tag: "live",
+    path: "/wealth-creator",
   },
   {
     icon: "🔄",
