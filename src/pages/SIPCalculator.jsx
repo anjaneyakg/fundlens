@@ -7,30 +7,38 @@ const style = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --navy:    #080d1a;
-    --navy2:   #0e1628;
-    --navy3:   #152035;
-    --navy4:   #1e2d47;
-    --teal:    #00d4aa;
-    --teal2:   #00a882;
-    --blue:    #3b82f6;
-    --gold:    #f59e0b;
-    --red:     #f43f5e;
-    --green:   #10b981;
-    --text:    #e8edf5;
-    --text2:   #94a3b8;
-    --border:  rgba(255,255,255,0.07);
-    --border2: rgba(0,212,170,0.2);
+    --bg:       #f7f4ef;
+    --bg2:      #ffffff;
+    --bg3:      #f0ece4;
+    --bg4:      #e8e2d8;
+    --sage:     #3d8b6f;
+    --sage-l:   #e6f4ee;
+    --sage-m:   #b8ddd0;
+    --rose:     #c2687a;
+    --rose-l:   #fceef1;
+    --indigo:   #5c6bc0;
+    --indigo-l: #eef0fb;
+    --gold:     #c8892a;
+    --gold-l:   #fdf3e3;
+    --red:      #d94f4f;
+    --green:    #2e8b57;
+    --text:     #2d2a24;
+    --text2:    #7a7060;
+    --border:   rgba(60,50,30,0.1);
+    --border-s: rgba(61,139,111,0.25);
+    --shadow:   0 2px 16px rgba(60,50,30,0.07);
+    --shadow-m: 0 6px 28px rgba(60,50,30,0.11);
   }
 
   .sip-page {
     min-height: 100vh;
-    background: var(--navy);
+    background: var(--bg);
     color: var(--text);
     font-family: 'Space Grotesk', sans-serif;
     background-image:
-      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(0,212,170,0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 50% at 10% 80%, rgba(59,130,246,0.05) 0%, transparent 55%);
+      radial-gradient(ellipse 55% 45% at 95% 0%,  rgba(61,139,111,0.09) 0%, transparent 60%),
+      radial-gradient(ellipse 45% 55% at 0%  95%, rgba(194,104,122,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 50% 50%, rgba(200,137,42,0.04)  0%, transparent 70%);
   }
 
   /* HEADER */
@@ -41,16 +49,16 @@ const style = `
   }
   .sip-eyebrow {
     font-family: 'JetBrains Mono'; font-size: 10px; letter-spacing: 3px;
-    text-transform: uppercase; color: var(--teal); margin-bottom: 12px;
+    text-transform: uppercase; color: var(--sage); margin-bottom: 12px;
     display: flex; align-items: center; gap: 10px;
   }
-  .sip-eyebrow::after { content:''; flex:1; max-width:80px; height:1px; background: var(--border2); }
+  .sip-eyebrow::after { content:''; flex:1; max-width:80px; height:1px; background: var(--border-s); }
   .sip-title {
     font-family: 'Fraunces'; font-size: clamp(2rem, 5vw, 3.2rem);
     font-weight: 900; line-height: 1.05; margin-bottom: 10px;
     color: var(--text);
   }
-  .sip-title em { font-style: italic; color: var(--teal); }
+  .sip-title em { font-style: italic; color: var(--sage); }
   .sip-subtitle { font-size: 14px; color: var(--text2); max-width: 500px; line-height: 1.6; }
 
   /* LAYOUT */
@@ -63,28 +71,27 @@ const style = `
 
   /* PANELS */
   .panel {
-    background: var(--navy2); border: 1px solid var(--border);
+    background: var(--bg2); border: 1px solid var(--border);
     border-radius: 14px; padding: 1.5rem;
+    box-shadow: var(--shadow);
   }
   .panel-sticky { position: sticky; top: 72px; }
   .panel-title {
     font-family: 'JetBrains Mono'; font-size: 10px; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--teal); margin-bottom: 1.25rem;
+    text-transform: uppercase; color: var(--sage); margin-bottom: 1.25rem;
     padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
   }
 
   /* SCHEME SEARCH */
-  .search-box {
-    position: relative; margin-bottom: 1rem;
-  }
+  .search-box { position: relative; margin-bottom: 1rem; }
   .search-input {
     width: 100%; padding: 10px 14px 10px 38px;
-    background: var(--navy3); border: 1px solid var(--border);
+    background: var(--bg3); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text);
     font-family: 'JetBrains Mono'; font-size: 12px;
-    outline: none; transition: border 0.15s;
+    outline: none; transition: border 0.15s, box-shadow 0.15s;
   }
-  .search-input:focus { border-color: var(--teal); }
+  .search-input:focus { border-color: var(--sage); box-shadow: 0 0 0 3px rgba(61,139,111,0.1); }
   .search-input::placeholder { color: var(--text2); }
   .search-icon {
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
@@ -92,31 +99,31 @@ const style = `
   }
   .search-dropdown {
     position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-    background: var(--navy3); border: 1px solid var(--border2);
-    border-radius: 8px; max-height: 220px; overflow-y: auto;
-    z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    background: var(--bg2); border: 1px solid var(--border-s);
+    border-radius: 10px; max-height: 220px; overflow-y: auto;
+    z-index: 100; box-shadow: var(--shadow-m);
   }
   .search-item {
     padding: 9px 14px; cursor: pointer; font-size: 12px;
     border-bottom: 1px solid var(--border); transition: background 0.1s;
     line-height: 1.4;
   }
-  .search-item:hover { background: var(--navy4); }
+  .search-item:hover { background: var(--sage-l); }
   .search-item:last-child { border-bottom: none; }
   .search-item-name { color: var(--text); font-size: 11px; }
   .search-item-meta { color: var(--text2); font-size: 10px; font-family: 'JetBrains Mono'; margin-top: 2px; }
   .selected-scheme {
-    background: rgba(0,212,170,0.08); border: 1px solid var(--border2);
+    background: var(--sage-l); border: 1px solid var(--border-s);
     border-radius: 8px; padding: 10px 12px; margin-bottom: 1rem;
   }
-  .selected-scheme-name { font-size: 12px; color: var(--teal); font-weight: 500; line-height: 1.4; }
+  .selected-scheme-name { font-size: 12px; color: var(--sage); font-weight: 600; line-height: 1.4; }
   .selected-scheme-meta { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--text2); margin-top: 3px; }
   .clear-btn {
     background: none; border: none; color: var(--text2); cursor: pointer;
     font-size: 11px; font-family: 'JetBrains Mono'; text-decoration: underline;
     margin-top: 4px; display: block;
   }
-  .clear-btn:hover { color: var(--red); }
+  .clear-btn:hover { color: var(--rose); }
 
   /* FORM FIELDS */
   .field { margin-bottom: 1rem; }
@@ -125,68 +132,68 @@ const style = `
     text-transform: uppercase; color: var(--text2); margin-bottom: 6px;
     display: flex; justify-content: space-between; align-items: center;
   }
-  .field-val { color: var(--teal); font-size: 11px; }
+  .field-val { color: var(--sage); font-size: 11px; font-weight: 600; }
   .field-input {
     width: 100%; padding: 9px 12px;
-    background: var(--navy3); border: 1px solid var(--border);
+    background: var(--bg3); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text);
     font-family: 'JetBrains Mono'; font-size: 13px;
-    outline: none; transition: border 0.15s;
+    outline: none; transition: border 0.15s, box-shadow 0.15s;
   }
-  .field-input:focus { border-color: var(--teal); }
+  .field-input:focus { border-color: var(--sage); box-shadow: 0 0 0 3px rgba(61,139,111,0.1); }
 
   .range-input {
-    -webkit-appearance: none; width: 100%; height: 3px;
-    border-radius: 2px; outline: none; cursor: pointer; margin-top: 4px;
+    -webkit-appearance: none; width: 100%; height: 4px;
+    border-radius: 2px; outline: none; cursor: pointer; margin-top: 6px;
   }
   .range-input::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px;
-    border-radius: 50%; background: var(--teal); cursor: pointer;
-    box-shadow: 0 0 8px rgba(0,212,170,0.4); border: 2px solid var(--navy);
+    -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--sage); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(61,139,111,0.35); border: 2px solid white;
   }
 
   /* TOGGLE */
   .toggle-row { display: flex; gap: 6px; margin-bottom: 1rem; }
   .tog-btn {
-    flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid var(--border);
-    background: transparent; color: var(--text2); cursor: pointer;
+    flex: 1; padding: 8px 0; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); cursor: pointer;
     font-family: 'JetBrains Mono'; font-size: 10px; letter-spacing: 1px;
     text-transform: uppercase; transition: all 0.15s;
   }
   .tog-btn.active {
-    background: rgba(0,212,170,0.12); border-color: var(--teal);
-    color: var(--teal);
+    background: var(--sage-l); border-color: var(--border-s);
+    color: var(--sage); font-weight: 600;
   }
 
   .divider { height: 1px; background: var(--border); margin: 1rem 0; }
 
   .calc-btn {
-    width: 100%; padding: 12px; border-radius: 8px; border: none; cursor: pointer;
-    background: linear-gradient(135deg, var(--teal), var(--blue));
-    color: var(--navy); font-family: 'JetBrains Mono'; font-size: 12px;
+    width: 100%; padding: 13px; border-radius: 10px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--sage) 0%, #5c9e7e 50%, var(--indigo) 100%);
+    color: white; font-family: 'JetBrains Mono'; font-size: 12px;
     font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
-    transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,212,170,0.2);
+    transition: all 0.2s; box-shadow: 0 4px 16px rgba(61,139,111,0.25);
     margin-top: 0.5rem;
   }
-  .calc-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,212,170,0.3); }
-  .calc-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .calc-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(61,139,111,0.35); }
+  .calc-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
   /* RESULTS */
   .results-col { display: flex; flex-direction: column; gap: 1.25rem; }
 
-  /* METRIC CARDS ROW */
-  .metrics-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
-  }
+  /* METRIC CARDS */
+  .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
   .metric-card {
-    background: var(--navy2); border: 1px solid var(--border);
+    background: var(--bg2); border: 1px solid var(--border);
     border-radius: 12px; padding: 1.25rem;
+    box-shadow: var(--shadow);
     animation: fadeUp 0.4s ease both;
   }
   @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
   .metric-card.highlight {
-    border-color: var(--border2);
-    background: linear-gradient(135deg, rgba(0,212,170,0.06), rgba(59,130,246,0.04));
+    border-color: var(--border-s);
+    background: linear-gradient(135deg, var(--sage-l), var(--indigo-l));
   }
   .metric-eyebrow {
     font-family: 'JetBrains Mono'; font-size: 9px; letter-spacing: 2px;
@@ -200,8 +207,9 @@ const style = `
 
   /* CHART PANEL */
   .chart-panel {
-    background: var(--navy2); border: 1px solid var(--border);
+    background: var(--bg2); border: 1px solid var(--border);
     border-radius: 14px; padding: 1.5rem;
+    box-shadow: var(--shadow);
     animation: fadeUp 0.5s ease both;
   }
   .chart-header {
@@ -214,19 +222,22 @@ const style = `
   }
   .chart-toggle { display: flex; gap: 4px; }
   .chart-tog {
-    padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border);
-    background: transparent; color: var(--text2); cursor: pointer;
+    padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); cursor: pointer;
     font-family: 'JetBrains Mono'; font-size: 9px; letter-spacing: 1px;
     text-transform: uppercase; transition: all 0.15s;
   }
-  .chart-tog.active { background: var(--navy4); border-color: var(--teal); color: var(--teal); }
+  .chart-tog.active {
+    background: var(--sage-l); border-color: var(--border-s); color: var(--sage);
+  }
 
   .svg-chart { width: 100%; overflow: visible; }
 
-  /* ROLLING RETURNS PANEL */
+  /* ROLLING + TABLE PANELS */
   .rolling-panel {
-    background: var(--navy2); border: 1px solid var(--border);
+    background: var(--bg2); border: 1px solid var(--border);
     border-radius: 14px; padding: 1.5rem;
+    box-shadow: var(--shadow);
     animation: fadeUp 0.6s ease both;
   }
 
@@ -236,26 +247,25 @@ const style = `
     font-family: 'JetBrains Mono'; font-size: 11px;
   }
   .year-table th {
-    text-align: right; padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
+    text-align: right; padding: 8px 10px;
+    border-bottom: 2px solid var(--border);
     color: var(--text2); font-size: 9px; letter-spacing: 1px;
-    text-transform: uppercase; font-weight: 400;
+    text-transform: uppercase; font-weight: 500;
   }
   .year-table th:first-child { text-align: left; }
   .year-table td {
-    text-align: right; padding: 8px 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    text-align: right; padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
     color: var(--text);
   }
   .year-table td:first-child { text-align: left; color: var(--text2); }
-  .year-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .year-table tr:hover td { background: var(--bg3); }
 
-  /* EMPTY / ERROR */
+  /* EMPTY / LOADING */
   .empty-state {
-    text-align: center; padding: 4rem 2rem;
-    color: var(--text2);
+    text-align: center; padding: 4rem 2rem; color: var(--text2);
   }
-  .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.5; }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.6; }
   .empty-title {
     font-family: 'Fraunces'; font-size: 1.2rem; color: var(--text);
     margin-bottom: 8px;
@@ -263,11 +273,12 @@ const style = `
   .empty-sub { font-size: 13px; line-height: 1.6; }
 
   .loading-bar {
-    height: 2px; background: var(--border); border-radius: 1px;
+    height: 3px; background: var(--bg4); border-radius: 2px;
     overflow: hidden; margin-top: 8px;
   }
   .loading-fill {
-    height: 100%; background: linear-gradient(90deg, var(--teal), var(--blue));
+    height: 100%;
+    background: linear-gradient(90deg, var(--sage-m), var(--sage), var(--indigo));
     animation: loadBar 1.5s ease-in-out infinite;
   }
   @keyframes loadBar { 0%{width:0%;margin-left:0} 50%{width:60%;margin-left:20%} 100%{width:0%;margin-left:100%} }
@@ -395,17 +406,39 @@ function computeSIP({ navMap, navDates, startDate, years, monthlyAmount, stepUpP
     });
   }
 
-  // Best/worst rolling 12-month XIRR
-  let bestRolling = -Infinity, worstRolling = Infinity;
-  for (let i = 12; i < monthlyData.length; i++) {
-    const slice = monthlyData.slice(i - 12, i + 1);
-    const cfs   = slice.map((r, j) => j < slice.length - 1 ? -r.sip : r.value);
-    const dts   = slice.map(r => r.date);
-    const r     = xirr(cfs, dts);
-    if (r !== null && isFinite(r)) {
-      bestRolling  = Math.max(bestRolling, r);
-      worstRolling = Math.min(worstRolling, r);
+  // Best/worst rolling 12-month XIRR — correct approach:
+  // For each 12-month window, track only units bought in that window
+  // Terminal value = those units × NAV at end of window
+  let bestRolling = null, worstRolling = null;
+  if (monthlyData.length >= 13) {
+    let best = -Infinity, worst = Infinity;
+    for (let end = 12; end < monthlyData.length; end++) {
+      const window = monthlyData.slice(end - 12, end + 1);
+      // Units accumulated only within this 12-month window
+      let windowUnits = 0;
+      const cfs = [], dts = [];
+      for (let i = 0; i < window.length - 1; i++) {
+        const nav = getNavOnDate(navMap, window[i].date);
+        if (!nav) continue;
+        const units = window[i].sip / nav.nav;
+        windowUnits += units;
+        cfs.push(-window[i].sip);
+        dts.push(window[i].date);
+      }
+      // Terminal cashflow = window units × NAV at end of window
+      const endNav = getNavOnDate(navMap, window[window.length - 1].date);
+      if (!endNav || windowUnits <= 0) continue;
+      const terminalValue = windowUnits * endNav.nav;
+      cfs.push(terminalValue);
+      dts.push(endNav.date);
+      const r = xirr(cfs, dts);
+      if (r !== null && isFinite(r) && r > -100 && r < 500) {
+        best  = Math.max(best, r);
+        worst = Math.min(worst, r);
+      }
     }
+    bestRolling  = best  === -Infinity ? null : best;
+    worstRolling = worst ===  Infinity ? null : worst;
   }
 
   return {
@@ -416,8 +449,8 @@ function computeSIP({ navMap, navDates, startDate, years, monthlyAmount, stepUpP
     xirr:       xirrVal,
     monthlyData,
     yearlyData,
-    bestRolling:  bestRolling  === -Infinity ? null : bestRolling,
-    worstRolling: worstRolling ===  Infinity ? null : worstRolling,
+    bestRolling:  bestRolling,
+    worstRolling: worstRolling,
     numInstallments: monthlyData.length,
   };
 }
@@ -454,8 +487,8 @@ function LineChart({ data }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="svg-chart">
       <defs>
         <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#00d4aa" stopOpacity="0.2"/>
-          <stop offset="100%" stopColor="#00d4aa" stopOpacity="0"/>
+          <stop offset="0%" stopColor="#3d8b6f" stopOpacity="0.18"/>
+          <stop offset="100%" stopColor="#3d8b6f" stopOpacity="0"/>
         </linearGradient>
       </defs>
 
@@ -463,8 +496,8 @@ function LineChart({ data }) {
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={PL} y1={t.y} x2={W-PR} y2={t.y}
-            stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-          <text x={PL-6} y={t.y+4} fill="#64748b" fontSize="9"
+            stroke="rgba(60,50,30,0.07)" strokeWidth="1"/>
+          <text x={PL-6} y={t.y+4} fill="#9a8e7e" fontSize="9"
             textAnchor="end" fontFamily="JetBrains Mono">{t.label}</text>
         </g>
       ))}
@@ -473,8 +506,8 @@ function LineChart({ data }) {
       {yearMarkers.slice(0, 12).map((m, i) => (
         <g key={i}>
           <line x1={m.x} y1={PT} x2={m.x} y2={H-PB}
-            stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>
-          <text x={m.x} y={H-PB+14} fill="#475569" fontSize="9"
+            stroke="rgba(60,50,30,0.05)" strokeWidth="1"/>
+          <text x={m.x} y={H-PB+14} fill="#9a8e7e" fontSize="9"
             textAnchor="middle" fontFamily="JetBrains Mono">{m.year}</text>
         </g>
       ))}
@@ -484,19 +517,19 @@ function LineChart({ data }) {
         fill="url(#valueGrad)"/>
 
       {/* Invested line */}
-      <path d={investPath} fill="none" stroke="#3b82f6"
+      <path d={investPath} fill="none" stroke="#5c6bc0"
         strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6"/>
 
       {/* Value line */}
-      <path d={valuePath} fill="none" stroke="#00d4aa" strokeWidth="2.5"
+      <path d={valuePath} fill="none" stroke="#3d8b6f" strokeWidth="2.5"
         strokeLinecap="round" strokeLinejoin="round"/>
 
       {/* Legend */}
       <g transform={`translate(${PL + 10}, ${PT + 8})`}>
-        <line x1="0" y1="0" x2="16" y2="0" stroke="#00d4aa" strokeWidth="2.5"/>
-        <text x="20" y="4" fill="#94a3b8" fontSize="9" fontFamily="JetBrains Mono">Portfolio Value</text>
-        <line x1="90" y1="0" x2="106" y2="0" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4 3"/>
-        <text x="110" y="4" fill="#94a3b8" fontSize="9" fontFamily="JetBrains Mono">Amount Invested</text>
+        <line x1="0" y1="0" x2="16" y2="0" stroke="#3d8b6f" strokeWidth="2.5"/>
+        <text x="20" y="4" fill="#7a7060" fontSize="9" fontFamily="JetBrains Mono">Portfolio Value</text>
+        <line x1="96" y1="0" x2="112" y2="0" stroke="#5c6bc0" strokeWidth="1.5" strokeDasharray="4 3"/>
+        <text x="116" y="4" fill="#7a7060" fontSize="9" fontFamily="JetBrains Mono">Amount Invested</text>
       </g>
     </svg>
   );
@@ -522,8 +555,8 @@ function BarChart({ data }) {
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={PL} y1={t.y} x2={W-PR} y2={t.y}
-            stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-          <text x={PL-6} y={t.y+4} fill="#64748b" fontSize="9"
+            stroke="rgba(60,50,30,0.07)" strokeWidth="1"/>
+          <text x={PL-6} y={t.y+4} fill="#9a8e7e" fontSize="9"
             textAnchor="end" fontFamily="JetBrains Mono">{t.label}</text>
         </g>
       ))}
@@ -536,23 +569,23 @@ function BarChart({ data }) {
             {/* Invested bar */}
             <rect x={x} y={yScale(d.invested)} width={bw * 0.45}
               height={barH(d.invested)}
-              fill="#3b82f6" opacity="0.5" rx="2"/>
+              fill="#5c6bc0" opacity="0.45" rx="2"/>
             {/* Value bar */}
             <rect x={x + bw * 0.5} y={yScale(d.value)} width={bw * 0.45}
               height={barH(d.value)}
-              fill={d.value >= d.invested ? "#00d4aa" : "#f43f5e"} opacity="0.8" rx="2"/>
+              fill={d.value >= d.invested ? "#3d8b6f" : "#c2687a"} opacity="0.75" rx="2"/>
             <text x={x + bw * 0.45} y={H - PB + 14}
-              fill="#475569" fontSize="9" textAnchor="middle"
+              fill="#9a8e7e" fontSize="9" textAnchor="middle"
               fontFamily="JetBrains Mono">Y{d.year}</text>
           </g>
         );
       })}
 
       <g transform={`translate(${PL + 10}, ${PT + 8})`}>
-        <rect x="0" y="-5" width="12" height="8" fill="#3b82f6" opacity="0.5" rx="1"/>
-        <text x="16" y="4" fill="#94a3b8" fontSize="9" fontFamily="JetBrains Mono">Invested</text>
-        <rect x="78" y="-5" width="12" height="8" fill="#00d4aa" opacity="0.8" rx="1"/>
-        <text x="94" y="4" fill="#94a3b8" fontSize="9" fontFamily="JetBrains Mono">Value</text>
+        <rect x="0" y="-5" width="12" height="8" fill="#5c6bc0" opacity="0.45" rx="1"/>
+        <text x="16" y="4" fill="#7a7060" fontSize="9" fontFamily="JetBrains Mono">Invested</text>
+        <rect x="78" y="-5" width="12" height="8" fill="#3d8b6f" opacity="0.75" rx="1"/>
+        <text x="94" y="4" fill="#7a7060" fontSize="9" fontFamily="JetBrains Mono">Value</text>
       </g>
     </svg>
   );
@@ -758,7 +791,7 @@ export default function SIPCalculator() {
             )}
 
             {navLoading && (
-              <div style={{fontSize:"11px",color:"var(--teal)",fontFamily:"JetBrains Mono",marginTop:"6px"}}>
+              <div style={{fontSize:"11px",color:"var(--sage)",fontFamily:"JetBrains Mono",marginTop:"6px"}}>
                 Loading NAV history...
                 <div className="loading-bar"><div className="loading-fill"/></div>
               </div>
@@ -767,7 +800,7 @@ export default function SIPCalculator() {
               <div style={{fontSize:"11px",color:"var(--red)",marginTop:"6px"}}>{navError}</div>
             )}
             {navMap && (
-              <div style={{fontSize:"10px",color:"var(--teal)",fontFamily:"JetBrains Mono",marginTop:"4px"}}>
+              <div style={{fontSize:"10px",color:"var(--sage)",fontFamily:"JetBrains Mono",marginTop:"4px"}}>
                 ✓ {Object.keys(navMap).length.toLocaleString()} NAV data points loaded
               </div>
             )}
@@ -792,7 +825,7 @@ export default function SIPCalculator() {
             </div>
             <input type="range" className="range-input"
               min="500" max="100000" step="500" value={monthlyAmount}
-              style={{background:`linear-gradient(to right,var(--teal) ${(monthlyAmount-500)/(100000-500)*100}%,var(--border) 0%)`}}
+              style={{background:`linear-gradient(to right,var(--sage) ${(monthlyAmount-500)/(100000-500)*100}%,var(--border) 0%)`}}
               onChange={e=>setMonthlyAmount(+e.target.value)}/>
             <input type="number" className="field-input" style={{marginTop:"6px"}}
               value={monthlyAmount} min="500"
@@ -808,7 +841,7 @@ export default function SIPCalculator() {
               </div>
               <input type="range" className="range-input"
                 min="5" max="25" step="1" value={stepUpPct}
-                style={{background:`linear-gradient(to right,var(--teal) ${(stepUpPct-5)/(25-5)*100}%,var(--border) 0%)`}}
+                style={{background:`linear-gradient(to right,var(--sage) ${(stepUpPct-5)/(25-5)*100}%,var(--border) 0%)`}}
                 onChange={e=>setStepUpPct(+e.target.value)}/>
             </div>
           )}
@@ -838,7 +871,7 @@ export default function SIPCalculator() {
             </div>
             <input type="range" className="range-input"
               min="1" max="30" step="1" value={years}
-              style={{background:`linear-gradient(to right,var(--teal) ${(years-1)/(30-1)*100}%,var(--border) 0%)`}}
+              style={{background:`linear-gradient(to right,var(--sage) ${(years-1)/(30-1)*100}%,var(--border) 0%)`}}
               onChange={e=>setYears(+e.target.value)}/>
           </div>
 
@@ -883,7 +916,7 @@ export default function SIPCalculator() {
                 <div className="metric-card highlight">
                   <div className="metric-eyebrow">XIRR</div>
                   <div className="metric-value" style={{
-                    color: result.xirr > 12 ? "var(--teal)" :
+                    color: result.xirr > 12 ? "var(--sage)" :
                            result.xirr > 6  ? "var(--gold)" : "var(--red)"
                   }}>
                     {fmtPct(result.xirr)}
@@ -892,7 +925,7 @@ export default function SIPCalculator() {
                 </div>
                 <div className="metric-card">
                   <div className="metric-eyebrow">Current Value</div>
-                  <div className="metric-value" style={{color:"var(--teal)"}}>
+                  <div className="metric-value" style={{color:"var(--sage)"}}>
                     {fmt(result.finalValue)}
                   </div>
                   <div className="metric-sub">
@@ -901,7 +934,7 @@ export default function SIPCalculator() {
                 </div>
                 <div className="metric-card">
                   <div className="metric-eyebrow">Total Invested</div>
-                  <div className="metric-value" style={{color:"var(--blue)"}}>
+                  <div className="metric-value" style={{color:"var(--indigo)"}}>
                     {fmt(result.totalInvested)}
                   </div>
                   <div className="metric-sub">{result.numInstallments} instalments</div>
@@ -968,7 +1001,7 @@ export default function SIPCalculator() {
                       <tr key={row.year}>
                         <td>Year {row.year}</td>
                         <td>{fmt(row.invested)}</td>
-                        <td style={{color: row.value >= row.invested ? "var(--teal)" : "var(--red)"}}>
+                        <td style={{color: row.value >= row.invested ? "var(--sage)" : "var(--red)"}}>
                           {fmt(row.value)}
                         </td>
                         <td style={{color: row.gain >= 0 ? "var(--green)" : "var(--red)"}}>
