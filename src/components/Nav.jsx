@@ -73,9 +73,9 @@ const navStyle = `
 `;
 
 const TOOLS = [
-  { path: "/loan-vs-sip", label: "Loan vs SIP" },
+  { path: "/loan-vs-sip",      label: "Loan vs SIP" },
+  { path: "/sip-performance",  label: "SIP Performance" },
   // Add new tools here as you build them:
-  // { path: "/sip-calculator",  label: "SIP Calculator" },
   // { path: "/sip-projection",  label: "Wealth Creator" },
   // { path: "/fd-calculator",   label: "FD Calculator" },
 ];
