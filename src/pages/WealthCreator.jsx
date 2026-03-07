@@ -6,21 +6,28 @@ const style = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:      #111010;
-    --bg2:     #1a1917;
-    --bg3:     #222120;
-    --bg4:     #2c2b29;
-    --amber:   #f59e0b;
-    --amber2:  #fbbf24;
-    --orange:  #f97316;
-    --green:   #22c55e;
-    --blue:    #60a5fa;
-    --red:     #f43f5e;
-    --violet:  #a78bfa;
-    --text:    #f5f0e8;
-    --text2:   #a39e94;
-    --border:  rgba(255,255,255,0.07);
-    --borderA: rgba(245,158,11,0.2);
+    --bg:      #f5f1ea;
+    --bg2:     #ffffff;
+    --bg3:     #ede8df;
+    --bg4:     #e4ddd1;
+    --amber:   #b07d2e;
+    --amber-l: #fdf5e6;
+    --amber-b: rgba(176,125,46,0.2);
+    --orange:  #c4622d;
+    --orange-l:#fef0e8;
+    --green:   #2e7d52;
+    --green-l: #e8f5ee;
+    --blue:    #3d5fa0;
+    --blue-l:  #edf1fb;
+    --violet:  #6b52a8;
+    --violet-l:#f2eefb;
+    --red:     #b94040;
+    --text:    #2a2318;
+    --text2:   #7a6e5e;
+    --border:  rgba(60,45,20,0.1);
+    --borderA: rgba(176,125,46,0.22);
+    --shadow:  0 2px 14px rgba(60,45,20,0.07);
+    --shadow-m:0 6px 28px rgba(60,45,20,0.11);
   }
 
   .wc-page {
@@ -29,8 +36,9 @@ const style = `
     color: var(--text);
     font-family: 'Outfit', sans-serif;
     background-image:
-      radial-gradient(ellipse 50% 40% at 90% 5%, rgba(245,158,11,0.07) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 50% at 5% 90%, rgba(249,115,22,0.05) 0%, transparent 55%);
+      radial-gradient(ellipse 55% 40% at 95% 0%,  rgba(176,125,46,0.09) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 50% at 0%  95%, rgba(196,98,45,0.07)  0%, transparent 60%),
+      radial-gradient(ellipse 35% 35% at 50% 50%, rgba(46,125,82,0.04)  0%, transparent 70%);
   }
 
   /* HEADER */
@@ -53,9 +61,7 @@ const style = `
   .wc-subtitle { font-size: 14px; color: var(--text2); margin-top: 8px; line-height: 1.6; max-width: 440px; }
 
   /* MODE TABS */
-  .mode-tabs {
-    display: flex; gap: 6px; align-self: flex-start; margin-top: 1rem;
-  }
+  .mode-tabs { display: flex; gap: 6px; align-self: flex-start; margin-top: 1rem; }
   .mode-tab {
     padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border);
     background: transparent; color: var(--text2); cursor: pointer;
@@ -63,23 +69,20 @@ const style = `
     text-transform: uppercase; transition: all 0.15s;
   }
   .mode-tab.active {
-    background: rgba(245,158,11,0.12); border-color: var(--amber); color: var(--amber);
+    background: var(--amber-l); border-color: var(--borderA); color: var(--amber);
   }
 
-  /* MAIN LAYOUT — two columns for Forward + Reverse */
+  /* LAYOUT */
   .wc-body {
-    max-width: 1300px; margin: 0 auto;
-    padding: 1.5rem 2rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto;
-    gap: 1.25rem;
+    max-width: 1300px; margin: 0 auto; padding: 1.5rem 2rem;
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto; gap: 1.25rem;
   }
 
   /* PANELS */
   .panel {
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 14px; padding: 1.5rem;
+    border-radius: 14px; padding: 1.5rem; box-shadow: var(--shadow);
   }
   .panel.amber-glow { border-color: var(--borderA); }
   .panel-eyebrow {
@@ -90,51 +93,53 @@ const style = `
   }
   .panel-eyebrow .badge {
     padding: 2px 8px; border-radius: 10px; font-size: 8px;
-    background: rgba(245,158,11,0.12); border: 1px solid var(--borderA);
+    background: var(--amber-l); border: 1px solid var(--borderA);
   }
 
-  /* SHARED INPUTS */
+  /* INPUTS */
   .field { margin-bottom: 1rem; }
   .field-label {
     font-family: 'IBM Plex Mono'; font-size: 9px; letter-spacing: 1.5px;
     text-transform: uppercase; color: var(--text2); margin-bottom: 6px;
     display: flex; justify-content: space-between;
   }
-  .field-val { color: var(--amber); font-size: 10px; }
+  .field-val { color: var(--amber); font-size: 10px; font-weight: 600; }
   .field-input {
     width: 100%; padding: 9px 12px;
     background: var(--bg3); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text);
     font-family: 'IBM Plex Mono'; font-size: 13px;
-    outline: none; transition: border 0.15s;
+    outline: none; transition: border 0.15s, box-shadow 0.15s;
   }
-  .field-input:focus { border-color: var(--amber); }
+  .field-input:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(176,125,46,0.1); }
   .range-input {
-    -webkit-appearance: none; width: 100%; height: 3px;
+    -webkit-appearance: none; width: 100%; height: 4px;
     border-radius: 2px; outline: none; cursor: pointer; margin-top: 6px;
   }
   .range-input::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px;
+    -webkit-appearance: none; width: 16px; height: 16px;
     border-radius: 50%; background: var(--amber); cursor: pointer;
-    box-shadow: 0 0 8px rgba(245,158,11,0.5); border: 2px solid var(--bg);
+    box-shadow: 0 2px 8px rgba(176,125,46,0.4); border: 2px solid white;
   }
   .tog-row { display: flex; gap: 6px; margin-bottom: 1rem; }
   .tog-btn {
-    flex: 1; padding: 7px 0; border-radius: 6px;
-    border: 1px solid var(--border); background: transparent;
+    flex: 1; padding: 8px 0; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg3);
     color: var(--text2); cursor: pointer;
     font-family: 'IBM Plex Mono'; font-size: 9px; letter-spacing: 1px;
     text-transform: uppercase; transition: all 0.15s;
   }
-  .tog-btn.active { background: rgba(245,158,11,0.1); border-color: var(--amber); color: var(--amber); }
+  .tog-btn.active {
+    background: var(--amber-l); border-color: var(--borderA); color: var(--amber); font-weight: 600;
+  }
   .divider { height: 1px; background: var(--border); margin: 1rem 0; }
 
-  /* SHARED PARAMS ROW — spans both columns */
+  /* SHARED PARAMS */
   .shared-panel {
     grid-column: 1 / -1;
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 14px; padding: 1.25rem 1.5rem;
+    border-radius: 14px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow);
   }
   .shared-label {
     font-family: 'IBM Plex Mono'; font-size: 9px; letter-spacing: 2px;
@@ -143,9 +148,7 @@ const style = `
   }
 
   /* RESULT CARDS */
-  .result-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;
-  }
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
   .r-card {
     background: var(--bg3); border: 1px solid var(--border);
     border-radius: 10px; padding: 1rem;
@@ -154,24 +157,21 @@ const style = `
   @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
   .r-card.hero {
     grid-column: 1 / -1;
-    background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(249,115,22,0.05));
+    background: linear-gradient(135deg, var(--amber-l), var(--orange-l));
     border-color: var(--borderA);
   }
   .r-eyebrow {
     font-family: 'IBM Plex Mono'; font-size: 8px; letter-spacing: 2px;
     text-transform: uppercase; color: var(--text2); margin-bottom: 6px;
   }
-  .r-value {
-    font-size: 1.5rem; font-weight: 800; line-height: 1;
-    margin-bottom: 3px;
-  }
+  .r-value { font-size: 1.5rem; font-weight: 800; line-height: 1; margin-bottom: 3px; }
   .r-sub { font-size: 11px; color: var(--text2); }
 
-  /* COMPARE CHART — spans full width */
+  /* CHART */
   .chart-panel {
     grid-column: 1 / -1;
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 14px; padding: 1.5rem;
+    border-radius: 14px; padding: 1.5rem; box-shadow: var(--shadow);
     animation: fadeUp 0.5s ease both;
   }
   .chart-header {
@@ -194,32 +194,29 @@ const style = `
   .table-panel {
     grid-column: 1 / -1;
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 14px; padding: 1.5rem;
+    border-radius: 14px; padding: 1.5rem; box-shadow: var(--shadow);
     animation: fadeUp 0.6s ease both;
   }
-  .yr-table {
-    width: 100%; border-collapse: collapse;
-    font-family: 'IBM Plex Mono'; font-size: 11px;
-  }
+  .yr-table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono'; font-size: 11px; }
   .yr-table th {
-    text-align: right; padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
+    text-align: right; padding: 8px 10px;
+    border-bottom: 2px solid var(--border);
     color: var(--text2); font-size: 9px; letter-spacing: 1px;
-    text-transform: uppercase; font-weight: 400;
+    text-transform: uppercase; font-weight: 500;
   }
   .yr-table th:first-child { text-align: left; }
   .yr-table td {
-    text-align: right; padding: 8px 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    text-align: right; padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
   }
   .yr-table td:first-child { text-align: left; color: var(--text2); }
-  .yr-table tr:last-child td { border-bottom: none; font-weight: 600; }
-  .yr-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .yr-table tr:last-child td { border-bottom: none; font-weight: 700; }
+  .yr-table tr:hover td { background: var(--bg3); }
 
   /* REVERSE SOLVER */
   .reverse-answer {
-    background: linear-gradient(135deg, rgba(96,165,250,0.08), rgba(167,139,250,0.05));
-    border: 1px solid rgba(96,165,250,0.2);
+    background: linear-gradient(135deg, var(--blue-l), var(--violet-l));
+    border: 1px solid rgba(61,95,160,0.18);
     border-radius: 10px; padding: 1.25rem; margin-top: 1rem;
     animation: fadeUp 0.35s ease both;
   }
@@ -228,16 +225,11 @@ const style = `
     text-transform: uppercase; color: var(--blue); margin-bottom: 8px;
   }
   .reverse-answer-value {
-    font-size: 2rem; font-weight: 800; color: var(--blue); line-height: 1;
-    margin-bottom: 4px;
+    font-size: 2rem; font-weight: 800; color: var(--blue); line-height: 1; margin-bottom: 4px;
   }
   .reverse-answer-sub { font-size: 12px; color: var(--text2); }
-  .reverse-sub-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem;
-  }
-  .reverse-sub-card {
-    background: var(--bg3); border-radius: 8px; padding: 0.75rem;
-  }
+  .reverse-sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
+  .reverse-sub-card { background: var(--bg3); border-radius: 8px; padding: 0.75rem; }
 
   @media (max-width: 900px) {
     .wc-body { grid-template-columns: 1fr; }
@@ -369,27 +361,27 @@ function CompareChart({ fixedData, stepupData, showStepup }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="svg-chart">
       <defs>
         <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.18"/>
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0"/>
+          <stop offset="0%" stopColor="#b07d2e" stopOpacity="0.18"/>
+          <stop offset="100%" stopColor="#b07d2e" stopOpacity="0"/>
         </linearGradient>
         <linearGradient id="violetGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.14"/>
-          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0"/>
+          <stop offset="0%" stopColor="#6b52a8" stopOpacity="0.14"/>
+          <stop offset="100%" stopColor="#6b52a8" stopOpacity="0"/>
         </linearGradient>
       </defs>
 
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={PL} y1={t.y} x2={W - PR} y2={t.y}
-            stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-          <text x={PL - 6} y={t.y + 4} fill="#6b7280" fontSize="9"
+            stroke="rgba(60,45,20,0.06)" strokeWidth="1"/>
+          <text x={PL - 6} y={t.y + 4} fill="#9a8070" fontSize="9"
             textAnchor="end" fontFamily="IBM Plex Mono">{fmtC(t.v)}</text>
         </g>
       ))}
 
       {xTicks.map((d, i) => (
         <text key={i} x={xS(fixedData.indexOf(d))} y={H - PB + 14}
-          fill="#6b7280" fontSize="9" textAnchor="middle"
+          fill="#9a8070" fontSize="9" textAnchor="middle"
           fontFamily="IBM Plex Mono">Y{d.year}</text>
       ))}
 
@@ -398,7 +390,7 @@ function CompareChart({ fixedData, stepupData, showStepup }) {
         d={`${makePath(fixedData, "invested")} L${xS(fixedData.length-1)},${PT+iH} L${PL},${PT+iH} Z`}
         fill="rgba(96,165,250,0.06)"/>
       <path d={makePath(fixedData, "invested")} fill="none"
-        stroke="#60a5fa" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5"/>
+        stroke="#3d5fa0" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5"/>
 
       {/* Step-up area + line */}
       {showStepup && (
@@ -407,7 +399,7 @@ function CompareChart({ fixedData, stepupData, showStepup }) {
             d={`${makePath(stepupData, "corpus")} L${xS(stepupData.length-1)},${PT+iH} L${PL},${PT+iH} Z`}
             fill="url(#violetGrad)"/>
           <path d={makePath(stepupData, "corpus")} fill="none"
-            stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            stroke="#6b52a8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
         </>
       )}
 
@@ -416,7 +408,7 @@ function CompareChart({ fixedData, stepupData, showStepup }) {
         d={`${makePath(fixedData, "corpus")} L${xS(fixedData.length-1)},${PT+iH} L${PL},${PT+iH} Z`}
         fill="url(#amberGrad)"/>
       <path d={makePath(fixedData, "corpus")} fill="none"
-        stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        stroke="#b07d2e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -654,10 +646,10 @@ export default function WealthCreator() {
         </div>
 
         {/* ── REVERSE PANEL ── */}
-        <div className="panel" style={{borderColor:"rgba(96,165,250,0.2)"}}>
+        <div className="panel" style={{borderColor:"rgba(61,95,160,0.18)"}}>
           <div className="panel-eyebrow" style={{color:"var(--blue)"}}>
             ◈ Reverse Calculator
-            <span className="badge" style={{background:"rgba(96,165,250,0.1)",borderColor:"rgba(96,165,250,0.2)",color:"var(--blue)"}}>
+            <span className="badge" style={{background:"rgba(61,95,160,0.08)",borderColor:"rgba(61,95,160,0.18)",color:"var(--blue)"}}>
               How much SIP do I need?
             </span>
           </div>
@@ -680,10 +672,10 @@ export default function WealthCreator() {
             <div className="field-label">SIP Type for Reverse</div>
             <div className="tog-row">
               <button className={`tog-btn ${reverseType==="fixed"?"active":""}`}
-                style={reverseType==="fixed"?{background:"rgba(96,165,250,0.1)",borderColor:"var(--blue)",color:"var(--blue)"}:{}}
+                style={reverseType==="fixed"?{background:"rgba(61,95,160,0.08)",borderColor:"var(--blue)",color:"var(--blue)"}:{}}
                 onClick={()=>setReverseType("fixed")}>Fixed</button>
               <button className={`tog-btn ${reverseType==="stepup"?"active":""}`}
-                style={reverseType==="stepup"?{background:"rgba(96,165,250,0.1)",borderColor:"var(--blue)",color:"var(--blue)"}:{}}
+                style={reverseType==="stepup"?{background:"rgba(61,95,160,0.08)",borderColor:"var(--blue)",color:"var(--blue)"}:{}}
                 onClick={()=>setReverseType("stepup")}>Step-up</button>
             </div>
           </div>
@@ -730,7 +722,7 @@ export default function WealthCreator() {
           {rev.saving > 0 && (
             <div style={{
               marginTop:"0.75rem",padding:"0.75rem 1rem",borderRadius:"8px",
-              background:"rgba(34,197,94,0.07)",border:"1px solid rgba(34,197,94,0.15)",
+              background:"rgba(46,125,82,0.07)",border:"1px solid rgba(46,125,82,0.15)",
               fontSize:"12px",color:"var(--text2)",lineHeight:"1.6"
             }}>
               💡 With {reverseStepUp}% annual step-up, you invest{" "}
@@ -746,15 +738,15 @@ export default function WealthCreator() {
             <div className="chart-title">◈ Corpus Growth — Fixed vs Step-up SIP</div>
             <div className="chart-legend">
               <div className="legend-item">
-                <div className="legend-dot" style={{background:"#60a5fa"}}/>
+                <div className="legend-dot" style={{background:"#3d5fa0"}}/>
                 Amount Invested
               </div>
               <div className="legend-item">
-                <div className="legend-dot" style={{background:"#f59e0b"}}/>
+                <div className="legend-dot" style={{background:"#b07d2e"}}/>
                 Fixed SIP Corpus
               </div>
               <div className="legend-item">
-                <div className="legend-dot" style={{background:"#a78bfa"}}/>
+                <div className="legend-dot" style={{background:"#6b52a8"}}/>
                 Step-up Corpus ({stepUpPct}%)
               </div>
             </div>
