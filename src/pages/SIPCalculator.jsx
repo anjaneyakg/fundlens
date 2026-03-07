@@ -559,7 +559,7 @@ function BarChart({ data }) {
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-const DATA_URL = "YOUR_GIST_RAW_URL_HERE"; // ← same Gist URL as Schemes.jsx
+const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 
 export default function SIPCalculator() {
   // Scheme search
