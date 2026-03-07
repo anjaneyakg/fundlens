@@ -160,9 +160,9 @@ const TOOLS = [
   {
     icon: "📈",
     name: "SIP Performance",
-    desc: "Calculate actual historical returns of a SIP in any scheme over any period.",
-    tag: "soon",
-    path: null,
+    desc: "Calculate actual historical returns of a SIP in any scheme over any period. Real NAV data, true XIRR.",
+    tag: "live",
+    path: "/sip-performance",
   },
   {
     icon: "💰",
