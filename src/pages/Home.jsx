@@ -181,9 +181,9 @@ const TOOLS = [
   {
     icon: "🏦",
     name: "FD Calculator",
-    desc: "Full matrix — all tenures, interest types, frequencies, payout options, senior citizen rates.",
-    tag: "soon",
-    path: null,
+    desc: "Full matrix — dual tenure comparison, all compounding frequencies, payout options, senior citizen rates, real returns after inflation.",
+    tag: "live",
+    path: "/fd-calculator",
   },
   {
     icon: "🔃",
