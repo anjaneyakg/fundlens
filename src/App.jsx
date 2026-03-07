@@ -561,14 +561,15 @@ export default function App() {
   const [error,        setError]        = useState(null);
 
   // ── UI state
-  const [search,    setSearch]    = useState("");
-  const [amcFilter, setAmcFilter] = useState("All");
-  const [catFilter, setCatFilter] = useState("All");
-  const [typeFilter,setTypeFilter]= useState("All");
-  const [sortKey,   setSortKey]   = useState("1Y");
-  const [sortDir,   setSortDir]   = useState(-1);
-  const [selected,  setSelected]  = useState(null);
-  const [tab,       setTab]       = useState("schemes");
+  const [search,      setSearch]      = useState("");
+  const [amcFilter,   setAmcFilter]   = useState("All");
+  const [catFilter,   setCatFilter]   = useState("All");
+  const [typeFilter,  setTypeFilter]  = useState("All");
+  const [planFilter,  setPlanFilter]  = useState("Direct");
+  const [sortKey,     setSortKey]     = useState("1Y");
+  const [sortDir,     setSortDir]     = useState(-1);
+  const [selected,    setSelected]    = useState(null);
+  const [tab,         setTab]         = useState("schemes");
 
   // ── Fetch data
   const loadData = useCallback(async () => {
@@ -602,9 +603,10 @@ export default function App() {
 
   // ── Filtering & sorting
   const filtered = allSchemes.filter(s => {
-    if (amcFilter  !== "All" && s.amc      !== amcFilter)  return false;
-    if (typeFilter !== "All" && s.type     !== typeFilter)  return false;
-    if (catFilter  !== "All" && s.category !== catFilter)   return false;
+    if (planFilter !== "All" && s.plan     !== planFilter)  return false;
+    if (amcFilter  !== "All" && s.amc      !== amcFilter)   return false;
+    if (typeFilter !== "All" && s.type     !== typeFilter)   return false;
+    if (catFilter  !== "All" && s.category !== catFilter)    return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) &&
                   !s.amc.toLowerCase().includes(search.toLowerCase()))  return false;
     return true;
@@ -624,7 +626,7 @@ export default function App() {
   };
 
   const peers = selected
-    ? allSchemes.filter(s => s.category === selected.category)
+    ? allSchemes.filter(s => s.category === selected.category && s.plan === selected.plan)
     : [];
 
   const sortCols = [
@@ -640,8 +642,6 @@ export default function App() {
   // ── Loading / Error states
   if (loading) return <><style>{style}</style><LoadingScreen progress={loadPct} message={loadMsg}/></>;
   if (error)   return <><style>{style}</style><ErrorScreen error={error} onRetry={loadData}/></>;
-
-  const typeCategories = ["All","Equity","Debt","Hybrid","Passive","FoF"];
 
   return (
     <div className="app">
@@ -712,9 +712,17 @@ export default function App() {
               value={search} onChange={e=>setSearch(e.target.value)} />
           </div>
 
-          {/* Asset type quick filter */}
+          {/* Direct / Regular toggle */}
           <div className="toggle-group">
-            {typeCategories.map(t => (
+            {["All","Direct","Regular"].map(p => (
+              <button key={p} className={`toggle-btn ${planFilter===p?"active":""}`}
+                onClick={()=>setPlanFilter(p)}>{p}</button>
+            ))}
+          </div>
+
+          {/* Asset type filter */}
+          <div className="toggle-group">
+            {["All","Equity","Debt","Hybrid","Passive","FoF"].map(t => (
               <button key={t} className={`toggle-btn ${typeFilter===t?"active":""}`}
                 onClick={()=>setTypeFilter(t)}>{t}</button>
             ))}
