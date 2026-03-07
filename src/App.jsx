@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Analytics } from "@vercel/analytics/react";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // After running your Colab pipeline, paste the Gist raw URL here:
@@ -953,6 +954,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Analytics />
     </div>
   );
 }
