@@ -76,7 +76,7 @@ const TOOLS = [
   { path: "/loan-vs-sip",      label: "Loan vs SIP" },
   { path: "/sip-performance",  label: "SIP Performance" },
   { path: "/wealth-creator",   label: "Wealth Creator" },
-  // { path: "/fd-calculator",   label: "FD Calculator" },
+  { path: "/fd-calculator",    label: "FD Calculator" },
 ];
 
 export default function Nav() {
