@@ -224,7 +224,7 @@ const GROUPS = [
     id: "D", label: "Fixed Income",
     items: [
       { code:"D1", name:"FD Calculator",         tagline:"What will my FD earn?",                 path:"/fd-calculator",    live:true  },
-      { code:"D2", name:"FD vs MF",              tagline:"Is FD better than debt fund?",          path:"/fd-vs-mf",         live:false },
+      { code:"D2", name:"FD vs MF",              tagline:"Is FD better than debt fund?",          path:"/fd-vs-mf",         live:true },
       { code:"D3", name:"RD Calculator",         tagline:"Recurring deposit returns",             path:"/rd-calculator",    live:false },
     ]
   },
