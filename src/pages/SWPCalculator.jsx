@@ -300,19 +300,18 @@ function BarChart({ rows }) {
 }
 
 // ─── CORPUS DECAY CHART ────────────────────────────────────────────────────
-function CorpusDecayChart({ rows }) {
+function CorpusDecayChart({ rows, initialCorpus }) {
   if (!rows || rows.length < 2) return null
   const w = 520, h = 160, pad = { l: 50, r: 20, t: 10, b: 30 }
   const values = rows.map(r => r.closingValue)
-  const maxV = Math.max(...values)
+  const maxV = Math.max(...values, initialCorpus)
   const scaleX = i => pad.l + (i / (rows.length - 1)) * (w - pad.l - pad.r)
   const scaleY = v => pad.t + (1 - v / maxV) * (h - pad.t - pad.b)
   const pts = rows.map((r, i) => `${scaleX(i)},${scaleY(r.closingValue)}`).join(' ')
-  // Real value line
-  const realPts = rows.map((r, i) => `${scaleX(i)},${scaleY(r.closingValue * 0.85)}`).join(' ')
 
   // Y axis labels
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map(p => ({ p, v: maxV * p }))
+  const corpusLineY = scaleY(initialCorpus)
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -327,6 +326,12 @@ function CorpusDecayChart({ rows }) {
             </text>
           </g>
         ))}
+        {/* Initial corpus reference line */}
+        <line x1={pad.l} x2={w - pad.r} y1={corpusLineY} y2={corpusLineY}
+          stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.8" />
+        <text x={w - pad.r + 2} y={corpusLineY + 4} fontSize="8" fill="#d97706" fontFamily="monospace">
+          Initial
+        </text>
         {/* Corpus line */}
         <polyline points={pts} fill="none" stroke="#5b6af0" strokeWidth="2.5"
           strokeLinejoin="round" strokeLinecap="round" />
@@ -348,7 +353,9 @@ function CorpusDecayChart({ rows }) {
         ))}
         {/* Legend */}
         <line x1={pad.l} x2={pad.l + 20} y1={12} y2={12} stroke="#5b6af0" strokeWidth="2.5" />
-        <text x={pad.l + 25} y={16} fontSize="9" fill="#5b6af0">Corpus Value</text>
+        <text x={pad.l + 25} y={16} fontSize="9" fill="#5b6af0">Corpus</text>
+        <line x1={pad.l + 70} x2={pad.l + 90} y1={12} y2={12} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4,2" />
+        <text x={pad.l + 95} y={16} fontSize="9" fill="#d97706">Initial corpus</text>
       </svg>
     </div>
   )
@@ -964,48 +971,126 @@ export default function SWPCalculator() {
                       }
                     </div>
 
-                    {/* Stats Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }} className="swp-stats">
-                      <div style={{ ...S.statCard(true), gridColumn: 'span 2' }}>
-                        <div style={S.statLabel(true)}>Final Corpus</div>
-                        <div style={{ ...S.statValue(true), fontSize: '1.4rem' }}>{fmt(result.finalCorpus)}</div>
-                        <div style={S.statSub(true)}>{result.rows.length} months simulated · XIRR {fmtPct(result.xirrVal)}</div>
-                      </div>
-                      <div style={{ ...S.statCard(false), gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <CorpusGauge pct={pctRemaining} />
-                      </div>
-                      <div style={S.statCard(false)}>
-                        <div style={S.statLabel(false)}>Total Withdrawn</div>
-                        <div style={S.statValue(false)}>{fmt(result.totalWithdrawn)}</div>
-                        <div style={S.statSub(false)}>Gross cashflows</div>
-                      </div>
-                      <div style={S.statCard(false)}>
-                        <div style={S.statLabel(false)}>Total Tax Paid</div>
-                        <div style={{ ...S.statValue(false), color: '#dc2626' }}>{fmt(result.totalTax)}</div>
-                        <div style={S.statSub(false)}>STCG + LTCG</div>
-                      </div>
-                      <div style={{ ...S.statCard(false), borderLeft: '3px solid #dc2626' }}>
-                        <div style={{ ...S.statLabel(false), color: '#dc2626' }}>Tax / Withdrawals</div>
-                        <div style={{ ...S.statValue(false), color: '#dc2626' }}>
-                          {result.totalWithdrawn > 0
-                            ? ((result.totalTax / result.totalWithdrawn) * 100).toFixed(2) + '%'
-                            : '—'}
+                    {/* ── 4 KEY TAKEAWAY CARDS ── */}
+                    {(() => {
+                      const comfortAbs = result.finalCorpus - corpus
+                      const comfortRatio = comfortAbs / corpus       // can be negative
+                      const comfortPositive = comfortAbs >= 0
+                      const taxPct = result.totalWithdrawn > 0
+                        ? (result.totalTax / result.totalWithdrawn) * 100 : 0
+
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }} className="swp-stats">
+
+                          {/* 1 — Final Corpus */}
+                          <div style={{
+                            background: 'linear-gradient(135deg, #3d3560 0%, #5b4fa0 100%)',
+                            borderRadius: '14px', padding: '18px 16px',
+                            boxShadow: '0 4px 20px rgba(61,53,96,0.2)',
+                          }}>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', marginBottom: '8px' }}>
+                              Final Corpus
+                            </div>
+                            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: '700', color: '#fff', lineHeight: 1.1 }}>
+                              {fmt(result.finalCorpus)}
+                            </div>
+                            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '6px' }}>
+                              {result.rows.length}m simulated · XIRR {fmtPct(result.xirrVal)}
+                            </div>
+                          </div>
+
+                          {/* 2 — % Remaining */}
+                          {(() => {
+                            const pct = pctRemaining * 100
+                            const color = pct >= 60 ? '#22c55e' : pct >= 30 ? '#f59e0b' : '#ef4444'
+                            const bg = pct >= 60 ? 'rgba(34,197,94,0.08)' : pct >= 30 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)'
+                            const border = pct >= 60 ? 'rgba(34,197,94,0.3)' : pct >= 30 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'
+                            return (
+                              <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: '14px', padding: '18px 16px' }}>
+                                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '8px' }}>
+                                  % Remaining
+                                </div>
+                                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: '700', color, lineHeight: 1.1 }}>
+                                  {pct.toFixed(1)}%
+                                </div>
+                                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
+                                  of ₹{(corpus/1e5).toFixed(1)}L initial corpus
+                                </div>
+                                {/* mini bar */}
+                                <div style={{ marginTop: '8px', height: '4px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: '4px', transition: 'width 0.6s ease' }} />
+                                </div>
+                              </div>
+                            )
+                          })()}
+
+                          {/* 3 — Tax / Withdrawals */}
+                          <div style={{ background: 'rgba(220,38,38,0.06)', border: '1.5px solid rgba(220,38,38,0.2)', borderRadius: '14px', padding: '18px 16px' }}>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '8px' }}>
+                              Tax / Withdrawals
+                            </div>
+                            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: '700', color: '#dc2626', lineHeight: 1.1 }}>
+                              {taxPct.toFixed(2)}%
+                            </div>
+                            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
+                              {fmt(result.totalTax)} total tax drag
+                            </div>
+                            {/* STCG vs LTCG split */}
+                            {(() => {
+                              const stcg = result.rows.filter(r => r.gainType === 'STCG').reduce((s, r) => s + r.taxPayable, 0)
+                              const ltcg = result.rows.filter(r => r.gainType === 'LTCG').reduce((s, r) => s + r.taxPayable, 0)
+                              const total = stcg + ltcg || 1
+                              return (
+                                <div style={{ marginTop: '8px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                  <div style={{ height: '4px', borderRadius: '4px 0 0 4px', background: '#f59e0b', width: `${(stcg/total)*100}%`, minWidth: stcg > 0 ? '4px' : '0' }} />
+                                  <div style={{ height: '4px', borderRadius: '0 4px 4px 0', background: '#16a34a', width: `${(ltcg/total)*100}%`, minWidth: ltcg > 0 ? '4px' : '0' }} />
+                                  <span style={{ fontSize: '9px', color: '#b0a8c8', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', marginLeft: '2px' }}>
+                                    ST·LT
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                          {/* 4 — Comfort Ratio */}
+                          <div style={{
+                            background: comfortPositive ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)',
+                            border: `1.5px solid ${comfortPositive ? 'rgba(34,197,94,0.28)' : 'rgba(239,68,68,0.28)'}`,
+                            borderRadius: '14px', padding: '18px 16px',
+                          }}>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                              Comfort Ratio
+                              <span style={{
+                                fontSize: '8px', padding: '1px 5px', borderRadius: '6px',
+                                background: comfortPositive ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                                color: comfortPositive ? '#15803d' : '#dc2626',
+                              }}>{comfortPositive ? '✓ above' : '✗ below'}</span>
+                            </div>
+                            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: '700', color: comfortPositive ? '#15803d' : '#dc2626', lineHeight: 1.1 }}>
+                              {comfortPositive ? '+' : ''}{(comfortRatio * 100).toFixed(1)}%
+                            </div>
+                            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
+                              {comfortPositive
+                                ? `${fmt(comfortAbs)} above initial corpus`
+                                : `${fmt(Math.abs(comfortAbs))} below initial corpus`}
+                            </div>
+                            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: comfortPositive ? '#16a34a' : '#dc2626', marginTop: '4px', fontStyle: 'italic' }}>
+                              {comfortPositive
+                                ? 'Corpus has grown despite withdrawals'
+                                : 'Withdrawals have eroded principal'}
+                            </div>
+                          </div>
+
                         </div>
-                        <div style={S.statSub(false)}>Tax drag on cashflows</div>
-                      </div>
-                      <div style={{ ...S.statCard(false), borderLeft: '3px solid #16a34a' }}>
-                        <div style={{ ...S.statLabel(false), color: '#16a34a' }}>Net After-Tax</div>
-                        <div style={{ ...S.statValue(false), color: '#15803d' }}>{fmt(result.totalWithdrawn - result.totalTax)}</div>
-                        <div style={S.statSub(false)}>In-hand cashflows</div>
-                      </div>
-                    </div>
+                      )
+                    })()}
 
                     {/* Corpus Decay Chart */}
                     <div style={{ marginBottom: '20px' }}>
                       <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '10px' }}>
                         Corpus Decay Over Time
                       </div>
-                      <CorpusDecayChart rows={result.rows} />
+                      <CorpusDecayChart rows={result.rows} initialCorpus={corpus} />
                     </div>
 
                     {/* Tabs */}
