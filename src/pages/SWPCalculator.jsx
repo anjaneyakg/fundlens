@@ -399,9 +399,19 @@ export default function SWPCalculator() {
 
   // Load schemes
   useEffect(() => {
-    fetch(DATA_URL).then(r => r.json()).then(data => {
-      setSchemes(Array.isArray(data) ? data : [])
-    }).catch(() => {})
+    fetch(DATA_URL)
+      .then(r => r.json())
+      .then(data => {
+        const raw = Array.isArray(data) ? data : []
+        // Normalize: support both camelCase and snake_case field names from Gist
+        const normalized = raw.map(s => ({
+          schemeCode: s.schemeCode || s.scheme_code || s.Scheme_Code || '',
+          schemeName: s.schemeName || s.scheme_name || s.Scheme_Name || '',
+          amcName:    s.amcName    || s.amc_name    || s.AMC_Name    || s.amc || '',
+        }))
+        setSchemes(normalized)
+      })
+      .catch(err => console.error('SWP: Failed to load schemes', err))
   }, [])
 
   // Scheme search filter
@@ -697,14 +707,16 @@ export default function SWPCalculator() {
                     <div style={S.fieldGroup}>
                       <label style={S.label}>Scheme</label>
                       <div style={{ position: 'relative' }}>
-                        <input style={S.input} placeholder="Search scheme name..."
+                        <input style={S.input} placeholder="Search scheme name or AMC..."
                           value={schemeSearch}
                           onChange={e => { setSchemeSearch(e.target.value); setSearchOpen(true) }}
-                          onFocus={() => setSearchOpen(true)} />
+                          onFocus={() => setSearchOpen(true)}
+                          onBlur={() => setTimeout(() => setSearchOpen(false), 200)} />
                         {searchOpen && filteredSchemes.length > 0 && (
                           <div className="swp-search-dropdown">
                             {filteredSchemes.map(s => (
                               <div key={s.schemeCode} className="swp-scheme-item"
+                                onMouseDown={e => e.preventDefault()}
                                 onClick={() => {
                                   setSelectedScheme(s)
                                   setSchemeSearch(s.schemeName)
@@ -719,6 +731,18 @@ export default function SWPCalculator() {
                                 <div className="swp-scheme-amc">{s.amcName}</div>
                               </div>
                             ))}
+                          </div>
+                        )}
+                        {schemeSearch.trim().length > 1 && filteredSchemes.length === 0 && schemes.length > 0 && (
+                          <div className="swp-search-dropdown">
+                            <div style={{ padding: '12px 14px', fontSize: '12px', color: '#9991bb', fontFamily: "'DM Sans', sans-serif" }}>
+                              No schemes found for "{schemeSearch}"
+                            </div>
+                          </div>
+                        )}
+                        {schemes.length === 0 && (
+                          <div style={{ fontSize: '11px', color: '#d97706', marginTop: '4px', fontFamily: "'DM Sans', sans-serif" }}>
+                            ⚠ Scheme list not loaded — check DATA_URL in console
                           </div>
                         )}
                       </div>
