@@ -973,9 +973,13 @@ export default function SWPCalculator() {
 
                     {/* ── 4 KEY TAKEAWAY CARDS ── */}
                     {(() => {
-                      const comfortAbs = result.finalCorpus - corpus
-                      const comfortRatio = comfortAbs / corpus       // can be negative
-                      const comfortPositive = comfortAbs >= 0
+                      // Comfort Ratio: months where closing corpus > initial corpus / total months (excl. last)
+                      const withdrawalRows = result.rows.slice(0, -1) // exclude latest/final value
+                      const aboveCount = withdrawalRows.filter(r => r.closingValue > corpus).length
+                      const totalCount = withdrawalRows.length
+                      const comfortRatio = totalCount > 0 ? (aboveCount / totalCount) * 100 : 0
+                      const comfortPositive = comfortRatio >= 50
+
                       const taxPct = result.totalWithdrawn > 0
                         ? (result.totalTax / result.totalWithdrawn) * 100 : 0
 
@@ -1014,11 +1018,10 @@ export default function SWPCalculator() {
                                   {pct.toFixed(1)}%
                                 </div>
                                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
-                                  of ₹{(corpus/1e5).toFixed(1)}L initial corpus
+                                  of {fmt(corpus)} initial corpus
                                 </div>
-                                {/* mini bar */}
                                 <div style={{ marginTop: '8px', height: '4px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: '4px', transition: 'width 0.6s ease' }} />
+                                  <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: '4px' }} />
                                 </div>
                               </div>
                             )
@@ -1035,7 +1038,6 @@ export default function SWPCalculator() {
                             <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
                               {fmt(result.totalTax)} total tax drag
                             </div>
-                            {/* STCG vs LTCG split */}
                             {(() => {
                               const stcg = result.rows.filter(r => r.gainType === 'STCG').reduce((s, r) => s + r.taxPayable, 0)
                               const ltcg = result.rows.filter(r => r.gainType === 'LTCG').reduce((s, r) => s + r.taxPayable, 0)
@@ -1044,9 +1046,7 @@ export default function SWPCalculator() {
                                 <div style={{ marginTop: '8px', display: 'flex', gap: '4px', alignItems: 'center' }}>
                                   <div style={{ height: '4px', borderRadius: '4px 0 0 4px', background: '#f59e0b', width: `${(stcg/total)*100}%`, minWidth: stcg > 0 ? '4px' : '0' }} />
                                   <div style={{ height: '4px', borderRadius: '0 4px 4px 0', background: '#16a34a', width: `${(ltcg/total)*100}%`, minWidth: ltcg > 0 ? '4px' : '0' }} />
-                                  <span style={{ fontSize: '9px', color: '#b0a8c8', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', marginLeft: '2px' }}>
-                                    ST·LT
-                                  </span>
+                                  <span style={{ fontSize: '9px', color: '#b0a8c8', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', marginLeft: '2px' }}>ST · LT</span>
                                 </div>
                               )
                             })()}
@@ -1058,26 +1058,17 @@ export default function SWPCalculator() {
                             border: `1.5px solid ${comfortPositive ? 'rgba(34,197,94,0.28)' : 'rgba(239,68,68,0.28)'}`,
                             borderRadius: '14px', padding: '18px 16px',
                           }}>
-                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#9991bb', marginBottom: '8px' }}>
                               Comfort Ratio
-                              <span style={{
-                                fontSize: '8px', padding: '1px 5px', borderRadius: '6px',
-                                background: comfortPositive ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                                color: comfortPositive ? '#15803d' : '#dc2626',
-                              }}>{comfortPositive ? '✓ above' : '✗ below'}</span>
                             </div>
                             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: '700', color: comfortPositive ? '#15803d' : '#dc2626', lineHeight: 1.1 }}>
-                              {comfortPositive ? '+' : ''}{(comfortRatio * 100).toFixed(1)}%
+                              {comfortRatio.toFixed(1)}%
                             </div>
                             <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: '#9991bb', marginTop: '6px' }}>
-                              {comfortPositive
-                                ? `${fmt(comfortAbs)} above initial corpus`
-                                : `${fmt(Math.abs(comfortAbs))} below initial corpus`}
+                              {aboveCount} of {totalCount} months above corpus
                             </div>
-                            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '10px', color: comfortPositive ? '#16a34a' : '#dc2626', marginTop: '4px', fontStyle: 'italic' }}>
-                              {comfortPositive
-                                ? 'Corpus has grown despite withdrawals'
-                                : 'Withdrawals have eroded principal'}
+                            <div style={{ marginTop: '8px', height: '4px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                              <div style={{ width: `${comfortRatio}%`, height: '100%', background: comfortPositive ? '#22c55e' : '#ef4444', borderRadius: '4px' }} />
                             </div>
                           </div>
 
