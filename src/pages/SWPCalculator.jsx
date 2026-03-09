@@ -402,12 +402,12 @@ export default function SWPCalculator() {
     fetch(DATA_URL)
       .then(r => r.json())
       .then(data => {
-        const raw = Array.isArray(data) ? data : []
-        // Normalize: support both camelCase and snake_case field names from Gist
+        // Gist format: { meta, amcs, categories, schemes: [...] }
+        const raw = Array.isArray(data) ? data : (data.schemes || [])
         const normalized = raw.map(s => ({
-          schemeCode: s.schemeCode || s.scheme_code || s.Scheme_Code || '',
-          schemeName: s.schemeName || s.scheme_name || s.Scheme_Name || '',
-          amcName:    s.amcName    || s.amc_name    || s.AMC_Name    || s.amc || '',
+          schemeCode: s.schemeCode || s.scheme_code || s.id || '',
+          schemeName: s.schemeName || s.scheme_name || s.name || '',
+          amcName:    s.amcName    || s.amc_name    || s.amc  || '',
         }))
         setSchemes(normalized)
       })
