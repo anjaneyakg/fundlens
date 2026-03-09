@@ -355,7 +355,7 @@ function CorpusDecayChart({ rows }) {
 }
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────
-const DATA_URL = 'https://gist.githubusercontent.com/anjaneyakg/d53e7e3b2e8b9c6a9f2b3e1a7d4c8f0e/raw/fundlens_schemes.json'
+const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 
 export default function SWPCalculator() {
   const [mode, setMode] = useState('projection') // 'projection' | 'historical'
