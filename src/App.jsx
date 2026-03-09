@@ -6,6 +6,7 @@ import LoanVsSIP from './pages/LoanVsSIP.jsx'
 import SIPCalculator from './pages/SIPCalculator.jsx'
 import WealthCreator from './pages/WealthCreator.jsx'
 import FDCalculator from './pages/FDCalculator.jsx'
+import SWPCalculator from './pages/SWPCalculator'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/sip-performance" element={<SIPCalculator />} />
         <Route path="/wealth-creator"  element={<WealthCreator />} />
         <Route path="/fd-calculator"   element={<FDCalculator />} />
+        <Route path="/swp-performance" element={<SWPCalculator />} />
       </Routes>
     </>
   )
