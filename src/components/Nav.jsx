@@ -197,8 +197,8 @@ const GROUPS = [
       { code:"A1", name:"SIP Performance",      tagline:"What did my SIP actually earn?",        path:"/sip-performance",  live:true  },
       { code:"A2", name:"Wealth Creator",        tagline:"What will my SIP grow to?",             path:"/wealth-creator",   live:true  },
       { code:"A3", name:"SWP Performance",       tagline:"What did my withdrawals cost me?",      path:"/swp-performance",  live:true },
-      { code:"A4", name:"SWP Projection",        tagline:"How long will my corpus last?",         path:"/swp-projection",   live:false },
-      { code:"A5", name:"STP Performance",       tagline:"Was my STP decision right?",            path:"/stp-performance",  live:false },
+      { code:"A4", name:"STP Performance",        tagline:"Was my STP decision right?",            path:"/stp-performance",  live:false },
+      { code:"A5", name:"SWP Projection",        tagline:"How long will my corpus last?",         path:"/swp-projection",   live:false },
       { code:"A6", name:"Scheme Basket",         tagline:"How did my portfolio do?",              path:"/scheme-basket",    live:false },
     ]
   },
