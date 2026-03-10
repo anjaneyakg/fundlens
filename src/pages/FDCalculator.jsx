@@ -454,7 +454,7 @@ function calcFD({ principal, rateRaw, tenureYears, interestType, compoundFreq, p
 
 // ─── CHART ────────────────────────────────────────────────────────────────────
 function GrowthChart({ data1, data2, label1, label2 }) {
-  if (!data1 || data1.length === 0) return null;
+  if (!data1 || data1.length < 2) return null;
   const W = 640, H = 200, PL = 58, PR = 28, PT = 14, PB = 36;
   const iW = W - PL - PR, iH = H - PT - PB;
 
@@ -540,8 +540,8 @@ export default function FDCalculator() {
   const [showInflation,setShowInflation]= useState(true);
   const [inflation,    setInflation]    = useState(5.5);
 
-  const t1Years = tenure1Yr + tenure1Mo/12;
-  const t2Years = tenure2Yr + tenure2Mo/12;
+  const t1Years = Math.max(1/12, tenure1Yr + tenure1Mo/12);
+  const t2Years = Math.max(1/12, tenure2Yr + tenure2Mo/12);
 
   const fd1 = useMemo(() => calcFD({
     principal, rateRaw: rate, tenureYears: t1Years,
@@ -639,14 +639,14 @@ export default function FDCalculator() {
                   <span className="tenure-dot t1"/>
                   <input type="number" className="tenure-field-input t1"
                     value={tenure1Yr} min="0" max="10"
-                    onChange={e=>setTenure1Yr(Math.min(10,Math.max(0,+e.target.value)))}/>
+                    onChange={e=>{const v=+e.target.value; if(!isNaN(v)) setTenure1Yr(Math.min(10,Math.max(0,v)));}}/>
                 </div>
                 <div className="tenure-unit">Years</div>
                 <div className="tenure-input-wrap" style={{marginTop:"6px"}}>
                   <span className="tenure-dot t1"/>
                   <input type="number" className="tenure-field-input t1"
                     value={tenure1Mo} min="0" max="11"
-                    onChange={e=>setTenure1Mo(Math.min(11,Math.max(0,+e.target.value)))}/>
+                    onChange={e=>{const v=+e.target.value; if(!isNaN(v)) setTenure1Mo(Math.min(11,Math.max(0,v)));}}/>
                 </div>
                 <div className="tenure-unit">Months</div>
               </div>
@@ -662,14 +662,14 @@ export default function FDCalculator() {
                   <span className="tenure-dot t2"/>
                   <input type="number" className="tenure-field-input t2"
                     value={tenure2Yr} min="0" max="10"
-                    onChange={e=>setTenure2Yr(Math.min(10,Math.max(0,+e.target.value)))}/>
+                    onChange={e=>{const v=+e.target.value; if(!isNaN(v)) setTenure2Yr(Math.min(10,Math.max(0,v)));}}/>
                 </div>
                 <div className="tenure-unit">Years</div>
                 <div className="tenure-input-wrap" style={{marginTop:"6px"}}>
                   <span className="tenure-dot t2"/>
                   <input type="number" className="tenure-field-input t2"
                     value={tenure2Mo} min="0" max="11"
-                    onChange={e=>setTenure2Mo(Math.min(11,Math.max(0,+e.target.value)))}/>
+                    onChange={e=>{const v=+e.target.value; if(!isNaN(v)) setTenure2Mo(Math.min(11,Math.max(0,v)));}}/>
                 </div>
                 <div className="tenure-unit">Months</div>
               </div>
