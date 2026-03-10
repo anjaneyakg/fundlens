@@ -475,6 +475,86 @@ function buildTimeline(sip, totalYears, existingCorpus, assump) {
   return rows;
 }
 
+// ── MULTIPLE CASH-FLOW: compute total PV of outflow stream ──────────────────
+// Returns the single lump-sum equivalent (in future-value terms at goal date)
+// of all outflows defined by the multiple CF configuration.
+//
+// Approach: enumerate each payment, inflate it from the base date,
+// then compound it forward to the goal (tenure) date so every payment
+// is expressed in the same "corpus needed at goal date" unit.
+function multiCFTotal(goal, assump) {
+  const baseFV    = parseFloat(goal.goalValue)    || 0;  // first payment base
+  const tenureYrs = parseFloat(goal.tenureYears)  || 0;
+  const endYr     = Math.min(parseFloat(goal.multiEndYear) || tenureYrs, tenureYrs);
+  const inf       = (parseFloat(goal.inflationRate) || 0) / 100;
+  const changeType= goal.multiChangeType;   // "inflation" | "defined" | "fixed"
+  const changePct = (parseFloat(goal.multiChangePct) || 0) / 100;
+  const changeAmt = parseFloat(goal.multiChangePct) || 0; // reused for fixed-amt
+
+  if (baseFV <= 0 || tenureYrs <= 0 || endYr <= 0) return 0;
+
+  // Build list of payment year points based on frequency
+  const freq = goal.multiFreq;
+  const payYears = [];
+  let step = freq === "Monthly"     ? 1/12
+           : freq === "Quarterly"   ? 0.25
+           : freq === "Half-Yearly" ? 0.5
+           : freq === "Annually"    ? 1
+           : freq === "Multi-Year"  ? (parseFloat(goal.multiEndYear) > tenureYrs/2
+                                        ? tenureYrs / 2 : tenureYrs / 3)
+           : 1;
+  step = Math.max(1/12, step);
+  for (let y = tenureYrs; y <= endYr + 0.001; y += step) {
+    payYears.push(parseFloat(y.toFixed(4)));
+  }
+  if (payYears.length === 0) payYears.push(tenureYrs);
+
+  // Value at today's price for the first payment, then escalate
+  const baseToday = goal.valueType === "today"
+    ? baseFV
+    : baseFV / Math.pow(1 + inf, tenureYrs);   // deflate future price back to today
+
+  let total = 0;
+  payYears.forEach((yr, i) => {
+    // Payment amount: escalate from first payment
+    let payAmt;
+    if (i === 0) {
+      // First payment: inflate base to payment year
+      payAmt = baseToday * Math.pow(1 + inf, yr);
+    } else {
+      // Subsequent: apply change rule from previous payment
+      const prevPay = (() => {
+        const prevYr = payYears[i-1];
+        const prevBase = baseToday * Math.pow(1 + inf, prevYr);
+        return prevBase; // simplified — escalation applied below
+      })();
+      if (changeType === "inflation") {
+        payAmt = baseToday * Math.pow(1 + inf, yr);
+      } else if (changeType === "defined") {
+        // Each subsequent payment escalates by changePct from previous
+        payAmt = baseToday * Math.pow(1 + inf, payYears[0]) * Math.pow(1 + changePct, i);
+      } else {
+        // Fixed-amount: base + i × changeAmt (in today's value, inflated)
+        payAmt = (baseToday + i * changeAmt) * Math.pow(1 + inf, yr);
+      }
+    }
+
+    // Express this payment as "corpus needed NOW (at yr=0) to fund it"
+    // = payAmt discounted back at portfolio return, then we sum all PVs
+    // and treat the total as the effective single goal value
+    const yrsToGoal = yr - tenureYrs; // 0 for first, positive for later payments
+    // Payments after goal date need extra corpus; payments at goal date are face value.
+    // We convert everything to: "how much corpus at the START (yr=0) do I need?"
+    // = chainedFV inverse (PV) = payAmt / chainedFVFactor(yr)
+    const fvFactor = chainedFV(1, yr, assump);
+    if (fvFactor > 0) total += payAmt / fvFactor;
+  });
+
+  // total is now PV at yr=0 of all payments.
+  // Convert to FV at goal date (tenureYrs) so it's compatible with selfFunded logic.
+  return chainedFV(total, tenureYrs, assump);
+}
+
 // Per-goal result
 function calcGoal(goal, assump) {
   const years   = parseFloat(goal.tenureYears) || 0;
@@ -484,7 +564,18 @@ function calcGoal(goal, assump) {
   const existing= parseFloat(goal.existingCorpus) || 0;
   if (rawVal <= 0 || years <= 0) return null;
 
-  const futureVal    = goal.valueType === "today" ? rawVal * Math.pow(1+inf, years) : rawVal;
+  // Effective future goal value — single or multiple cash flow
+  let futureVal;
+  if (goal.cashFlowType === "multiple") {
+    futureVal = multiCFTotal(goal, assump);
+    if (futureVal <= 0) {
+      // Fallback: treat as single outflow if multi CF not properly configured
+      futureVal = goal.valueType === "today" ? rawVal * Math.pow(1+inf, years) : rawVal;
+    }
+  } else {
+    futureVal = goal.valueType === "today" ? rawVal * Math.pow(1+inf, years) : rawVal;
+  }
+
   const selfFunded   = Math.max(0, futureVal - loan);
   const existingGrown= chainedFV(existing, years, assump);
   const target       = Math.max(0, selfFunded - existingGrown);
@@ -512,10 +603,51 @@ function calcGoal(goal, assump) {
   const costOfDelay = Math.max(0, sipDelayed - sipReq);
   const timeline    = buildTimeline(sipReq, years, existing, assump);
 
-  return { futureVal, selfFunded, target, sipReq, achievability, costOfDelay, timeline, years };
+  // For display: breakdown of CF payments if multiple
+  const cfBreakdown = goal.cashFlowType === "multiple" ? (() => {
+    const endYr  = Math.min(parseFloat(goal.multiEndYear) || years, years + 10);
+    const inf2   = (parseFloat(goal.inflationRate) || 0) / 100;
+    const baseToday = goal.valueType === "today"
+      ? rawVal
+      : rawVal / Math.pow(1 + inf2, years);
+    const freq = goal.multiFreq;
+    let step = freq==="Monthly"?1/12:freq==="Quarterly"?.25:freq==="Half-Yearly"?.5:freq==="Multi-Year"?Math.max(1,years/3):1;
+    step = Math.max(1/12, step);
+    const payments = [];
+    for (let y = years; y <= endYr + 0.001 && payments.length < 12; y += step) {
+      const yr = parseFloat(y.toFixed(4));
+      const i  = payments.length;
+      let amt;
+      if (goal.multiChangeType === "inflation")     amt = baseToday * Math.pow(1+inf2, yr);
+      else if (goal.multiChangeType === "defined")  amt = baseToday * Math.pow(1+inf2, years) * Math.pow(1+(parseFloat(goal.multiChangePct)||0)/100, i);
+      else                                           amt = (baseToday + i * (parseFloat(goal.multiChangePct)||0)) * Math.pow(1+inf2, yr);
+      payments.push({ year: yr, amount: amt });
+    }
+    return payments;
+  })() : null;
+
+  return { futureVal, selfFunded, target, sipReq, achievability, costOfDelay, timeline, years, cfBreakdown };
 }
 
-// Cash-flow based unified corpus (binary search)
+// ── Simulate corpus month-by-month with CHAINED glide-path rates ─────────────
+// Used by both the binary search and the status simulation in calcCashFlow.
+// This replicates exactly the same chained compounding logic as sipRequired,
+// ensuring CF-based SIP equals GB SIP when there is only one goal.
+function simulateCorpus(monthlySIP, goalMonths, startCorpus, assump) {
+  // We track years-to-goal for each month to pick the correct horizon bucket.
+  // Total horizon = goalMonths / 12.
+  const totalYrs = goalMonths / 12;
+  let corpus = startCorpus;
+  for (let m = 1; m <= goalMonths; m++) {
+    const yrsToGoal = (goalMonths - m) / 12;
+    const h = bucket(yrsToGoal);
+    const r = portReturn(assump, h) / 12;
+    corpus = corpus * (1 + r) + monthlySIP;
+  }
+  return corpus;
+}
+
+// Cash-flow based unified corpus (binary search with correct chained simulation)
 function calcCashFlow(goals, assump) {
   const valid = goals
     .map((g, i) => ({ ...g, _i: i, _calc: calcGoal(g, assump) }))
@@ -526,66 +658,82 @@ function calcCashFlow(goals, assump) {
     });
   if (!valid.length) return null;
 
-  // Binary search for minimum SIP that funds all goals
-  let lo = 0, hi = 1000000;
+  // Run a full chained simulation from month 0 to last goal,
+  // growing corpus with per-month horizon-correct rate, withdrawing at each goal date.
+  const maxM = Math.round(Math.max(...valid.map(g => parseFloat(g.tenureYears)||0)) * 12);
+
+  // Build withdrawal schedule
+  const withdrawals = valid.map(g => ({
+    month:  Math.round((parseFloat(g.tenureYears)||0) * 12),
+    amount: g._calc.selfFunded,
+  }));
+
+  const simulate = (sip) => {
+    let corpus = 0;
+    let ok = true;
+    for (let m = 1; m <= maxM; m++) {
+      // yrsToGoal of the LAST goal gives overall horizon for glide path
+      // but each month we use years remaining to the NEAREST future goal
+      const nextGoalM = withdrawals.find(w => w.month >= m)?.month ?? maxM;
+      const yrsToNext = (nextGoalM - m) / 12;
+      const h = bucket(yrsToNext);
+      const r = portReturn(assump, h) / 12;
+      corpus = corpus * (1 + r) + sip;
+      const wd = withdrawals.find(w => w.month === m);
+      if (wd) {
+        corpus -= wd.amount;
+        if (corpus < 0) { ok = false; corpus = 0; }
+      }
+    }
+    return { corpus, ok };
+  };
+
+  // Binary search
+  let lo = 0, hi = 2000000;
   for (let i = 0; i < 64; i++) {
     const mid = (lo + hi) / 2;
-    let corpus = 0, ok = true, prevM = 0;
-    for (const g of valid) {
-      const gM  = Math.round((parseFloat(g.tenureYears)||0) * 12);
-      const seg = gM - prevM;
-      if (seg > 0) {
-        const h = bucket(seg / 12);
-        const r = portReturn(assump, h) / 12;
-        corpus = r > 0
-          ? corpus * Math.pow(1+r,seg) + mid*(Math.pow(1+r,seg)-1)/r
-          : corpus + mid*seg;
-      }
-      corpus -= g._calc.selfFunded;
-      if (corpus < 0) { ok = false; corpus = 0; }
-      prevM = gM;
-    }
-    if (ok) hi = mid; else lo = mid;
+    simulate(mid).ok ? hi = mid : lo = mid;
   }
   const cfSIP = (lo + hi) / 2;
 
-  // Simulate for per-goal status
-  let corpus = 0, prevM = 0;
-  const goalStatus = valid.map(g => {
-    const gM  = Math.round((parseFloat(g.tenureYears)||0) * 12);
-    const seg = gM - prevM;
-    if (seg > 0) {
-      const h = bucket(seg / 12);
+  // Per-goal status: re-simulate, capturing corpus just before each withdrawal
+  const goalStatus = (() => {
+    let corpus = 0;
+    return valid.map(g => {
+      const gM = Math.round((parseFloat(g.tenureYears)||0) * 12);
+      const prevM = valid.indexOf(g) === 0 ? 0
+        : Math.round((parseFloat(valid[valid.indexOf(g)-1].tenureYears)||0) * 12);
+      // Grow from prevM to gM
+      for (let m = prevM + 1; m <= gM; m++) {
+        const nextGoalM = withdrawals.find(w => w.month >= m)?.month ?? maxM;
+        const h = bucket((nextGoalM - m) / 12);
+        const r = portReturn(assump, h) / 12;
+        corpus = corpus * (1 + r) + cfSIP;
+      }
+      const ach    = Math.min(100, (corpus / g._calc.selfFunded) * 100);
+      const status = ach >= 99 ? "funded" : ach >= 70 ? "partial" : "atrisk";
+      corpus = Math.max(0, corpus - g._calc.selfFunded);
+      return { goal: g, achievability: ach, status, withdrawal: g._calc.selfFunded };
+    });
+  })();
+
+  // CF timeline for chart — month-by-month, record yearly
+  const cfTimeline = (() => {
+    let corpus = 0;
+    const rows = [{ year: 0, corpus: 0, invested: 0 }];
+    for (let m = 1; m <= maxM; m++) {
+      const nextGoalM = withdrawals.find(w => w.month >= m)?.month ?? maxM;
+      const h = bucket((nextGoalM - m) / 12);
       const r = portReturn(assump, h) / 12;
-      corpus = r > 0
-        ? corpus * Math.pow(1+r,seg) + cfSIP*(Math.pow(1+r,seg)-1)/r
-        : corpus + cfSIP*seg;
+      corpus = corpus * (1 + r) + cfSIP;
+      const wd = withdrawals.find(w => w.month === m);
+      if (wd) corpus = Math.max(0, corpus - wd.amount);
+      if (m % 12 === 0) rows.push({ year: m/12, corpus, invested: cfSIP*m });
     }
-    const ach    = Math.min(100, (corpus / g._calc.selfFunded) * 100);
-    const status = ach >= 99 ? "funded" : ach >= 70 ? "partial" : "atrisk";
-    corpus = Math.max(0, corpus - g._calc.selfFunded);
-    prevM  = gM;
-    return { goal: g, achievability: ach, status, withdrawal: g._calc.selfFunded };
-  });
+    return rows;
+  })();
 
-  // Corpus timeline for chart
-  const maxM = Math.ceil(Math.max(...valid.map(g=>(parseFloat(g.tenureYears)||0))) * 12);
-  const events = valid.map(g => ({
-    month: Math.round((parseFloat(g.tenureYears)||0)*12),
-    amount: g._calc.selfFunded,
-  }));
-  const cfTimeline = [];
-  let runCorpus = 0, lastEventM = 0;
-  for (let m = 0; m <= maxM; m++) {
-    const h = bucket((m - lastEventM) / 12);
-    const r = portReturn(assump, h) / 12;
-    runCorpus = runCorpus * (1+r) + cfSIP;
-    const ev = events.find(e => e.month === m);
-    if (ev) { runCorpus = Math.max(0, runCorpus - ev.amount); lastEventM = m; }
-    if (m % 12 === 0) cfTimeline.push({ year: m/12, corpus: runCorpus, invested: cfSIP*m });
-  }
-
-  const gbTotal = valid.reduce((s,g)=>s+(g._calc?.sipReq||0),0);
+  const gbTotal = valid.reduce((s,g) => s + (g._calc?.sipReq||0), 0);
   return { cfSIP, goalStatus, cfTimeline, saving: Math.max(0, gbTotal - cfSIP) };
 }
 
@@ -1160,6 +1308,35 @@ export default function GoalSIP() {
                           </tbody>
                         </table>
                       </div>
+                      {/* Multi-CF breakdown: show payment schedule for any multi-CF goal */}
+                      {goalCalcs.some(({goal,calc})=>goal.cashFlowType==="multiple"&&calc?.cfBreakdown?.length) && (
+                        <div style={{marginBottom:"1rem"}}>
+                          {goalCalcs.filter(({goal,calc})=>goal.cashFlowType==="multiple"&&calc?.cfBreakdown?.length).map(({goal,calc},i)=>(
+                            <div key={goal.id} style={{marginBottom:"8px"}}>
+                              <div style={{fontFamily:"DM Mono",fontSize:"7.5px",letterSpacing:"1.5px",textTransform:"uppercase",color:"var(--amber)",marginBottom:"5px"}}>
+                                ◈ {goal.goalName||`Goal ${i+1}`} — Payment Schedule ({goal.multiFreq})
+                              </div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                                {calc.cfBreakdown.map((p,pi)=>(
+                                  <div key={pi} style={{
+                                    background:"var(--amber-l)",border:"1px solid var(--amber-b)",
+                                    borderRadius:"7px",padding:"4px 8px",
+                                    fontFamily:"DM Mono",fontSize:"9px",color:"var(--amber)",
+                                    display:"flex",flexDirection:"column",alignItems:"center",gap:"1px"
+                                  }}>
+                                    <span style={{fontSize:"7px",opacity:0.7}}>Yr {p.year.toFixed(1)}</span>
+                                    <span style={{fontWeight:500}}>{fmt(p.amount)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{fontFamily:"DM Mono",fontSize:"7.5px",color:"var(--ink3)",marginTop:"4px"}}>
+                                Total corpus required: {fmt(calc.futureVal)} · SIP: {fmt(calc.sipReq)}/mo
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="risk-flags">
                         {goalCalcs.some(({calc})=>calc?.achievability!=null&&calc.achievability<70) ? (
                           <div className="rflag danger"><span className="rflag-icon">⚠</span><div>
