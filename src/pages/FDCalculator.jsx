@@ -278,7 +278,8 @@ const style = `
     font-family: 'DM Mono'; font-size: 9px; color: var(--text2);
   }
   .legend-line { width: 18px; height: 3px; border-radius: 2px; }
-  .svg-chart { width: 100%; overflow: visible; }
+  .svg-chart { width: 100%; display: block; overflow: hidden; }
+  .chart-scroll-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* year table */
   .table-panel {
@@ -291,7 +292,8 @@ const style = `
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
   }
   .table-title { font-family: 'DM Mono'; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text2); }
-  .fd-table { width: 100%; border-collapse: collapse; font-family: 'DM Mono'; font-size: 11px; }
+  .table-scroll-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .fd-table { width: 100%; min-width: 480px; border-collapse: collapse; font-family: 'DM Mono'; font-size: 11px; }
   .fd-table th {
     text-align: right; padding: 8px 10px;
     border-bottom: 2px solid var(--border);
@@ -326,6 +328,24 @@ const style = `
     .input-panel { position: static; }
     .compare-strip { grid-template-columns: 1fr; }
     .infl-grid { grid-template-columns: 1fr 1fr; }
+    .tenor-metrics { grid-template-columns: 1fr 1fr; }
+    .tenor-maturity-value { font-size: 2rem; }
+  }
+
+  @media (max-width: 600px) {
+    .fd-header { padding: 2rem 1rem 1.25rem; }
+    .fd-body { padding: 1rem; gap: 1rem; }
+    .input-panel { padding: 1.25rem; }
+    .chart-panel { padding: 1.25rem; }
+    .table-panel { padding: 1.25rem; }
+    .infl-grid { grid-template-columns: 1fr; }
+    .tenor-card { padding: 1.25rem; }
+    .tenor-maturity-value { font-size: 1.8rem; }
+    .tenor-metrics { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .chart-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .chart-legend { flex-wrap: wrap; gap: 8px; }
+    .small-toggle { gap: 4px; }
+    .sm-btn { font-size: 8px; padding: 4px 8px; }
   }
 `;
 
@@ -435,7 +455,7 @@ function calcFD({ principal, rateRaw, tenureYears, interestType, compoundFreq, p
 // ─── CHART ────────────────────────────────────────────────────────────────────
 function GrowthChart({ data1, data2, label1, label2 }) {
   if (!data1 || data1.length === 0) return null;
-  const W = 640, H = 200, PL = 58, PR = 16, PT = 14, PB = 36;
+  const W = 640, H = 200, PL = 58, PR = 28, PT = 14, PB = 36;
   const iW = W - PL - PR, iH = H - PT - PB;
 
   const allCorpus = [...data1.map(d=>d.corpus), ...(data2||[]).map(d=>d.corpus)];
@@ -817,12 +837,14 @@ export default function FDCalculator() {
                   </div>
                 </div>
               </div>
+              <div className="chart-scroll-wrap">
               <GrowthChart
                 data1={fd1.yearlyRows}
                 data2={fd2.yearlyRows}
                 label1={`Tenure A`}
                 label2={`Tenure B`}
               />
+              </div>
             </div>
 
             {/* YEAR TABLE */}
@@ -830,6 +852,7 @@ export default function FDCalculator() {
               <div className="table-header">
                 <span className="table-title">◈ Year-wise Accrual</span>
               </div>
+              <div className="table-scroll-wrap">
               <table className="fd-table">
                 <thead>
                   <tr>
@@ -868,6 +891,7 @@ export default function FDCalculator() {
                   })()}
                 </tbody>
               </table>
+              </div>
             </div>
 
           </div>{/* end results-col */}
