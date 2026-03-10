@@ -198,6 +198,17 @@ const navStyle = `
 // ── FULL CALCULATOR REGISTRY ──────────────────────────────────────────────────
 const GROUPS = [
   {
+    id: "Z", label: "MF Explorer",
+    items: [
+      { code:"Z1", name:"Scheme Explorer",      tagline:"Check MF Scheme Snapshot",        path:"/schemes",  live:true  },
+      { code:"Z2", name:"Wealth Creator",        tagline:"What will my SIP grow to?",             path:"/wealth-creator",   live:false  },
+      { code:"Z3", name:"SWP Performance",       tagline:"What did my withdrawals cost me?",      path:"/swp-performance",  live:false },
+      { code:"Z4", name:"STP Performance",        tagline:"Was my STP decision right?",            path:"/stp-performance",  live:false },
+      { code:"Z5", name:"SWP Projection",        tagline:"How long will my corpus last?",         path:"/swp-projection",   live:false },
+      { code:"Z6", name:"Scheme Basket",         tagline:"How did my portfolio do?",              path:"/scheme-basket",    live:false },
+    ]
+  },
+  {
     id: "A", label: "MF Investments",
     items: [
       { code:"A1", name:"SIP Performance",      tagline:"What did my SIP actually earn?",        path:"/sip-performance",  live:true  },
