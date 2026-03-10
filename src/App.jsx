@@ -10,6 +10,8 @@ import SWPCalculator from './pages/SWPCalculator'
 import FDvsMF from './pages/FDvsMF'
 import GoalSIP from './pages/GoalSIP'
 import GoalCalculator from './pages/GoalCalculator'
+import LoanCalc from './pages/LoanCalc'
+import PrepayVsInvest from './pages/PrepayVsInvest'
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/fd-vs-mf" element={<FDvsMF />} />
         <Route path="/goal-sip" element={<GoalSIP />} />
         <Route path="/goal-calculator" element={<GoalCalculator />} />
+        <Route path="/loan-calculator" element={<LoanCalc />} />
+        <Route path="/prepay-vs-invest" element={<PrepayVsInvest />} />
 
       </Routes>
     </>
