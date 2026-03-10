@@ -211,7 +211,7 @@ const GROUPS = [
   {
     id: "B", label: "Loans",
     items: [
-      { code:"B1", name:"Loan EMI",              tagline:"What is my monthly payment?",           path:"/loan-emi",         live:true },
+      { code:"B1", name:"Loan EMI",              tagline:"What is my monthly payment?",           path:"/LoanCalc",         live:true },
       { code:"B2", name:"Loan vs SIP",           tagline:"Should I prepay or invest?",            path:"/loan-vs-sip",      live:true  },
       { code:"B3", name:"Prepayment Benefit",    tagline:"What do I save by prepaying early?",    path:"/loan-prepayment",  live:true },
     ]
