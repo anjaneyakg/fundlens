@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 const navStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Syne:wght@400;600&display=swap');
 
+  html, body { overflow-x: hidden; max-width: 100%; }
+
   /* ── BASE NAV ── */
   .fl-nav {
     position: sticky; top: 0; z-index: 200;
@@ -17,13 +19,11 @@ const navStyle = `
     width: 100%; box-sizing: border-box;
   }
 
-  /* inner scroll container so dropdowns aren't clipped */
+  /* ── LINKS ROW ── */
   .fl-nav-links {
     display: flex; align-items: center; gap: 0; flex: 1; height: 60px;
-    overflow-x: auto; overflow-y: visible;
-    scrollbar-width: none;
+    min-width: 0;
   }
-  .fl-nav-links::-webkit-scrollbar { display: none; }
 
   /* ── LOGO ── */
   .fl-nav-logo {
