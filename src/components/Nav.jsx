@@ -14,6 +14,7 @@ const navStyle = `
     box-shadow: 0 2px 16px rgba(99,91,255,0.06);
     display: flex; align-items: center;
     padding: 0 1.5rem; gap: 0;
+    width: 100%; box-sizing: border-box; overflow: hidden;
   }
 
   /* ── LOGO ── */
@@ -180,7 +181,7 @@ const navStyle = `
 
   /* ── MOBILE ── */
   @media (max-width: 900px) {
-    .fl-nav { padding: 0 1rem; overflow-x: auto; }
+    .fl-nav { padding: 0 1rem; overflow-x: auto; overflow-y: hidden; }
     .fl-nav-tag { display: none; }
     .fl-group-btn { padding: 0 8px; font-size: 10px; }
     .fl-nav-link { padding: 0 10px; font-size: 10px; }
