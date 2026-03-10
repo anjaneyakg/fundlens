@@ -8,6 +8,7 @@ import WealthCreator from './pages/WealthCreator.jsx'
 import FDCalculator from './pages/FDCalculator.jsx'
 import SWPCalculator from './pages/SWPCalculator'
 import FDvsMF from './pages/FDvsMF'
+import GoalSIP from './pages/GoalSIP'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/fd-calculator"   element={<FDCalculator />} />
         <Route path="/swp-performance" element={<SWPCalculator />} />
         <Route path="/fd-vs-mf" element={<FDvsMF />} />
+        <Route path="/goal-sip" element={<GoalSIP />} />
       </Routes>
     </>
   )
