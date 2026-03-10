@@ -14,8 +14,16 @@ const navStyle = `
     box-shadow: 0 2px 16px rgba(99,91,255,0.06);
     display: flex; align-items: center;
     padding: 0 1.5rem; gap: 0;
-    width: 100%; box-sizing: border-box; overflow: hidden;
+    width: 100%; box-sizing: border-box;
   }
+
+  /* inner scroll container so dropdowns aren't clipped */
+  .fl-nav-links {
+    display: flex; align-items: center; gap: 0; flex: 1; height: 60px;
+    overflow-x: auto; overflow-y: visible;
+    scrollbar-width: none;
+  }
+  .fl-nav-links::-webkit-scrollbar { display: none; }
 
   /* ── LOGO ── */
   .fl-nav-logo {
@@ -37,9 +45,6 @@ const navStyle = `
   .fl-nav-brand span { color: #635bff; }
 
   /* ── LINKS ROW ── */
-  .fl-nav-links {
-    display: flex; align-items: center; gap: 0; flex: 1; height: 60px;
-  }
 
   /* ── PLAIN LINK ── */
   .fl-nav-link {
@@ -181,7 +186,7 @@ const navStyle = `
 
   /* ── MOBILE ── */
   @media (max-width: 900px) {
-    .fl-nav { padding: 0 1rem; overflow-x: auto; overflow-y: hidden; }
+    .fl-nav { padding: 0 1rem; }
     .fl-nav-tag { display: none; }
     .fl-group-btn { padding: 0 8px; font-size: 10px; }
     .fl-nav-link { padding: 0 10px; font-size: 10px; }
