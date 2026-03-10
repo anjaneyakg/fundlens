@@ -210,8 +210,8 @@ export default function Home() {
 
       {/* Hero */}
       <div className="home-hero">
-        <div className="home-eyebrow">◈ Institutional Grade MF Analytics</div>
-        <div className="home-title">INVESTMENT<br/>INTELLIGENCE<br/>TERMINAL</div>
+        <div className="home-eyebrow">◈ Institutional Grade Investment Analytics Tools</div>
+        <div className="home-title">INVESTMENT<br/>INTELLIGENCE<br/>TERMINAL (IIT)</div>
         <div className="home-subtitle">
           Professional-grade tools for financial advisors and serious investors.
           Analyse, compare and decide — with real data, not assumptions.
