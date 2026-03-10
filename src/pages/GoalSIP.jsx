@@ -482,7 +482,8 @@ function buildTimeline(sip, totalYears, existingCorpus, assump) {
 function multiCFTotal(goal, assump) {
   const baseVal     = parseFloat(goal.goalValue)   || 0;
   const tenureYrs   = parseFloat(goal.tenureYears) || 0;
-  const durationYrs = Math.max(1, parseFloat(goal.multiEndYear) || 5);
+  const durationYrs = (goal.multiEndYear === "" || goal.multiEndYear == null)
+    ? 5 : Math.max(1, parseFloat(goal.multiEndYear) || 1);
   const inf         = (parseFloat(goal.inflationRate) || 0) / 100;
   const changeType  = goal.multiChangeType;
   const changePct   = (parseFloat(goal.multiChangePct) || 0) / 100;
@@ -499,12 +500,10 @@ function multiCFTotal(goal, assump) {
            : 1; // Annually default
   step = Math.max(1/12, step);
 
-  // Offsets from goal date: 0, step, 2*step, ... up to durationYrs
-  const offsets = [];
-  for (let t = 0; t <= durationYrs + 0.001; t = parseFloat((t + step).toFixed(6))) {
-    offsets.push(parseFloat(t.toFixed(6)));
-  }
-  if (offsets.length === 0) offsets.push(0);
+  // durationYrs = number of payments; i-th offset = i * step (0-indexed)
+  const numPayments = Math.max(1, Math.round(durationYrs / step));
+  const offsets = Array.from({ length: numPayments }, (_, i) =>
+    parseFloat((i * step).toFixed(6)));
 
   // First payment amount in nominal terms (at goal date)
   const baseToday = goal.valueType === "today"
@@ -584,7 +583,8 @@ function calcGoal(goal, assump) {
 
   // For display: payment schedule matching multiCFTotal logic exactly
   const cfBreakdown = goal.cashFlowType === "multiple" ? (() => {
-    const durationYrs = Math.max(1, parseFloat(goal.multiEndYear) || 5);
+    const durationYrs = (goal.multiEndYear === "" || goal.multiEndYear == null)
+      ? 5 : Math.max(1, parseFloat(goal.multiEndYear) || 1);
     const inf2 = (parseFloat(goal.inflationRate) || 0) / 100;
     const baseToday = goal.valueType === "today"
       ? rawVal : rawVal / Math.pow(1 + inf2, years);
@@ -595,15 +595,15 @@ function calcGoal(goal, assump) {
     let step = freq==="Monthly"?1/12:freq==="Quarterly"?.25:freq==="Half-Yearly"?.5
              :freq==="Multi-Year"?Math.max(2,Math.round(durationYrs/3)):1;
     step = Math.max(1/12, step);
-    const payments = [];
-    for (let offset = 0; offset <= durationYrs + 0.001 && payments.length < 16; offset = parseFloat((offset+step).toFixed(6))) {
-      const i = payments.length;
+    const numPay = Math.max(1, Math.round(durationYrs / step));
+    const payments = Array.from({ length: Math.min(numPay, 16) }, (_, i) => {
+      const offset = parseFloat((i * step).toFixed(6));
       let amt;
       if (goal.multiChangeType === "inflation")    amt = firstPayNominal * Math.pow(1+inf2, offset);
       else if (goal.multiChangeType === "defined") amt = firstPayNominal * Math.pow(1+changePct2, i);
       else                                          amt = firstPayNominal + i * changeAmt2;
-      payments.push({ year: parseFloat((years + offset).toFixed(2)), amount: amt });
-    }
+      return { year: parseFloat((years + offset).toFixed(2)), amount: amt };
+    });
     return payments;
   })() : null;
 
