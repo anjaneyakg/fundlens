@@ -32,6 +32,8 @@ const style = `
 
   .fd-page {
     min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
     background: var(--bg);
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
@@ -324,7 +326,7 @@ const style = `
   .empty-sub { font-size: 13px; line-height: 1.6; }
 
   @media (max-width: 960px) {
-    .fd-body { grid-template-columns: 1fr; }
+    .fd-body { grid-template-columns: 1fr; padding: 1.25rem; }
     .input-panel { position: static; }
     .compare-strip { grid-template-columns: 1fr; }
     .infl-grid { grid-template-columns: 1fr 1fr; }
@@ -333,19 +335,26 @@ const style = `
   }
 
   @media (max-width: 600px) {
-    .fd-header { padding: 2rem 1rem 1.25rem; }
-    .fd-body { padding: 1rem; gap: 1rem; }
-    .input-panel { padding: 1.25rem; }
-    .chart-panel { padding: 1.25rem; }
-    .table-panel { padding: 1.25rem; }
-    .infl-grid { grid-template-columns: 1fr; }
-    .tenor-card { padding: 1.25rem; }
-    .tenor-maturity-value { font-size: 1.8rem; }
+    .fd-header { padding: 1.5rem 1rem 1rem; gap: 1rem; }
+    .fd-subtitle { max-width: 100%; }
+    .fd-body { padding: 0.875rem; gap: 0.875rem; }
+    .input-panel { padding: 1rem; border-radius: 12px; }
+    .chart-panel { padding: 1rem; border-radius: 12px; }
+    .table-panel { padding: 1rem; border-radius: 12px; }
+    .inflation-card { padding: 1rem; border-radius: 12px; }
+    .tenor-card { padding: 1rem; border-radius: 12px; }
+    .infl-grid { grid-template-columns: 1fr 1fr; }
+    .tenor-maturity-value { font-size: 1.75rem; }
     .tenor-metrics { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .t-metric { padding: 7px 8px; }
     .chart-header { flex-direction: column; align-items: flex-start; gap: 8px; }
     .chart-legend { flex-wrap: wrap; gap: 8px; }
     .small-toggle { gap: 4px; }
     .sm-btn { font-size: 8px; padding: 4px 8px; }
+    .tenure-compare { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .investor-toggle { margin-bottom: 1rem; }
+    .fd-table { font-size: 10px; }
+    .fd-table th, .fd-table td { padding: 7px 7px; }
   }
 `;
 
