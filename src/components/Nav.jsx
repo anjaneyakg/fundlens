@@ -201,15 +201,28 @@ const GROUPS = [
     id: "Z", label: "MF Explorer",
     items: [
       { code:"Z1", name:"Scheme Explorer",      tagline:"Check MF Scheme Snapshot",        path:"/schemes",  live:true  },
-      { code:"Z2", name:"Wealth Creator",        tagline:"What will my SIP grow to?",             path:"/wealth-creator",   live:false  },
-      { code:"Z3", name:"SWP Performance",       tagline:"What did my withdrawals cost me?",      path:"/swp-performance",  live:false },
-      { code:"Z4", name:"STP Performance",        tagline:"Was my STP decision right?",            path:"/stp-performance",  live:false },
-      { code:"Z5", name:"SWP Projection",        tagline:"How long will my corpus last?",         path:"/swp-projection",   live:false },
-      { code:"Z6", name:"Scheme Basket",         tagline:"How did my portfolio do?",              path:"/scheme-basket",    live:false },
+      { code:"Z2", name:"Compare Schemes",        tagline:"xxx",             path:"/wealth-creator",   live:false  },
+      { code:"Z3", name:"Fund Screener - Features",       tagline:"xxx",      path:"/swp-performance",  live:false },
+      { code:"Z4", name:"Fund Screener - Ratios",        tagline:"xxx",            path:"/stp-performance",  live:false },
+      { code:"Z5", name:"Fund Manager Track",        tagline:"xxx",         path:"/swp-projection",   live:false },
+      { code:"Z6", name:"Rolling Return Consistency",         tagline:"xxx",              path:"/scheme-basket",    live:false },
+      { code:"Z7", name:"Market Cycle Overlay",         tagline:"xxx",              path:"/scheme-basket",    live:false },
+      { code:"Z8", name:"Scheme Ranking",         tagline:"xxx",              path:"/scheme-basket",    live:false },
+    ]
+  },
+{
+    id: "X", label: "MF Portfolios",
+    items: [
+      { code:"X1", name:"Scheme Snapshot",              tagline:"What is my monthly payment?",           path:"/LoanCalc",         live:false },
+      { code:"X2", name:"Portfolio Overlap",           tagline:"Should I prepay or invest?",            path:"/loan-vs-sip",      live:false  },
+      { code:"X3", name:"Top Securities",    tagline:"What do I save by prepaying early?",    path:"/loan-prepayment",  live:false },
+      { code:"X4", name:"Top Sectors",    tagline:"What do I save by prepaying early?",    path:"/loan-prepayment",  live:false },
+      { code:"X5", name:"Change Tracker",    tagline:"What do I save by prepaying early?",    path:"/loan-prepayment",  live:false },
+      { code:"X6", name:"Underlying MarketCap",    tagline:"What do I save by prepaying early?",    path:"/loan-prepayment",  live:false },
     ]
   },
   {
-    id: "A", label: "MF Investments",
+    id: "A", label: "MF Calculators",
     items: [
       { code:"A1", name:"SIP Performance",      tagline:"What did my SIP actually earn?",        path:"/sip-performance",  live:true  },
       { code:"A2", name:"Wealth Creator",        tagline:"What will my SIP grow to?",             path:"/wealth-creator",   live:true  },
