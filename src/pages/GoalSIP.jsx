@@ -475,85 +475,64 @@ function buildTimeline(sip, totalYears, existingCorpus, assump) {
   return rows;
 }
 
-// ── MULTIPLE CASH-FLOW: compute total PV of outflow stream ──────────────────
-// Returns the single lump-sum equivalent (in future-value terms at goal date)
-// of all outflows defined by the multiple CF configuration.
-//
-// Approach: enumerate each payment, inflate it from the base date,
-// then compound it forward to the goal (tenure) date so every payment
-// is expressed in the same "corpus needed at goal date" unit.
+// -- MULTIPLE CASH-FLOW: corpus needed at goal date --------------------------
+// "End Year" = number of years of recurring payments starting at tenure date.
+// e.g. tenure=15, endYear=12 => 12 annual payments from Y15 to Y27.
+// Each payment is PV-discounted to the goal date using ST post-goal return.
 function multiCFTotal(goal, assump) {
-  const baseFV    = parseFloat(goal.goalValue)    || 0;  // first payment base
-  const tenureYrs = parseFloat(goal.tenureYears)  || 0;
-  const endYr     = Math.min(parseFloat(goal.multiEndYear) || tenureYrs, tenureYrs);
-  const inf       = (parseFloat(goal.inflationRate) || 0) / 100;
-  const changeType= goal.multiChangeType;   // "inflation" | "defined" | "fixed"
-  const changePct = (parseFloat(goal.multiChangePct) || 0) / 100;
-  const changeAmt = parseFloat(goal.multiChangePct) || 0; // reused for fixed-amt
+  const baseVal     = parseFloat(goal.goalValue)   || 0;
+  const tenureYrs   = parseFloat(goal.tenureYears) || 0;
+  const durationYrs = Math.max(1, parseFloat(goal.multiEndYear) || 5);
+  const inf         = (parseFloat(goal.inflationRate) || 0) / 100;
+  const changeType  = goal.multiChangeType;
+  const changePct   = (parseFloat(goal.multiChangePct) || 0) / 100;
+  const changeAmt   = parseFloat(goal.multiChangePct) || 0;
 
-  if (baseFV <= 0 || tenureYrs <= 0 || endYr <= 0) return 0;
+  if (baseVal <= 0 || tenureYrs <= 0) return 0;
 
-  // Build list of payment year points based on frequency
+  // Step size between payments (years)
   const freq = goal.multiFreq;
-  const payYears = [];
   let step = freq === "Monthly"     ? 1/12
            : freq === "Quarterly"   ? 0.25
            : freq === "Half-Yearly" ? 0.5
-           : freq === "Annually"    ? 1
-           : freq === "Multi-Year"  ? (parseFloat(goal.multiEndYear) > tenureYrs/2
-                                        ? tenureYrs / 2 : tenureYrs / 3)
-           : 1;
+           : freq === "Multi-Year"  ? Math.max(2, Math.round(durationYrs / 3))
+           : 1; // Annually default
   step = Math.max(1/12, step);
-  for (let y = tenureYrs; y <= endYr + 0.001; y += step) {
-    payYears.push(parseFloat(y.toFixed(4)));
+
+  // Offsets from goal date: 0, step, 2*step, ... up to durationYrs
+  const offsets = [];
+  for (let t = 0; t <= durationYrs + 0.001; t = parseFloat((t + step).toFixed(6))) {
+    offsets.push(parseFloat(t.toFixed(6)));
   }
-  if (payYears.length === 0) payYears.push(tenureYrs);
+  if (offsets.length === 0) offsets.push(0);
 
-  // Value at today's price for the first payment, then escalate
+  // First payment amount in nominal terms (at goal date)
   const baseToday = goal.valueType === "today"
-    ? baseFV
-    : baseFV / Math.pow(1 + inf, tenureYrs);   // deflate future price back to today
+    ? baseVal
+    : baseVal / Math.pow(1 + inf, tenureYrs);
+  const firstPayNominal = baseToday * Math.pow(1 + inf, tenureYrs);
 
-  let total = 0;
-  payYears.forEach((yr, i) => {
-    // Payment amount: escalate from first payment
+  // Post-goal discount rate: ST portfolio return (conservative)
+  const postGoalR = portReturn(assump, "ST");
+
+  // Sum PV of all payments discounted to goal date
+  let corpusAtGoal = 0;
+  offsets.forEach((offset, i) => {
     let payAmt;
-    if (i === 0) {
-      // First payment: inflate base to payment year
-      payAmt = baseToday * Math.pow(1 + inf, yr);
+    if (changeType === "inflation") {
+      payAmt = firstPayNominal * Math.pow(1 + inf, offset);
+    } else if (changeType === "defined") {
+      payAmt = firstPayNominal * Math.pow(1 + changePct, i);
     } else {
-      // Subsequent: apply change rule from previous payment
-      const prevPay = (() => {
-        const prevYr = payYears[i-1];
-        const prevBase = baseToday * Math.pow(1 + inf, prevYr);
-        return prevBase; // simplified — escalation applied below
-      })();
-      if (changeType === "inflation") {
-        payAmt = baseToday * Math.pow(1 + inf, yr);
-      } else if (changeType === "defined") {
-        // Each subsequent payment escalates by changePct from previous
-        payAmt = baseToday * Math.pow(1 + inf, payYears[0]) * Math.pow(1 + changePct, i);
-      } else {
-        // Fixed-amount: base + i × changeAmt (in today's value, inflated)
-        payAmt = (baseToday + i * changeAmt) * Math.pow(1 + inf, yr);
-      }
+      // Fixed-amount step-up
+      payAmt = firstPayNominal + i * changeAmt;
     }
-
-    // Express this payment as "corpus needed NOW (at yr=0) to fund it"
-    // = payAmt discounted back at portfolio return, then we sum all PVs
-    // and treat the total as the effective single goal value
-    const yrsToGoal = yr - tenureYrs; // 0 for first, positive for later payments
-    // Payments after goal date need extra corpus; payments at goal date are face value.
-    // We convert everything to: "how much corpus at the START (yr=0) do I need?"
-    // = chainedFV inverse (PV) = payAmt / chainedFVFactor(yr)
-    const fvFactor = chainedFV(1, yr, assump);
-    if (fvFactor > 0) total += payAmt / fvFactor;
+    corpusAtGoal += payAmt / Math.pow(1 + postGoalR, offset);
   });
 
-  // total is now PV at yr=0 of all payments.
-  // Convert to FV at goal date (tenureYrs) so it's compatible with selfFunded logic.
-  return chainedFV(total, tenureYrs, assump);
+  return corpusAtGoal;
 }
+
 
 // Per-goal result
 function calcGoal(goal, assump) {
@@ -603,25 +582,27 @@ function calcGoal(goal, assump) {
   const costOfDelay = Math.max(0, sipDelayed - sipReq);
   const timeline    = buildTimeline(sipReq, years, existing, assump);
 
-  // For display: breakdown of CF payments if multiple
+  // For display: payment schedule matching multiCFTotal logic exactly
   const cfBreakdown = goal.cashFlowType === "multiple" ? (() => {
-    const endYr  = Math.min(parseFloat(goal.multiEndYear) || years, years + 10);
-    const inf2   = (parseFloat(goal.inflationRate) || 0) / 100;
+    const durationYrs = Math.max(1, parseFloat(goal.multiEndYear) || 5);
+    const inf2 = (parseFloat(goal.inflationRate) || 0) / 100;
     const baseToday = goal.valueType === "today"
-      ? rawVal
-      : rawVal / Math.pow(1 + inf2, years);
+      ? rawVal : rawVal / Math.pow(1 + inf2, years);
+    const firstPayNominal = baseToday * Math.pow(1 + inf2, years);
+    const changePct2 = (parseFloat(goal.multiChangePct) || 0) / 100;
+    const changeAmt2 = parseFloat(goal.multiChangePct) || 0;
     const freq = goal.multiFreq;
-    let step = freq==="Monthly"?1/12:freq==="Quarterly"?.25:freq==="Half-Yearly"?.5:freq==="Multi-Year"?Math.max(1,years/3):1;
+    let step = freq==="Monthly"?1/12:freq==="Quarterly"?.25:freq==="Half-Yearly"?.5
+             :freq==="Multi-Year"?Math.max(2,Math.round(durationYrs/3)):1;
     step = Math.max(1/12, step);
     const payments = [];
-    for (let y = years; y <= endYr + 0.001 && payments.length < 12; y += step) {
-      const yr = parseFloat(y.toFixed(4));
-      const i  = payments.length;
+    for (let offset = 0; offset <= durationYrs + 0.001 && payments.length < 16; offset = parseFloat((offset+step).toFixed(6))) {
+      const i = payments.length;
       let amt;
-      if (goal.multiChangeType === "inflation")     amt = baseToday * Math.pow(1+inf2, yr);
-      else if (goal.multiChangeType === "defined")  amt = baseToday * Math.pow(1+inf2, years) * Math.pow(1+(parseFloat(goal.multiChangePct)||0)/100, i);
-      else                                           amt = (baseToday + i * (parseFloat(goal.multiChangePct)||0)) * Math.pow(1+inf2, yr);
-      payments.push({ year: yr, amount: amt });
+      if (goal.multiChangeType === "inflation")    amt = firstPayNominal * Math.pow(1+inf2, offset);
+      else if (goal.multiChangeType === "defined") amt = firstPayNominal * Math.pow(1+changePct2, i);
+      else                                          amt = firstPayNominal + i * changeAmt2;
+      payments.push({ year: parseFloat((years + offset).toFixed(2)), amount: amt });
     }
     return payments;
   })() : null;
@@ -688,13 +669,22 @@ function calcCashFlow(goals, assump) {
     return { corpus, ok };
   };
 
-  // Binary search
-  let lo = 0, hi = 2000000;
-  for (let i = 0; i < 64; i++) {
-    const mid = (lo + hi) / 2;
-    simulate(mid).ok ? hi = mid : lo = mid;
+  // For a single goal, CF SIP must equal GB SIP exactly (no inter-goal benefit).
+  // Bypass binary search and use sipRequired directly to eliminate floating-point drift.
+  let cfSIP;
+  if (valid.length === 1) {
+    cfSIP = valid[0]._calc.sipReq;
+  } else {
+    // Binary search — threshold corpus >= -1 to avoid fp false-negatives
+    let lo = 0, hi = 2000000;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      const { corpus, ok } = simulate(mid);
+      // "ok" if corpus didn't go negative at any withdrawal point
+      ok ? hi = mid : lo = mid;
+    }
+    cfSIP = (lo + hi) / 2;
   }
-  const cfSIP = (lo + hi) / 2;
 
   // Per-goal status: re-simulate, capturing corpus just before each withdrawal
   const goalStatus = (() => {
@@ -1029,9 +1019,9 @@ export default function GoalSIP() {
                                 </div>
                               )}
                               <div className="gc-field">
-                                <label className="gc-label">End Year</label>
+                                <label className="gc-label">No. of Payments (Yrs)</label>
                                 <input type="number" className="gc-input" value={goal.multiEndYear}
-                                  onChange={e=>updateGoal(goal.id,"multiEndYear",e.target.value)} placeholder="20"/>
+                                  onChange={e=>updateGoal(goal.id,"multiEndYear",e.target.value)} placeholder="e.g. 12"/>
                               </div>
                             </div>
                           </div>
