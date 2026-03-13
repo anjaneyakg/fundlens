@@ -284,8 +284,8 @@ const style = `
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 const ReturnCell = ({ value }) => (
-  <div className="ret-cell" style={{ color: returnColor(value) }}>
-    {value > 0 ? "+" : ""}{value}%
+  <div className="ret-cell" style={{ color: value != null ? returnColor(value) : "#6b72a0" }}>
+    {value != null ? `${value > 0 ? "+" : ""}${value}%` : "—"}
   </div>
 );
 
