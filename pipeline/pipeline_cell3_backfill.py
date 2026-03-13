@@ -50,7 +50,7 @@ except Exception:
 
 AMFI_NAV_HISTORY_URL = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 MAIN_GIST_ID         = "64368e3f1dfef3f82da8fa9f0f164211"   # existing main Gist
-ARCHIVE_GIST_ID      = ""   # ← populated after first run (Cell 3 creates it)
+ARCHIVE_GIST_ID      = "6ef77a22f54636ace8246a62e377f1e4"   # ← populated after first run (Cell 3 creates it)
 ARCHIVE_GIST_FILE    = "fundlens_nav_archive.json"
 ARCHIVE_LOCAL_FILE   = "fundlens_nav_archive.json"
 
