@@ -141,7 +141,7 @@ const style = `
 
   .sort-bar {
     display: grid;
-    grid-template-columns: 2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
+    grid-template-columns: 2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
     gap: 0; margin-bottom: 1rem;
     font-family: 'DM Mono'; font-size: 10px; color: var(--muted);
     letter-spacing: 1px; text-transform: uppercase; padding: 0 12px;
@@ -152,7 +152,7 @@ const style = `
 
   .scheme-card {
     display: grid;
-    grid-template-columns: 2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
+    grid-template-columns: 2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
     gap: 0; align-items: center;
     padding: 14px 12px; margin-bottom: 4px;
     background: var(--surface);
@@ -673,12 +673,11 @@ export default function App() {
     : [];
 
   const sortCols = [
-    { key:"1W",     label:"1W"    },
     { key:"1M",     label:"1M"    },
     { key:"3M",     label:"3M"    },
+    { key:"6M",     label:"6M"    },
     { key:"1Y",     label:"1Y"    },
     { key:"3Y",     label:"3Y"    },
-    { key:"5Y",     label:"5Y"    },
     { key:"SHARPE", label:"Sharpe"},
   ];
 
@@ -823,12 +822,11 @@ export default function App() {
                     </span>
                   </div>
                 </div>
-                <ReturnCell value={s.returns?.["1W"]} />
                 <ReturnCell value={s.returns?.["1M"]} />
                 <ReturnCell value={s.returns?.["3M"]} />
+                <ReturnCell value={s.returns?.["6M"]} />
                 <ReturnCell value={s.returns?.["1Y"]} />
                 <ReturnCell value={s.returns?.["3Y"]} />
-                <ReturnCell value={s.returns?.["5Y"]} />
                 <div className="ret-cell" style={{color: (s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)"}}>
                   {s.risk?.sharpe != null ? s.risk.sharpe.toFixed(2) : "—"}
                 </div>
