@@ -584,9 +584,10 @@ def assemble_output(
     print(f"  [Step 7]    {no_history_count} schemes had no NAV history.")
 
     # ── Slim schemes for Gist size — strip heavy fields before upload
-    KEEP_FIELDS = {
-        'id', 'name', 'amc', 'category', 'type', 'plan',
-        'structure', 'nav', 'navDate', 'returns'
+   KEEP_FIELDS = {
+    'id', 'name', 'navName', 'amc', 'category', 'type', 'plan',
+    'structure', 'nav', 'navDate', 'returns'
+}
     }
     for s in schemes_out:
         # Trim returns to 3 key periods only
