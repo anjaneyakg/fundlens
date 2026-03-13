@@ -589,9 +589,9 @@ export default function App() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Derive option (Growth/IDCW) from scheme name
-  const getOption = (name) => {
-    const n = (name || "").toLowerCase();
+  // ── Derive option (Growth/IDCW) from navName (full name) or name
+  const getOption = (s) => {
+    const n = ((s.navName || s.name) || "").toLowerCase();
     if (n.includes("idcw") || n.includes("dividend") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
     if (n.includes("bonus")) return "Bonus";
     return "Growth";
@@ -618,7 +618,7 @@ export default function App() {
     if (planFilter   !== "All" && s.plan      !== planFilter)         return false;
     if (amcFilter    !== "All" && s.amc       !== amcFilter)          return false;
     if (natureFilter !== "All" && s.structure !== natureFilter)       return false;
-    if (optionFilter !== "All" && getOption(s.name) !== optionFilter) return false;
+    if (optionFilter !== "All" && getOption(s) !== optionFilter) return false;
 
     // Category filter — if set, ignore typeFilter (category implies type)
     if (catFilter !== "All") {
@@ -640,6 +640,25 @@ export default function App() {
                : (b.returns?.[sortKey] ?? -999);
     return sortDir * (aVal - bVal);
   });
+
+  // ── Deduplicate — same scheme name can have multiple codes in AMFI
+  // Keep the one with best 1Y return per name+plan+option combination
+  const deduped = (() => {
+    const seen = new Map();
+    for (const s of filtered) {
+      const key = `${s.name}||${s.plan}||${getOption(s)}`;
+      if (!seen.has(key)) {
+        seen.set(key, s);
+      } else {
+        // Keep whichever has better 1Y return
+        const existing = seen.get(key);
+        if ((s.returns?.["1Y"] ?? -999) > (existing.returns?.["1Y"] ?? -999)) {
+          seen.set(key, s);
+        }
+      }
+    }
+    return Array.from(seen.values());
+  })();
 
   const handleSort = (k) => {
     if (sortKey === k) setSortDir(d => -d);
@@ -766,7 +785,7 @@ export default function App() {
             {categoryList.map(c=><option key={c}>{c}</option>)}
           </select>
 
-          <div className="results-count"><span>{filtered.length}</span> of {allSchemes.length} schemes</div>
+          <div className="results-count"><span>{deduped.length}</span> of {allSchemes.length} schemes</div>
         </div>
 
         <div className="main">
@@ -781,11 +800,11 @@ export default function App() {
               ))}
             </div>
 
-            {filtered.length === 0 && (
+            {deduped.length === 0 && (
               <div className="no-results">No schemes match your filters.</div>
             )}
 
-            {filtered.slice(0,80).map((s,i) => (
+            {deduped.slice(0,80).map((s,i) => (
               <div key={s.id}
                 className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
                 style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
@@ -797,7 +816,7 @@ export default function App() {
                     <span className="tag tag-cat">{s.category}</span>
                     <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
                     <span className="tag" style={{background:"rgba(99,91,255,0.07)",color:"var(--muted)",border:"1px solid var(--border)"}}>
-                      {getOption(s.name)}
+                      {getOption(s)}
                     </span>
                   </div>
                 </div>
@@ -812,10 +831,10 @@ export default function App() {
                 </div>
               </div>
             ))}
-            {filtered.length > 80 && (
+            {deduped.length > 80 && (
               <div style={{textAlign:"center",padding:"1rem",fontFamily:"'DM Mono'",
                 fontSize:"11px",color:"var(--muted)"}}>
-                Showing 80 of {filtered.length} — refine filters to narrow results
+                Showing 80 of {deduped.length} — refine filters to narrow results
               </div>
             )}
           </div>
