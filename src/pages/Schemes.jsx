@@ -534,7 +534,7 @@ export default function App() {
   const [search,        setSearch]       = useState("");
   const [amcFilter,     setAmcFilter]    = useState("All");
   const [catFilter,     setCatFilter]    = useState("Large Cap");
-  const [typeFilter,    setTypeFilter]   = useState("Equity");
+  const [typeFilter,    setTypeFilter]   = useState("All");
   const [planFilter,    setPlanFilter]   = useState("Direct");
   const [optionFilter,  setOptionFilter] = useState("Growth");
   const [natureFilter,  setNatureFilter] = useState("Open Ended");
@@ -589,7 +589,7 @@ export default function App() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Derive option (Growth/IDCW) from scheme name — no pipeline change needed
+  // ── Derive option (Growth/IDCW) from scheme name
   const getOption = (name) => {
     const n = (name || "").toLowerCase();
     if (n.includes("idcw") || n.includes("dividend") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
@@ -597,16 +597,39 @@ export default function App() {
     return "Growth";
   };
 
+  // ── Category → implied type map (so Type filter doesn't block category browse)
+  const CAT_TYPE = {
+    "Liquid":"Debt","Overnight":"Debt","Money Market":"Debt","Ultra Short Duration":"Debt",
+    "Low Duration":"Debt","Short Duration":"Debt","Medium Duration":"Debt",
+    "Medium to Long Duration":"Debt","Long Duration":"Debt","Dynamic Bond":"Debt",
+    "Corporate Bond":"Debt","Credit Risk":"Debt","Banking & PSU":"Debt",
+    "Gilt":"Debt","Floater":"Debt","Debt":"Debt",
+    "Large Cap":"Equity","Mid Cap":"Equity","Small Cap":"Equity","Multi Cap":"Equity",
+    "Flexi Cap":"Equity","Large & Mid Cap":"Equity","Focused":"Equity","ELSS":"Equity",
+    "Contra":"Equity","Dividend Yield":"Equity","Value":"Equity","Thematic":"Equity","Equity":"Equity",
+    "Aggressive Hybrid":"Hybrid","Conservative Hybrid":"Hybrid","Balanced Hybrid":"Hybrid",
+    "Dynamic AA":"Hybrid","Equity Savings":"Hybrid","Multi Asset":"Hybrid","Hybrid":"Hybrid",
+    "Arbitrage":"Hybrid",
+    "Index":"Passive","ETF":"Passive","Fund of Funds":"Passive",
+  };
+
   // ── Filtering & sorting
   const filtered = allSchemes.filter(s => {
-    if (planFilter   !== "All" && s.plan      !== planFilter)              return false;
-    if (amcFilter    !== "All" && s.amc       !== amcFilter)               return false;
-    if (typeFilter   !== "All" && s.type      !== typeFilter)              return false;
-    if (catFilter    !== "All" && s.category  !== catFilter)               return false;
-    if (natureFilter !== "All" && s.structure !== natureFilter)            return false;
-    if (optionFilter !== "All" && getOption(s.name) !== optionFilter)      return false;
+    if (planFilter   !== "All" && s.plan      !== planFilter)         return false;
+    if (amcFilter    !== "All" && s.amc       !== amcFilter)          return false;
+    if (natureFilter !== "All" && s.structure !== natureFilter)       return false;
+    if (optionFilter !== "All" && getOption(s.name) !== optionFilter) return false;
+
+    // Category filter — if set, ignore typeFilter (category implies type)
+    if (catFilter !== "All") {
+      if (s.category !== catFilter) return false;
+    } else {
+      // No category selected — apply type filter
+      if (typeFilter !== "All" && s.type !== typeFilter) return false;
+    }
+
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) &&
-                  !s.amc.toLowerCase().includes(search.toLowerCase()))     return false;
+                  !s.amc.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   }).sort((a, b) => {
     const aVal = sortKey === "SHARPE" ? (a.risk?.sharpe ?? -999)
@@ -711,7 +734,7 @@ export default function App() {
           <div className="toggle-group">
             {["All","Equity","Debt","Hybrid","Passive"].map(t => (
               <button key={t} className={`toggle-btn ${typeFilter===t?"active":""}`}
-                onClick={()=>setTypeFilter(t)}>{t}</button>
+                onClick={()=>{ setTypeFilter(t); if (t !== "All") setCatFilter("All"); }}>{t}</button>
             ))}
           </div>
 
@@ -734,7 +757,11 @@ export default function App() {
           </select>
 
           {/* Category dropdown */}
-          <select className="filter-select" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
+          <select className="filter-select" value={catFilter} onChange={e => {
+            setCatFilter(e.target.value);
+            // When category selected, type is implicit — reset type to All
+            if (e.target.value !== "All") setTypeFilter("All");
+          }}>
             <option value="All">All Categories</option>
             {categoryList.map(c=><option key={c}>{c}</option>)}
           </select>
@@ -768,7 +795,10 @@ export default function App() {
                   <div className="scheme-name">{s.name}</div>
                   <div className="scheme-meta">
                     <span className="tag tag-cat">{s.category}</span>
-                    <span className="tag tag-plan-d">{s.type}</span>
+                    <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
+                    <span className="tag" style={{background:"rgba(99,91,255,0.07)",color:"var(--muted)",border:"1px solid var(--border)"}}>
+                      {getOption(s.name)}
+                    </span>
                   </div>
                 </div>
                 <ReturnCell value={s.returns?.["1W"]} />
