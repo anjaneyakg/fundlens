@@ -615,6 +615,9 @@ export default function App() {
 
   // ── Filtering & sorting
   const filtered = allSchemes.filter(s => {
+    // Always exclude segregated portfolio schemes
+    if (s.name.toLowerCase().includes("segregated")) return false;
+
     if (planFilter   !== "All" && s.plan      !== planFilter)         return false;
     if (amcFilter    !== "All" && s.amc       !== amcFilter)          return false;
     if (natureFilter !== "All" && s.structure !== natureFilter)       return false;
