@@ -63,7 +63,7 @@ jobs:
         if: github.event.inputs.skip_main != 'true'
         working-directory: pipeline
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_GIST }}
+          GITHUB_TOKEN: ${{ secrets.GIST_PAT }}
         run: |
           echo "=== Cell 1: Fetching from AMFI and computing returns ==="
           python pipeline_cell1.py
@@ -73,7 +73,7 @@ jobs:
         if: github.event.inputs.skip_main != 'true'
         working-directory: pipeline
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_GIST }}
+          GITHUB_TOKEN: ${{ secrets.GIST_PAT }}
         run: |
           echo "=== Cell 2: Uploading to GitHub Gist ==="
           python pipeline_cell2.py
@@ -87,7 +87,7 @@ jobs:
           github.event.inputs.run_backfill == 'true'
         working-directory: pipeline
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_GIST }}
+          GITHUB_TOKEN: ${{ secrets.GIST_PAT }}
         run: |
           echo "=== Cell 3: Extending historical archive ==="
           python pipeline_cell3_backfill.py
