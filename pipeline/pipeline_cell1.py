@@ -590,13 +590,9 @@ def assemble_output(
 }
     }
     for s in schemes_out:
-        # Trim returns to 3 key periods only
-        r = s.get('returns', {})
-        s['returns'] = {
-            '1M':  r.get('1M'),
-            '1Y':  r.get('1Y'),
-            '3Y':  r.get('3Y'),
-        }
+      # Keep all return periods
+    slim['returns'] = s.get('returns', {})
+
         # Remove heavy/null fields
         for key in list(s.keys()):
             if key not in KEEP_FIELDS:
