@@ -1,21 +1,8 @@
-# .github/workflows/daily_pipeline.yml
-# FundLens Daily Data Pipeline
-# Runs automatically at 10:00 PM IST (16:30 UTC) every day.
-# Also runs backfill (Cell 3) immediately after — extending history 3 months deeper each day.
-# Manual trigger also available via GitHub UI.
-#
-# Required GitHub Secrets (Settings → Secrets → Actions):
-#   GITHUB_TOKEN_GIST   — Personal Access Token with 'gist' scope
-#                         (use a different name from the built-in GITHUB_TOKEN)
-
 name: FundLens Daily Pipeline
 
 on:
   schedule:
-    # 16:30 UTC = 10:00 PM IST (UTC+5:30)
     - cron: '30 16 * * *'
-
-  # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
       run_backfill:
@@ -27,7 +14,7 @@ on:
           - 'true'
           - 'false'
       skip_main:
-        description: 'Skip main pipeline (Cell 1+2)? Use for backfill-only runs.'
+        description: 'Skip main pipeline (Cell 1+2)?'
         required: false
         default: 'false'
         type: choice
@@ -38,27 +25,22 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45     # AMFI calls are slow — generous timeout
+    timeout-minutes: 45
 
     steps:
 
-      # ── 1. Checkout repo ──────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Set up Python ──────────────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
-      # ── 3. Install dependencies ───────────────────────────────────────────
       - name: Install dependencies
         run: |
           pip install requests python-dateutil
 
-      # ── 4. Run Cell 1 — Fetch AMFI + Compute ──────────────────────────────
       - name: Run Cell 1 (Fetch + Compute)
         if: github.event.inputs.skip_main != 'true'
         working-directory: pipeline
@@ -68,7 +50,6 @@ jobs:
           echo "=== Cell 1: Fetching from AMFI and computing returns ==="
           python pipeline_cell1.py
 
-      # ── 5. Run Cell 2 — Upload to Main Gist ───────────────────────────────
       - name: Run Cell 2 (Upload to Gist)
         if: github.event.inputs.skip_main != 'true'
         working-directory: pipeline
@@ -78,10 +59,7 @@ jobs:
           echo "=== Cell 2: Uploading to GitHub Gist ==="
           python pipeline_cell2.py
 
-      # ── 6. Run Cell 3 — Backfill (3 months deeper per day) ────────────────
       - name: Run Cell 3 (Historical Backfill)
-        # On schedule: always run backfill
-        # On manual: run only if run_backfill=true
         if: |
           github.event_name == 'schedule' ||
           github.event.inputs.run_backfill == 'true'
@@ -92,18 +70,10 @@ jobs:
           echo "=== Cell 3: Extending historical archive ==="
           python pipeline_cell3_backfill.py
 
-      # ── 7. Report result ──────────────────────────────────────────────────
       - name: Report success
         if: success()
-        run: |
-          echo "✅ FundLens pipeline completed successfully."
-          echo "   Main Gist: updated with today's NAVs and 36-month history."
-          echo "   Archive:   extended 3 months further back."
+        run: echo "FundLens pipeline completed successfully."
 
       - name: Report failure
         if: failure()
-        run: |
-          echo "❌ FundLens pipeline FAILED."
-          echo "   Existing Gist preserved — website unaffected."
-          echo "   Check the logs above for details."
-          echo "   Manual re-run: GitHub Actions → Run workflow."
+        run: echo "FundLens pipeline FAILED. Existing Gist preserved."
