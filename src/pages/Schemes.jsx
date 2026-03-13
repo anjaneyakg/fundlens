@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
-// After running your Colab pipeline, paste the Gist raw URL here:
+// Main slim Gist — schemes list (~3MB), loaded on every page load
 const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
-// e.g. "https://gist.githubusercontent.com/yourusername/abc123/raw/fundlens_schemes.json"
+// Extras Gist — leaderboard + rolling returns, loaded separately after main data
+// Set this after uploading fundlens_extras.json to a second Gist
+const EXTRAS_URL = "";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n >= 1000 ? `₹${(n/1000).toFixed(1)}K Cr` : `₹${n} Cr`;
@@ -283,8 +285,8 @@ const style = `
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 const ReturnCell = ({ value }) => (
-  <div className="ret-cell" style={{ color: returnColor(value) }}>
-    {value > 0 ? "+" : ""}{value}%
+  <div className="ret-cell" style={{ color: value != null ? returnColor(value) : "#6b72a0" }}>
+    {value != null ? `${value > 0 ? "+" : ""}${value}%` : "—"}
   </div>
 );
 
@@ -301,7 +303,7 @@ const DetailPanel = ({ scheme, peers }) => {
   );
 
   const periods = ["1W","1M","3M","6M","1Y","3Y","5Y"];
-  const maxRet = Math.max(...peers.map(p => p.returns["1Y"]));
+  const maxRet = Math.max(...peers.map(p => p.returns?.["1Y"] ?? 0), 1);
 
   return (
     <div>
@@ -330,8 +332,10 @@ const DetailPanel = ({ scheme, peers }) => {
         {periods.map(p => (
           <div className="ret-tile" key={p}>
             <div className="ret-tile-period">{p}</div>
-            <div className="ret-tile-val" style={{color: returnColor(scheme.returns[p])}}>
-              {scheme.returns[p] > 0 ? "+" : ""}{scheme.returns[p]}%
+            <div className="ret-tile-val" style={{color: scheme.returns?.[p] != null ? returnColor(scheme.returns[p]) : "var(--muted)"}}>
+              {scheme.returns?.[p] != null
+                ? `${scheme.returns[p] > 0 ? "+" : ""}${scheme.returns[p]}%`
+                : "—"}
             </div>
           </div>
         ))}
@@ -366,15 +370,14 @@ const DetailPanel = ({ scheme, peers }) => {
             </div>
             <div className="bar-track">
               <div className="bar-fill" style={{
-                width: `${Math.max(2,(p.returns["1Y"]/maxRet)*100)}%`,
+                width: `${Math.max(2,((p.returns?.["1Y"] ?? 0)/maxRet)*100)}%`,
                 background: p.id === scheme.id
                   ? "linear-gradient(90deg, var(--violet), var(--pink))"
                   : "rgba(99,91,255,0.12)",
-                border: p.id === scheme.id ? "none" : "none"
               }} />
             </div>
-            <div className="bar-val" style={{color: p.id === scheme.id ? "var(--violet)" : returnColor(p.returns["1Y"])}}>
-              {p.returns["1Y"] > 0 ? "+" : ""}{p.returns["1Y"]}%
+            <div className="bar-val" style={{color: p.id === scheme.id ? "var(--violet)" : returnColor(p.returns?.["1Y"] ?? 0)}}>
+              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
             </div>
           </div>
         ))}
@@ -388,17 +391,21 @@ const DetailPanel = ({ scheme, peers }) => {
             <th>Fund</th>
             <th>1Y</th>
             <th>3Y</th>
-            <th>AUM</th>
+            <th>Sharpe</th>
           </tr>
         </thead>
         <tbody>
-          {[...peers].sort((a,b) => b.returns["1Y"] - a.returns["1Y"]).slice(0,8).map((p, i) => (
+          {[...peers].sort((a,b) => (b.returns?.["1Y"] ?? -999) - (a.returns?.["1Y"] ?? -999)).slice(0,8).map((p, i) => (
             <tr key={p.id} className={p.id === scheme.id ? "highlight" : ""}>
               <td><span className="peer-rank">{i+1}</span></td>
               <td><div className="peer-name" title={p.name}>{p.amc}</div></td>
-              <td style={{color: returnColor(p.returns["1Y"])}}>{p.returns["1Y"] > 0 ? "+" : ""}{p.returns["1Y"]}%</td>
-              <td style={{color: returnColor(p.returns["3Y"])}}>{p.returns["3Y"] > 0 ? "+" : ""}{p.returns["3Y"]}%</td>
-              <td style={{color:"var(--muted)"}}>{fmt(p.aum)}</td>
+              <td style={{color: returnColor(p.returns?.["1Y"] ?? 0)}}>
+                {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+              </td>
+              <td style={{color: returnColor(p.returns?.["3Y"] ?? 0)}}>
+                {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
+              </td>
+              <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -551,15 +558,33 @@ export default function App() {
       setLoadPct(30); setLoadMsg("Fetching scheme data...");
       const resp = await fetch(DATA_URL);
       if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${resp.statusText}`);
-      setLoadPct(65); setLoadMsg("Parsing analytics data...");
+      setLoadPct(65); setLoadMsg("Parsing scheme data...");
       const json = await resp.json();
-      setLoadPct(85); setLoadMsg("Building dashboard...");
-      setAllSchemes(json.schemes   || []);
-      setAmcList(json.amcs         || []);
+      setAllSchemes(json.schemes     || []);
+      setAmcList(json.amcs           || []);
       setCategoryList(json.categories || []);
-      setLeaderboard(json.leaderboard || {});
-      setRollingMap(json.rolling   || {});
-      setMeta(json.meta            || null);
+      setMeta(json.meta              || null);
+
+      // Fetch extras (leaderboard + rolling) separately if URL is set
+      if (EXTRAS_URL) {
+        setLoadMsg("Loading leaderboard data...");
+        try {
+          const extResp = await fetch(EXTRAS_URL);
+          if (extResp.ok) {
+            const ext = await extResp.json();
+            setLeaderboard(ext.leaderboard || {});
+            setRollingMap(ext.rolling     || {});
+          }
+        } catch (e) {
+          // Extras failed — not critical, app still works
+          console.warn("Extras fetch failed:", e.message);
+        }
+      } else {
+        // Fallback: leaderboard/rolling may still be in main Gist (older format)
+        setLeaderboard(json.leaderboard || {});
+        setRollingMap(json.rolling     || {});
+      }
+
       setLoadPct(100); setLoadMsg("Ready!");
       setTimeout(() => setLoading(false), 300);
     } catch (e) {
@@ -680,7 +705,10 @@ export default function App() {
 
           <select className="filter-select" value={amcFilter} onChange={e=>setAmcFilter(e.target.value)}>
             <option value="All">All AMCs</option>
-            {amcList.map(a=><option key={a}>{a}</option>)}
+            {amcList.map(a=>{
+              const name = typeof a === 'string' ? a : a.name;
+              return <option key={name} value={name}>{name}</option>;
+            })}
           </select>
 
           <select className="filter-select" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
