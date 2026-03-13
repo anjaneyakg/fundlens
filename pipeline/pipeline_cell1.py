@@ -583,6 +583,36 @@ def assemble_output(
     print(f"  [Step 7]    {no_nav_count} schemes had no current NAV (closed/wound-up).")
     print(f"  [Step 7]    {no_history_count} schemes had no NAV history.")
 
+    # ── Slim schemes for Gist size — strip heavy fields before upload
+    KEEP_FIELDS = {
+        'id', 'name', 'amc', 'category', 'type', 'plan',
+        'structure', 'nav', 'navDate', 'returns'
+    }
+    for s in schemes_out:
+        # Trim returns to 3 key periods only
+        r = s.get('returns', {})
+        s['returns'] = {
+            '1M':  r.get('1M'),
+            '1Y':  r.get('1Y'),
+            '3Y':  r.get('3Y'),
+        }
+        # Remove heavy/null fields
+        for key in list(s.keys()):
+            if key not in KEEP_FIELDS:
+                del s[key]
+
+    # Save extras (leaderboard + rolling) separately
+    import json as _json
+    extras = {
+        'meta':        output['meta'],
+        'leaderboard': leaderboard,
+        'rolling':     rolling,
+    }
+    with open('fundlens_extras.json', 'w', encoding='utf-8') as f:
+        _json.dump(extras, f, separators=(',', ':'))
+    extras_mb = len(_json.dumps(extras, separators=(',',':')).encode()) / (1024*1024)
+    print(f"  [Step 7] Extras saved: fundlens_extras.json ({extras_mb:.2f}MB)")
+    
     return output
 
 
