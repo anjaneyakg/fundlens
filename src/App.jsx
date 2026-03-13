@@ -12,6 +12,7 @@ import GoalSIP from './pages/GoalSIP'
 import GoalCalculator from './pages/GoalCalculator'
 import LoanCalc from './pages/LoanCalc'
 import PrepayVsInvest from './pages/PrepayVsInvest'
+import STPCalculator from './pages/STPCalculator'
 
 export default function App() {
   return (
@@ -30,7 +31,8 @@ export default function App() {
         <Route path="/goal-calculator" element={<GoalCalculator />} />
         <Route path="/loan-calculator" element={<LoanCalc />} />
         <Route path="/prepay-vs-invest" element={<PrepayVsInvest />} />
-
+        <Route path="/stp-calculator" element={<STPCalculator />} />
+        
       </Routes>
     </>
   )
