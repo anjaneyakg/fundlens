@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // Main slim Gist — schemes list (~3MB), loaded on every page load
-const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
+const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/3610ed9080ed30e896e2973c7f9ee462/raw/c7f31d23c4ce79850602a27f138e739154b271a4/fundlens_extras.json";
 // Extras Gist — leaderboard + rolling returns, loaded separately after main data
 // Set this after uploading fundlens_extras.json to a second Gist
 const EXTRAS_URL = "";
