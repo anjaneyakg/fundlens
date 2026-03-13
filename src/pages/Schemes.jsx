@@ -3,8 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // Main slim Gist — schemes list (~3MB), loaded on every page load
 const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
-// Extras Gist — leaderboard + rolling returns, loaded separately after main data
-// Set this after uploading fundlens_extras.json to a second Gist
+// Extras Gist — leaderboard + rolling returns, loaded separately
 const EXTRAS_URL = "https://gist.githubusercontent.com/anjaneyakg/3610ed9080ed30e896e2973c7f9ee462/raw/fundlens_extras.json";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -285,8 +284,8 @@ const style = `
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 const ReturnCell = ({ value }) => (
-  <div className="ret-cell" style={{ color: value != null ? returnColor(value) : "#6b72a0" }}>
-    {value != null ? `${value > 0 ? "+" : ""}${value}%` : "—"}
+  <div className="ret-cell" style={{ color: returnColor(value) }}>
+    {value > 0 ? "+" : ""}{value}%
   </div>
 );
 
@@ -303,7 +302,7 @@ const DetailPanel = ({ scheme, peers }) => {
   );
 
   const periods = ["1W","1M","3M","6M","1Y","3Y","5Y"];
-  const maxRet = Math.max(...peers.map(p => p.returns?.["1Y"] ?? 0), 1);
+  const maxRet = Math.max(...peers.map(p => p.returns["1Y"]));
 
   return (
     <div>
@@ -332,10 +331,8 @@ const DetailPanel = ({ scheme, peers }) => {
         {periods.map(p => (
           <div className="ret-tile" key={p}>
             <div className="ret-tile-period">{p}</div>
-            <div className="ret-tile-val" style={{color: scheme.returns?.[p] != null ? returnColor(scheme.returns[p]) : "var(--muted)"}}>
-              {scheme.returns?.[p] != null
-                ? `${scheme.returns[p] > 0 ? "+" : ""}${scheme.returns[p]}%`
-                : "—"}
+            <div className="ret-tile-val" style={{color: returnColor(scheme.returns[p])}}>
+              {scheme.returns[p] > 0 ? "+" : ""}{scheme.returns[p]}%
             </div>
           </div>
         ))}
@@ -370,14 +367,15 @@ const DetailPanel = ({ scheme, peers }) => {
             </div>
             <div className="bar-track">
               <div className="bar-fill" style={{
-                width: `${Math.max(2,((p.returns?.["1Y"] ?? 0)/maxRet)*100)}%`,
+                width: `${Math.max(2,(p.returns["1Y"]/maxRet)*100)}%`,
                 background: p.id === scheme.id
                   ? "linear-gradient(90deg, var(--violet), var(--pink))"
                   : "rgba(99,91,255,0.12)",
+                border: p.id === scheme.id ? "none" : "none"
               }} />
             </div>
-            <div className="bar-val" style={{color: p.id === scheme.id ? "var(--violet)" : returnColor(p.returns?.["1Y"] ?? 0)}}>
-              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+            <div className="bar-val" style={{color: p.id === scheme.id ? "var(--violet)" : returnColor(p.returns["1Y"])}}>
+              {p.returns["1Y"] > 0 ? "+" : ""}{p.returns["1Y"]}%
             </div>
           </div>
         ))}
@@ -391,21 +389,17 @@ const DetailPanel = ({ scheme, peers }) => {
             <th>Fund</th>
             <th>1Y</th>
             <th>3Y</th>
-            <th>Sharpe</th>
+            <th>AUM</th>
           </tr>
         </thead>
         <tbody>
-          {[...peers].sort((a,b) => (b.returns?.["1Y"] ?? -999) - (a.returns?.["1Y"] ?? -999)).slice(0,8).map((p, i) => (
+          {[...peers].sort((a,b) => b.returns["1Y"] - a.returns["1Y"]).slice(0,8).map((p, i) => (
             <tr key={p.id} className={p.id === scheme.id ? "highlight" : ""}>
               <td><span className="peer-rank">{i+1}</span></td>
               <td><div className="peer-name" title={p.name}>{p.amc}</div></td>
-              <td style={{color: returnColor(p.returns?.["1Y"] ?? 0)}}>
-                {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-              </td>
-              <td style={{color: returnColor(p.returns?.["3Y"] ?? 0)}}>
-                {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
-              </td>
-              <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
+              <td style={{color: returnColor(p.returns["1Y"])}}>{p.returns["1Y"] > 0 ? "+" : ""}{p.returns["1Y"]}%</td>
+              <td style={{color: returnColor(p.returns["3Y"])}}>{p.returns["3Y"] > 0 ? "+" : ""}{p.returns["3Y"]}%</td>
+              <td style={{color:"var(--muted)"}}>{fmt(p.aum)}</td>
             </tr>
           ))}
         </tbody>
@@ -537,15 +531,17 @@ export default function App() {
   const [error,        setError]        = useState(null);
 
   // ── UI state
-  const [search,      setSearch]      = useState("");
-  const [amcFilter,   setAmcFilter]   = useState("All");
-  const [catFilter,   setCatFilter]   = useState("All");
-  const [typeFilter,  setTypeFilter]  = useState("All");
-  const [planFilter,  setPlanFilter]  = useState("Direct");
-  const [sortKey,     setSortKey]     = useState("1Y");
-  const [sortDir,     setSortDir]     = useState(-1);
-  const [selected,    setSelected]    = useState(null);
-  const [tab,         setTab]         = useState("schemes");
+  const [search,        setSearch]       = useState("");
+  const [amcFilter,     setAmcFilter]    = useState("All");
+  const [catFilter,     setCatFilter]    = useState("Large Cap");
+  const [typeFilter,    setTypeFilter]   = useState("Equity");
+  const [planFilter,    setPlanFilter]   = useState("Direct");
+  const [optionFilter,  setOptionFilter] = useState("Growth");
+  const [natureFilter,  setNatureFilter] = useState("Open Ended");
+  const [sortKey,       setSortKey]      = useState("1Y");
+  const [sortDir,       setSortDir]      = useState(-1);
+  const [selected,      setSelected]     = useState(null);
+  const [tab,           setTab]          = useState("schemes");
 
   // ── Fetch data
   const loadData = useCallback(async () => {
@@ -553,17 +549,17 @@ export default function App() {
     setLoadMsg("Connecting to data source...");
     try {
       if (!DATA_URL || DATA_URL === "YOUR_GIST_RAW_URL_HERE") {
-        throw new Error("DATA_URL not configured. Run the Colab pipeline first, then paste your Gist raw URL into the DATA_URL constant.");
+        throw new Error("DATA_URL not configured. Run the Colab pipeline first.");
       }
       setLoadPct(30); setLoadMsg("Fetching scheme data...");
       const resp = await fetch(DATA_URL);
       if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${resp.statusText}`);
       setLoadPct(65); setLoadMsg("Parsing scheme data...");
       const json = await resp.json();
-      setAllSchemes(json.schemes     || []);
-      setAmcList(json.amcs           || []);
+      setAllSchemes(json.schemes      || []);
+      setAmcList(json.amcs            || []);
       setCategoryList(json.categories || []);
-      setMeta(json.meta              || null);
+      setMeta(json.meta               || null);
 
       // Fetch extras (leaderboard + rolling) separately if URL is set
       if (EXTRAS_URL) {
@@ -573,16 +569,14 @@ export default function App() {
           if (extResp.ok) {
             const ext = await extResp.json();
             setLeaderboard(ext.leaderboard || {});
-            setRollingMap(ext.rolling     || {});
+            setRollingMap(ext.rolling      || {});
           }
         } catch (e) {
-          // Extras failed — not critical, app still works
           console.warn("Extras fetch failed:", e.message);
         }
       } else {
-        // Fallback: leaderboard/rolling may still be in main Gist (older format)
         setLeaderboard(json.leaderboard || {});
-        setRollingMap(json.rolling     || {});
+        setRollingMap(json.rolling      || {});
       }
 
       setLoadPct(100); setLoadMsg("Ready!");
@@ -595,14 +589,24 @@ export default function App() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Derive option (Growth/IDCW) from scheme name — no pipeline change needed
+  const getOption = (name) => {
+    const n = (name || "").toLowerCase();
+    if (n.includes("idcw") || n.includes("dividend") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
+    if (n.includes("bonus")) return "Bonus";
+    return "Growth";
+  };
+
   // ── Filtering & sorting
   const filtered = allSchemes.filter(s => {
-    if (planFilter !== "All" && s.plan     !== planFilter)  return false;
-    if (amcFilter  !== "All" && s.amc      !== amcFilter)   return false;
-    if (typeFilter !== "All" && s.type     !== typeFilter)   return false;
-    if (catFilter  !== "All" && s.category !== catFilter)    return false;
+    if (planFilter   !== "All" && s.plan      !== planFilter)              return false;
+    if (amcFilter    !== "All" && s.amc       !== amcFilter)               return false;
+    if (typeFilter   !== "All" && s.type      !== typeFilter)              return false;
+    if (catFilter    !== "All" && s.category  !== catFilter)               return false;
+    if (natureFilter !== "All" && s.structure !== natureFilter)            return false;
+    if (optionFilter !== "All" && getOption(s.name) !== optionFilter)      return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) &&
-                  !s.amc.toLowerCase().includes(search.toLowerCase()))  return false;
+                  !s.amc.toLowerCase().includes(search.toLowerCase()))     return false;
     return true;
   }).sort((a, b) => {
     const aVal = sortKey === "SHARPE" ? (a.risk?.sharpe ?? -999)
@@ -687,7 +691,7 @@ export default function App() {
               value={search} onChange={e=>setSearch(e.target.value)} />
           </div>
 
-          {/* Direct / Regular toggle */}
+          {/* Plan: Direct / Regular */}
           <div className="toggle-group">
             {["All","Direct","Regular"].map(p => (
               <button key={p} className={`toggle-btn ${planFilter===p?"active":""}`}
@@ -695,22 +699,41 @@ export default function App() {
             ))}
           </div>
 
-          {/* Asset type filter */}
+          {/* Option: Growth / IDCW */}
           <div className="toggle-group">
-            {["All","Equity","Debt","Hybrid","Passive","FoF"].map(t => (
+            {["All","Growth","IDCW","Bonus"].map(o => (
+              <button key={o} className={`toggle-btn ${optionFilter===o?"active":""}`}
+                onClick={()=>setOptionFilter(o)}>{o}</button>
+            ))}
+          </div>
+
+          {/* Asset type */}
+          <div className="toggle-group">
+            {["All","Equity","Debt","Hybrid","Passive"].map(t => (
               <button key={t} className={`toggle-btn ${typeFilter===t?"active":""}`}
                 onClick={()=>setTypeFilter(t)}>{t}</button>
             ))}
           </div>
 
+          {/* Nature: Open / Close / Interval */}
+          <div className="toggle-group">
+            {["All","Open Ended","Close Ended","Interval"].map(n => (
+              <button key={n} className={`toggle-btn ${natureFilter===n?"active":""}`}
+                onClick={()=>setNatureFilter(n)}
+                style={{fontSize:"10px"}}>{n === "Open Ended" ? "Open" : n === "Close Ended" ? "Close" : n}</button>
+            ))}
+          </div>
+
+          {/* AMC dropdown */}
           <select className="filter-select" value={amcFilter} onChange={e=>setAmcFilter(e.target.value)}>
             <option value="All">All AMCs</option>
-            {amcList.map(a=>{
-              const name = typeof a === 'string' ? a : a.name;
+            {amcList.map(a => {
+              const name = typeof a === "string" ? a : a.name;
               return <option key={name} value={name}>{name}</option>;
             })}
           </select>
 
+          {/* Category dropdown */}
           <select className="filter-select" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
             <option value="All">All Categories</option>
             {categoryList.map(c=><option key={c}>{c}</option>)}
