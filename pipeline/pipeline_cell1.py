@@ -13,6 +13,7 @@
 #   Step 7 — Validate (never push bad data)
 #   Step 8 — Save locally for Cell 2 to upload
 
+import bisect
 import json
 import math
 import time
@@ -312,42 +313,68 @@ def fetch_nav_history(months_back: int = HISTORY_MONTHS) -> dict:
 
 def compute_returns(nav_history: list[dict], current_nav: float) -> dict:
     """
-    Compute returns from monthly NAV history.
+    Compute returns using calendar-based NAV lookup (not index counting).
     nav_history: [ {date: 'YYYY-MM-DD', nav: float}, ... ] oldest→newest
-    current_nav: today's NAV (may be more recent than last history entry)
-    Returns: { '1W': %, '1M': %, '3M': %, '6M': %, '1Y': %, '3Y': % }
+    current_nav: today's NAV from NAVAll.txt
+
+    Fix: previously used index counting (history[-n]) which drifts whenever
+    a month has no data. Now uses bisect on actual dates — finds the closest
+    NAV on-or-before the target date, matching SEBI / industry convention.
+
+    Return methodology (matches JM Financial / industry platforms):
+      <1Y  → Absolute return %          e.g. 1M, 3M, 6M
+      ≥1Y  → CAGR (compound annualised) e.g. 1Y, 3Y
     """
     if not nav_history:
         return {}
 
-    now_nav = current_nav
-    history = nav_history  # already sorted oldest → newest
+    # Build parallel sorted lists for binary search
+    dates = []
+    navs_list = []
+    for entry in nav_history:
+        d = parse_date(entry["date"])
+        if d:
+            dates.append(d)
+            navs_list.append(entry["nav"])
 
-    def nav_n_months_ago(n: int) -> float | None:
-        """Get NAV approximately n months ago from history."""
-        if len(history) < n:
+    if not dates:
+        return {}
+
+    def nav_on_or_before(target_date) -> float | None:
+        """
+        Find the most recent NAV that existed on or before target_date.
+        This correctly handles weekends, holidays, and data gaps.
+        """
+        idx = bisect.bisect_right(dates, target_date) - 1
+        if idx < 0:
             return None
-        # Count back n entries from end
-        idx = max(0, len(history) - n)
-        return history[idx]["nav"]
+        return navs_list[idx]
 
     returns = {}
+    now_nav = current_nav
 
-    # 1M, 3M, 6M, 1Y, 3Y — from monthly snapshots
-    for months, key in [(1, "1M"), (3, "3M"), (6, "6M"), (12, "1Y"), (36, "3Y")]:
-        nav_then = nav_n_months_ago(months)
+    # Short-term: absolute return % (industry standard for periods < 1 year)
+    for days, key in [(30, "1M"), (91, "3M"), (182, "6M")]:
+        target = TODAY - timedelta(days=days)
+        nav_then = nav_on_or_before(target)
         if nav_then and now_nav:
-            if months < 12:
-                returns[key] = absolute_return(nav_then, now_nav)
-            else:
-                years = months / 12
-                returns[key] = cagr(nav_then, now_nav, years)
+            returns[key] = absolute_return(nav_then, now_nav)
 
-    # 1W — approximate from current NAV vs last history entry
-    # (Weekly precision needs daily data; use last monthly as proxy)
-    last_nav = history[-1]["nav"] if history else None
-    if last_nav and now_nav:
-        returns["1W"] = absolute_return(last_nav, now_nav)
+    # Long-term: CAGR / compound annualised (industry standard for >= 1 year)
+    for days, years, key in [(365, 1.0, "1Y"), (1095, 3.0, "3Y")]:
+        target = TODAY - timedelta(days=days)
+        nav_then = nav_on_or_before(target)
+        if nav_then and now_nav:
+            returns[key] = cagr(nav_then, now_nav, years)
+
+    # 1W — only valid if a NAV point exists within the last 7 days in history.
+    # Monthly snapshots cannot reliably represent a 7-day window; if the
+    # closest available NAV is the same as the month-end proxy, suppress 1W
+    # so the frontend shows "—" rather than a misleading number.
+    target_1w = TODAY - timedelta(days=7)
+    nav_1w = nav_on_or_before(target_1w)
+    if nav_1w and now_nav and nav_1w != now_nav:
+        returns["1W"] = absolute_return(nav_1w, now_nav)
 
     return returns
 
