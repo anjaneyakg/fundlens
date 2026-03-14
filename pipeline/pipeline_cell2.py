@@ -8,7 +8,7 @@ try:
     from google.colab import userdata
     GITHUB_TOKEN = userdata.get('GITHUB_TOKEN')
 except ImportError:
-    GITHUB_TOKEN = os.environ.get('GIST_PAT', '')
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 
 HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}",
