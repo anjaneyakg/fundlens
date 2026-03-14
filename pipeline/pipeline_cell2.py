@@ -9,6 +9,7 @@ try:
     GITHUB_TOKEN = userdata.get('GITHUB_TOKEN')
 except ImportError:
     GITHUB_TOKEN = os.environ.get('GIST_PAT', '')
+
 HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json",
