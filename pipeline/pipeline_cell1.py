@@ -33,7 +33,7 @@ AMFI_SCHEME_MASTER_URL = "https://portal.amfiindia.com/DownloadSchemeData_Po.asp
 AMFI_NAV_ALL_URL       = "https://www.amfiindia.com/spages/NAVAll.txt"
 AMFI_NAV_HISTORY_URL   = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 
-HISTORY_MONTHS         = 36        # months of NAV history to fetch
+HISTORY_MONTHS         = 24        # months of NAV history to fetch (keep file size ~15MB)
 RISK_FREE_RATE_ANNUAL  = 0.065     # 6.5% — used for Sharpe/Sortino
 REQUEST_DELAY_SEC      = 1.5       # polite delay between AMFI calls
 MAX_RETRIES            = 3         # retry count per HTTP call
@@ -611,16 +611,11 @@ def assemble_output(
     print(f"  [Step 7]    {no_history_count} schemes had no NAV history.")
 
     # ── Slim schemes for Gist size — strip heavy fields before upload
-   KEEP_FIELDS = {
-    'id', 'name', 'navName', 'amc', 'category', 'type', 'plan',
-    'structure', 'nav', 'navDate', 'returns'
-}
+    KEEP_FIELDS = {
+        'id', 'name', 'navName', 'amc', 'category', 'type', 'plan',
+        'structure', 'nav', 'navDate', 'returns'
     }
     for s in schemes_out:
-      # Keep all return periods
-    slim['returns'] = s.get('returns', {})
-
-        # Remove heavy/null fields
         for key in list(s.keys()):
             if key not in KEEP_FIELDS:
                 del s[key]
