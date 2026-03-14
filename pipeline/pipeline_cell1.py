@@ -1,29 +1,35 @@
 # pipeline_cell1.py
-# FundLens Data Pipeline — Cell 1
+# FundLens Data Pipeline — Cell 1 — v4.0
 # Source: AMFI Direct (amfiindia.com + portal.amfiindia.com)
-# Replaces: MFAPI.in dependency entirely
 #
 # What this does:
-#   Step 1 — Fetch scheme master (all schemes: open + close + interval ended)
-#   Step 2 — Fetch today's NAVs
-#   Step 3 — Fetch 36-month NAV history (12 × 90-day windows)
-#   Step 4 — Compute returns (1W, 1M, 3M, 6M, 1Y, 3Y) from NAV history
-#   Step 5 — Compute risk ratios (Std Dev, Sharpe, Sortino)
-#   Step 6 — Build leaderboard, rolling returns, AMC list, categories
-#   Step 7 — Validate (never push bad data)
-#   Step 8 — Save locally for Cell 2 to upload
+#   Step 1 — Fetch scheme master (all schemes)
+#   Step 2 — Fetch today's NAVs (NAVAll.txt)
+#   Step 3 — Fetch 24-month NAV history (daily, no month-end collapse)
+#   Step 4 — Compute returns anchored to navDate (not date.today())
+#   Step 5 — Compute risk ratios (Std Dev, Sharpe, Sortino, MaxDrawdown)
+#   Step 6 — Build category index (top 10 per category x plan)
+#   Step 7 — Split NAV history into files (category x plan)
+#   Step 8 — Validate and save all output files locally
+#
+# Output files (picked up by Cell 2 for Gist upload):
+#   fundlens_schemes.json        — slim scheme list (id, name, nav, meta)
+#   fundlens_returns.json        — all returns keyed by schemeId
+#   fundlens_ratios.json         — all risk ratios keyed by schemeId
+#   fundlens_category_index.json — top 10 per category x plan
+#   nav_history/                 — ~74 files: nav_{category_slug}_{plan}.json
 
 import bisect
 import json
 import math
+import os
+import re
 import time
 import requests
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from collections import defaultdict
-from io import StringIO
 
-# Local modules (same folder)
 from amfi_normalise import normalise_amc, parse_scheme_type_category, is_direct_plan
 from validate import validate_main_gist, print_validation_summary, ValidationError
 
@@ -33,19 +39,18 @@ AMFI_SCHEME_MASTER_URL = "https://portal.amfiindia.com/DownloadSchemeData_Po.asp
 AMFI_NAV_ALL_URL       = "https://www.amfiindia.com/spages/NAVAll.txt"
 AMFI_NAV_HISTORY_URL   = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 
-HISTORY_MONTHS         = 24        # months of NAV history to fetch (keeps file ~15MB)
-RISK_FREE_RATE_ANNUAL  = 0.065     # 6.5% — used for Sharpe/Sortino
-REQUEST_DELAY_SEC      = 1.5       # polite delay between AMFI calls
-MAX_RETRIES            = 3         # retry count per HTTP call
-OUTPUT_FILE            = "fundlens_schemes.json"
+HISTORY_MONTHS         = 24
+RISK_FREE_RATE_ANNUAL  = 0.065
+REQUEST_DELAY_SEC      = 1.5
+MAX_RETRIES            = 3
+NAV_HISTORY_DIR        = "nav_history"
 
-TODAY                  = date.today()
-TODAY_STR              = TODAY.strftime("%Y-%m-%d")
+TODAY     = date.today()
+TODAY_STR = TODAY.strftime("%Y-%m-%d")
 
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
-def safe_get(url: str, params: dict = None, label: str = "") -> str:
-    """HTTP GET with retry + polite delay. Returns text content."""
+def safe_get(url, params=None, label=""):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             resp = requests.get(url, params=params, timeout=30)
@@ -59,12 +64,36 @@ def safe_get(url: str, params: dict = None, label: str = "") -> str:
     raise RuntimeError(f"Failed to fetch {label} after {MAX_RETRIES} attempts.")
 
 
-def date_windows(months_back: int):
+def parse_date(date_str):
     """
-    Generate (from_date, to_date) pairs covering the last N months,
-    in 90-day chunks, oldest first.
-    AMFI max window = 90 days per call.
+    Parse AMFI date strings correctly.
+    AMFI returns DD-Mon-YYYY (e.g. 13-Mar-2026), not YYYY-MM-DD.
+    Previous pipeline used d_str[:7] for month key — gave garbage like
+    '13-Mar-' instead of '2026-03'. Always parse fully before formatting.
     """
+    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(date_str.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def to_iso(d):
+    return d.strftime("%Y-%m-%d")
+
+
+def category_slug(category, plan):
+    """
+    Generate stable filename slug: category + plan.
+    e.g. "Large Cap" + "Direct" -> "largecap_direct"
+    File: nav_largecap_direct.json
+    """
+    slug = re.sub(r'[^a-z0-9]+', '_', category.lower()).strip('_')
+    return f"{slug}_{plan.lower()}"
+
+
+def date_windows(months_back):
     end = TODAY
     start = (TODAY - relativedelta(months=months_back)).replace(day=1)
     windows = []
@@ -76,19 +105,8 @@ def date_windows(months_back: int):
     return windows
 
 
-def parse_date(date_str: str):
-    """Parse AMFI date strings: '01-Jan-2024' or '2024-01-01'."""
-    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(date_str.strip(), fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def cagr(nav_then: float, nav_now: float, years: float) -> float | None:
-    """CAGR from two NAV points over N years. Returns percentage."""
-    if not nav_then or not nav_now or years <= 0:
+def cagr(nav_then, nav_now, years):
+    if not nav_then or not nav_now or years <= 0 or nav_then == 0:
         return None
     try:
         return round(((nav_now / nav_then) ** (1 / years) - 1) * 100, 2)
@@ -96,22 +114,16 @@ def cagr(nav_then: float, nav_now: float, years: float) -> float | None:
         return None
 
 
-def absolute_return(nav_then: float, nav_now: float) -> float | None:
-    """Absolute return % for short periods (< 1 year)."""
-    if not nav_then or not nav_now:
+def absolute_return(nav_then, nav_now):
+    if not nav_then or not nav_now or nav_then == 0:
         return None
     return round((nav_now / nav_then - 1) * 100, 2)
 
 
 # ─── Step 1: Fetch Scheme Master ─────────────────────────────────────────────
 
-def fetch_scheme_master() -> dict:
-    """
-    Fetch AMFI scheme master. Returns dict keyed by scheme_code (str).
-    Each entry: { id, name, amcFull, amc, type, category, plan, isin, inceptionDate }
-    Includes ALL scheme types: Open Ended, Close Ended, Interval.
-    """
-    print("\n[Step 1] Fetching scheme master from AMFI...")
+def fetch_scheme_master():
+    print("\n[Step 1] Fetching scheme master...")
     raw = safe_get(AMFI_SCHEME_MASTER_URL, label="scheme master")
     schemes = {}
     current_amc_full = ""
@@ -120,59 +132,58 @@ def fetch_scheme_master() -> dict:
         line = line.strip()
         if not line:
             continue
-
-        # AMC header lines: "Aditya Birla Sun Life AMC Limited,100033,..."
-        # Regular data lines have 9+ comma-separated fields
         parts = [p.strip() for p in line.split(",")]
-
-        # Detect AMC header line (first field doesn't look like a scheme code)
         if len(parts) >= 2 and not parts[1].isdigit():
             current_amc_full = parts[0]
             continue
-
-        # Data line: AMC, Code, Scheme Name, Scheme Type, Scheme Category,
-        #            Scheme NAV Name, Min Amount, Launch Date, Closure Date, ISIN, ISIN2
         if len(parts) < 9:
             continue
-
         try:
-            amc_raw      = parts[0]
-            code         = parts[1].strip()
-            scheme_name  = parts[2].strip()
-            scheme_type_raw = parts[3].strip()  # e.g. "Open Ended"
-            scheme_cat_raw  = parts[4].strip()  # e.g. "Equity Scheme - Large Cap Fund"
-            nav_name     = parts[5].strip()
-            launch_raw   = parts[7].strip() if len(parts) > 7 else ""
-            isin         = parts[9].strip() if len(parts) > 9 else ""
+            amc_raw         = parts[0]
+            code            = parts[1].strip()
+            scheme_name     = parts[2].strip()
+            scheme_type_raw = parts[3].strip()
+            scheme_cat_raw  = parts[4].strip()
+            nav_name        = parts[5].strip()
+            launch_raw      = parts[7].strip() if len(parts) > 7 else ""
+            isin            = parts[9].strip() if len(parts) > 9 else ""
 
             if not code or not code.isdigit():
                 continue
 
-            # Use AMC from data line first, fall back to header
-            amc_source = amc_raw if amc_raw else current_amc_full
-            amc_full = amc_source.strip()
+            amc_full  = (amc_raw or current_amc_full).strip()
             amc_short = normalise_amc(amc_full)
 
-            # Parse type and category from AMFI's verbose string
-            combined_type_str = f"{scheme_type_raw} {scheme_cat_raw}"
-            scheme_type, category = parse_scheme_type_category(combined_type_str)
+            scheme_type, category = parse_scheme_type_category(
+                f"{scheme_type_raw} {scheme_cat_raw}"
+            )
+            plan = "Direct" if is_direct_plan(nav_name or scheme_name) else "Regular"
 
-            # Plan detection from NAV name (more reliable than scheme name)
-            plan_source = nav_name or scheme_name
-            plan = "Direct" if is_direct_plan(plan_source) else "Regular"
-
-            # Inception date
             inception_date = ""
             if launch_raw:
                 d = parse_date(launch_raw)
-                inception_date = d.strftime("%Y-%m-%d") if d else ""
+                inception_date = to_iso(d) if d else ""
 
-            # Open/Close/Interval ended
             structure = "Open Ended"
             if "close" in scheme_type_raw.lower():
                 structure = "Close Ended"
             elif "interval" in scheme_type_raw.lower():
                 structure = "Interval"
+
+            # Sub-classify Index into ETF vs Index Fund
+            display_category = category
+            if category == "Index":
+                name_lower = (nav_name or scheme_name).lower()
+                if "etf" in name_lower or "exchange traded" in name_lower:
+                    display_category = "Index - ETF"
+                else:
+                    display_category = "Index - Index Fund"
+
+            # Close Ended and Interval get explicit labels
+            if structure == "Close Ended":
+                display_category = "Close Ended"
+            elif structure == "Interval":
+                display_category = "Interval"
 
             schemes[code] = {
                 "id":            code,
@@ -181,34 +192,26 @@ def fetch_scheme_master() -> dict:
                 "amcFull":       amc_full,
                 "amc":           amc_short,
                 "type":          scheme_type,
-                "category":      category,
+                "category":      display_category,
                 "plan":          plan,
                 "structure":     structure,
                 "isin":          isin,
                 "inceptionDate": inception_date,
             }
+        except Exception:
+            continue
 
-        except Exception as e:
-            continue  # skip malformed lines silently
-
-    print(f"  [Step 1] ✅ {len(schemes)} schemes loaded from master.")
+    print(f"  [Step 1] ✅ {len(schemes)} schemes loaded.")
     return schemes
 
 
-# ─── Step 2: Fetch Today's NAVs ──────────────────────────────────────────────
+# ─── Step 2: Fetch Current NAVs ──────────────────────────────────────────────
 
-def fetch_current_navs() -> dict:
-    """
-    Fetch NAVAll.txt — all current NAVs.
-    Returns dict: { scheme_code: { nav, navDate, aum, expenseRatio } }
-    NAVAll.txt format (semicolon delimited):
-    Scheme Code;ISIN Div Payout;ISIN Growth;Scheme Name;Net Asset Value;Date
-    """
-    print("\n[Step 2] Fetching current NAVs from AMFI NAVAll.txt...")
+def fetch_current_navs():
+    print("\n[Step 2] Fetching current NAVs...")
     raw = safe_get(AMFI_NAV_ALL_URL, label="NAVAll.txt")
     navs = {}
     skipped = 0
-
     for line in raw.splitlines():
         line = line.strip()
         if not line or line.startswith(";"):
@@ -217,124 +220,99 @@ def fetch_current_navs() -> dict:
         if len(parts) < 6:
             continue
         try:
-            code    = parts[0].strip()
-            nav_str = parts[4].strip()
-            date_str= parts[5].strip()
-
+            code     = parts[0].strip()
+            nav_str  = parts[4].strip()
+            date_str = parts[5].strip()
             if not code.isdigit():
                 continue
-            nav_val = float(nav_str)
             nav_date = parse_date(date_str)
-
             navs[code] = {
-                "nav":     round(nav_val, 4),
-                "navDate": nav_date.strftime("%Y-%m-%d") if nav_date else TODAY_STR,
+                "nav":     round(float(nav_str), 4),
+                "navDate": to_iso(nav_date) if nav_date else TODAY_STR,
             }
         except Exception:
             skipped += 1
-            continue
-
-    print(f"  [Step 2] ✅ {len(navs)} current NAVs loaded. ({skipped} lines skipped)")
+    print(f"  [Step 2] ✅ {len(navs)} NAVs loaded. ({skipped} skipped)")
     return navs
 
 
-# ─── Step 3: Fetch NAV History ───────────────────────────────────────────────
+# ─── Step 3: Fetch NAV History (daily) ───────────────────────────────────────
 
-def fetch_nav_history(months_back: int = HISTORY_MONTHS) -> dict:
+def fetch_nav_history(months_back=HISTORY_MONTHS):
     """
-    Fetch historical NAVs for all schemes over the last N months.
-    Makes multiple 90-day window calls to AMFI.
-    Returns dict: { scheme_code: [ {date: 'YYYY-MM-DD', nav: float}, ... ] }
-    Sorted oldest → newest.
+    Fetch daily NAV history — ALL daily entries, no month-end collapse.
+    Key fix v4: parse_date() now handles DD-Mon-YYYY correctly.
+    Previous collapse code used d_str[:7] which was broken for AMFI format.
     """
-    print(f"\n[Step 3] Fetching {months_back}-month NAV history from AMFI...")
+    print(f"\n[Step 3] Fetching {months_back}M daily NAV history...")
     windows = date_windows(months_back)
-    print(f"  Will make {len(windows)} AMFI calls (90-day windows)...")
+    print(f"  {len(windows)} windows...")
 
-    # Raw collection: { code: { 'YYYY-MM-DD': nav_float } }
     raw_history = defaultdict(dict)
 
     for i, (from_dt, to_dt) in enumerate(windows, 1):
         from_str = from_dt.strftime("%d-%b-%Y")
         to_str   = to_dt.strftime("%d-%b-%Y")
-        print(f"  Window {i}/{len(windows)}: {from_str} → {to_str}", end=" ")
-
+        print(f"  Window {i}/{len(windows)}: {from_str} -> {to_str}", end=" ")
         try:
-            params = {"frmdt": from_str, "todt": to_str}
-            text = safe_get(AMFI_NAV_HISTORY_URL, params=params,
-                           label=f"history window {i}")
-            line_count = 0
+            text = safe_get(AMFI_NAV_HISTORY_URL,
+                            params={"frmdt": from_str, "todt": to_str},
+                            label=f"history {i}")
+            count = 0
             for line in text.splitlines():
                 parts = line.strip().split(";")
                 if len(parts) < 8:
                     continue
                 try:
-                    code     = parts[0].strip()
-                    nav_str  = parts[4].strip()
-                    date_str = parts[7].strip()
+                    code    = parts[0].strip()
+                    nav_str = parts[4].strip()
+                    d_str   = parts[7].strip()
                     if not code.isdigit() or not nav_str:
                         continue
                     nav_val  = float(nav_str)
-                    nav_date = parse_date(date_str)
+                    nav_date = parse_date(d_str)
                     if nav_date and nav_val > 0:
-                        date_key = nav_date.strftime("%Y-%m-%d")
-                        raw_history[code][date_key] = nav_val
-                        line_count += 1
+                        raw_history[code][to_iso(nav_date)] = nav_val
+                        count += 1
                 except Exception:
                     continue
-            print(f"→ {line_count:,} NAV points")
+            print(f"-> {count:,} entries")
         except Exception as e:
-            print(f"→ ❌ FAILED: {e} (skipping window, continuing)")
+            print(f"-> FAILED: {e}")
             continue
 
-    # Convert to sorted arrays, keeping end-of-month NAVs only
     history = {}
     for code, date_nav_map in raw_history.items():
-        if not date_nav_map:
-            continue
-        # Sort all dates
-        sorted_dates = sorted(date_nav_map.keys())
-        # Keep last trading day of each month
-        monthly = {}
-        for d_str in sorted_dates:
-            month_key = d_str[:7]  # 'YYYY-MM'
-            monthly[month_key] = {"date": d_str, "nav": date_nav_map[d_str]}
-        # Convert to array sorted by month
-        history[code] = [v for k, v in sorted(monthly.items())]
+        if date_nav_map:
+            history[code] = [
+                {"date": d, "nav": v}
+                for d, v in sorted(date_nav_map.items())
+            ]
 
-    scheme_count = len(history)
-    avg_points = sum(len(v) for v in history.values()) / max(scheme_count, 1)
-    print(f"\n  [Step 3] ✅ History fetched: {scheme_count} schemes, "
-          f"avg {avg_points:.1f} monthly points each.")
+    avg = sum(len(v) for v in history.values()) / max(len(history), 1)
+    print(f"\n  [Step 3] ✅ {len(history)} schemes, avg {avg:.0f} daily entries.")
     return history
 
 
 # ─── Step 4: Compute Returns ─────────────────────────────────────────────────
 
-def compute_returns(nav_history: list[dict], current_nav: float, nav_date: date = None) -> dict:
+def compute_returns(nav_history, current_nav, nav_date):
     """
-    Compute returns using calendar-based NAV lookup anchored to nav_date.
+    Calendar-based return computation anchored to nav_date.
 
-    nav_history : [{date: 'YYYY-MM-DD', nav: float}] oldest → newest (monthly)
-    current_nav : latest NAV value from NAVAll.txt
-    nav_date    : date of current_nav (from NAVAll.txt).
-                  CRITICAL — use this, not date.today().
-                  On weekends / holidays date.today() has no NAV; anchoring to
-                  nav_date ensures all period lookups are relative to the last
-                  actual trading day, matching SEBI / industry convention.
+    nav_date is the actual NAV publication date (from NAVAll.txt).
+    Using date.today() as anchor is wrong on weekends and holidays
+    because no NAV is published — lookbacks shift by 1-2 days silently.
 
-    Return methodology (matches JM Financial / industry platforms):
-      < 1Y  →  Absolute return %           e.g. 1M, 3M, 6M
-      ≥ 1Y  →  CAGR (compound annualised)  e.g. 1Y, 3Y
+    Returns methodology matches SEBI / industry standard:
+      < 1Y  ->  Absolute return %
+      >= 1Y ->  CAGR (compound annualised)
     """
     if not nav_history or not current_nav:
         return {}
 
-    # Anchor date: use actual NAV date, fall back to today only if unavailable
-    anchor = nav_date if nav_date else TODAY
-
-    # Build parallel sorted lists for binary search
-    dates = []
+    anchor    = nav_date
+    dates     = []
     navs_list = []
     for entry in nav_history:
         d = parse_date(entry["date"])
@@ -345,91 +323,57 @@ def compute_returns(nav_history: list[dict], current_nav: float, nav_date: date 
     if not dates:
         return {}
 
-    def nav_on_or_before(target_date) -> float | None:
-        """
-        Find the most recent NAV on or before target_date.
-        Handles weekends, public holidays, and data gaps correctly.
-        """
-        idx = bisect.bisect_right(dates, target_date) - 1
-        if idx < 0:
-            return None
-        return navs_list[idx]
+    def nav_on_or_before(target):
+        idx = bisect.bisect_right(dates, target) - 1
+        return navs_list[idx] if idx >= 0 else None
 
-    returns = {}
+    r = {}
 
-    # Short-term: absolute return % (industry standard for < 1 year)
     for days, key in [(30, "1M"), (91, "3M"), (182, "6M")]:
-        target = anchor - timedelta(days=days)
-        nav_then = nav_on_or_before(target)
-        if nav_then and current_nav:
-            returns[key] = absolute_return(nav_then, current_nav)
+        nav_then = nav_on_or_before(anchor - timedelta(days=days))
+        if nav_then:
+            r[key] = absolute_return(nav_then, current_nav)
 
-    # Long-term: CAGR / compound annualised (industry standard for >= 1 year)
     for days, years, key in [(365, 1.0, "1Y"), (1095, 3.0, "3Y")]:
-        target = anchor - timedelta(days=days)
-        nav_then = nav_on_or_before(target)
-        if nav_then and current_nav:
-            returns[key] = cagr(nav_then, current_nav, years)
+        nav_then = nav_on_or_before(anchor - timedelta(days=days))
+        if nav_then:
+            r[key] = cagr(nav_then, current_nav, years)
 
-    # 1W — suppress if monthly data can't support it meaningfully
-    # (month-end snapshots make 1W unreliable; only compute if a data point
-    # exists within the last 7 days of the anchor date)
-    target_1w = anchor - timedelta(days=7)
-    nav_1w = nav_on_or_before(target_1w)
-    if nav_1w and current_nav and nav_1w != current_nav:
-        returns["1W"] = absolute_return(nav_1w, current_nav)
+    nav_1w = nav_on_or_before(anchor - timedelta(days=7))
+    if nav_1w and nav_1w != current_nav:
+        r["1W"] = absolute_return(nav_1w, current_nav)
 
-    return returns
+    return r
 
 
 # ─── Step 5: Compute Risk Ratios ─────────────────────────────────────────────
 
-def compute_risk_ratios(nav_history: list[dict]) -> dict:
-    """
-    Compute annualised risk metrics from monthly NAV series.
-    Returns: { stdDev, sharpe, sortino, maxDrawdown }
-    """
-    if len(nav_history) < 12:
+def compute_risk_ratios(nav_history):
+    """Annualised risk metrics from daily NAV series (252 trading days)."""
+    if len(nav_history) < 60:
         return {}
 
-    navs = [entry["nav"] for entry in nav_history]
-    # Monthly returns
-    monthly_returns = [
-        (navs[i] - navs[i-1]) / navs[i-1]
-        for i in range(1, len(navs))
-    ]
-
-    if len(monthly_returns) < 6:
+    navs = [e["nav"] for e in nav_history]
+    dr   = [(navs[i] - navs[i-1]) / navs[i-1] for i in range(1, len(navs))]
+    if len(dr) < 30:
         return {}
 
-    n = len(monthly_returns)
-    mean_r = sum(monthly_returns) / n
+    n      = len(dr)
+    mean_r = sum(dr) / n
+    var    = sum((r - mean_r) ** 2 for r in dr) / (n - 1)
+    std_a  = math.sqrt(var) * math.sqrt(252)
 
-    # Standard deviation (annualised)
-    variance = sum((r - mean_r) ** 2 for r in monthly_returns) / (n - 1)
-    std_monthly = math.sqrt(variance)
-    std_annual = std_monthly * math.sqrt(12)
+    rf_d   = RISK_FREE_RATE_ANNUAL / 252
+    sharpe = ((mean_r - rf_d) * 252) / std_a if std_a > 0 else None
 
-    # Risk-free rate monthly
-    rf_monthly = RISK_FREE_RATE_ANNUAL / 12
-
-    # Sharpe ratio (annualised)
-    if std_annual > 0:
-        sharpe = ((mean_r - rf_monthly) * 12) / std_annual
+    down   = [r for r in dr if r < rf_d]
+    if down:
+        dstd    = math.sqrt(sum((r - rf_d)**2 for r in down) / len(down)) * math.sqrt(252)
+        sortino = ((mean_r - rf_d) * 252) / dstd if dstd > 0 else None
     else:
-        sharpe = None
+        sortino = None
 
-    # Sortino ratio — only downside deviation
-    downside_returns = [r for r in monthly_returns if r < rf_monthly]
-    if downside_returns:
-        downside_var = sum((r - rf_monthly) ** 2 for r in downside_returns) / len(downside_returns)
-        downside_std = math.sqrt(downside_var) * math.sqrt(12)
-        sortino = ((mean_r - rf_monthly) * 12) / downside_std if downside_std > 0 else None
-    else:
-        sortino = None  # no negative months — can't compute
-
-    # Max Drawdown
-    peak = navs[0]
+    peak   = navs[0]
     max_dd = 0.0
     for nav in navs:
         if nav > peak:
@@ -438,117 +382,117 @@ def compute_risk_ratios(nav_history: list[dict]) -> dict:
         if dd > max_dd:
             max_dd = dd
 
-    def r2(x):
+    def r4(x):
         return round(x, 4) if x is not None else None
 
     return {
-        "stdDev":      r2(std_annual * 100),   # annualised std dev %
-        "sharpe":      r2(sharpe),
-        "sortino":     r2(sortino),
-        "maxDrawdown": r2(max_dd * 100),        # %
+        "stdDev":      r4(std_a * 100),
+        "sharpe":      r4(sharpe),
+        "sortino":     r4(sortino),
+        "maxDrawdown": r4(max_dd * 100),
     }
 
 
-# ─── Step 6: Build Leaderboard & Rolling Returns ─────────────────────────────
+# ─── Step 6: Build Category Index ────────────────────────────────────────────
 
-def build_leaderboard(schemes: list[dict]) -> dict:
+def build_category_index(schemes_out):
     """
-    Build category-level leaderboard: top 5 schemes per category by 1Y return.
-    Only includes Direct + Growth plans for clean comparison.
+    Top-10 leaderboard per category x plan combination.
+    Key: "Large Cap|Direct"
+    Only schemes with a 1Y return. Sorted by 1Y descending.
+    Frontend uses this for instant peer display without joining other files.
     """
-    print("\n[Step 6a] Building leaderboard...")
-    by_category = defaultdict(list)
+    print("\n[Step 6] Building category index...")
+    by_key = defaultdict(list)
 
-    for s in schemes:
-        if s.get("plan") != "Direct":
-            continue
+    for s in schemes_out:
         r1y = s.get("returns", {}).get("1Y")
         if r1y is None:
             continue
-        by_category[s["category"]].append({
+        key = f"{s['category']}|{s['plan']}"
+        by_key[key].append({
             "id":       s["id"],
             "name":     s["name"],
             "amc":      s["amc"],
             "return1Y": r1y,
+            "returns":  s.get("returns", {}),
             "risk":     s.get("risk", {}),
         })
 
-    leaderboard = {}
-    for cat, entries in by_category.items():
-        sorted_entries = sorted(entries, key=lambda x: x["return1Y"], reverse=True)
-        leaderboard[cat] = sorted_entries[:10]  # top 10 per category
+    index = {
+        k: sorted(v, key=lambda x: x["return1Y"], reverse=True)[:10]
+        for k, v in by_key.items()
+    }
+    print(f"  [Step 6] ✅ {len(index)} category x plan combinations.")
+    return index
 
-    print(f"  [Step 6a] ✅ Leaderboard built: {len(leaderboard)} categories.")
-    return leaderboard
 
+# ─── Step 7: Split NAV History ───────────────────────────────────────────────
 
-def build_rolling_returns(schemes: list[dict]) -> dict:
+def split_nav_history(schemes_out, nav_history):
     """
-    Build rolling 1Y return series per scheme (keyed by scheme id).
-    For each month in history, compute trailing 12M return.
-    Format: { schemeId: [ {date: 'YYYY-MM', return: float}, ... ] }
-    Only for schemes with ≥ 13 monthly NAV points.
-    """
-    print("\n[Step 6b] Building rolling returns...")
-    rolling = {}
+    Write one NAV history file per category x plan combination.
+    Filename: nav_{category_slug}_{plan}.json
+    e.g. nav_largecap_direct.json, nav_thematic_regular.json
 
-    for s in schemes:
-        history = s.get("navHistory", [])
-        if len(history) < 13:
+    ~74 files total (35 categories x 2 plans, some categories
+    have only one plan type so actual count may be slightly less).
+
+    Frontend fetch logic:
+      - User sets plan universe (Direct or Regular) at session start
+      - On scheme detail click: fetch nav_{category}_{plan}.json
+      - File is browser-cached — second click in same category is instant
+    """
+    print("\n[Step 7] Splitting NAV history...")
+    os.makedirs(NAV_HISTORY_DIR, exist_ok=True)
+
+    split = defaultdict(dict)
+    for s in schemes_out:
+        sid     = s["id"]
+        history = nav_history.get(sid, [])
+        if not history:
             continue
-        navs = history  # sorted oldest → newest
-        series = []
-        for i in range(12, len(navs)):
-            nav_now  = navs[i]["nav"]
-            nav_then = navs[i - 12]["nav"]
-            if nav_then > 0:
-                r = cagr(nav_then, nav_now, 1.0)
-                month_label = navs[i]["date"][:7]  # 'YYYY-MM'
-                series.append({"date": month_label, "return": r})
-        if series:
-            rolling[s["id"]] = series
+        filename = f"nav_{category_slug(s['category'], s['plan'])}.json"
+        split[filename][sid] = history
 
-    print(f"  [Step 6b] ✅ Rolling returns built: {len(rolling)} schemes.")
-    return rolling
+    sizes = []
+    for filename, content in sorted(split.items()):
+        path = os.path.join(NAV_HISTORY_DIR, filename)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(content, f, separators=(",", ":"))
+        mb = os.path.getsize(path) / (1024 * 1024)
+        sizes.append(mb)
+        flag = " WARNING" if mb > 15 else ""
+        print(f"  {filename:<55} {len(content):>5} schemes  {mb:.2f}MB{flag}")
+
+    print(f"\n  [Step 7] ✅ {len(split)} files | "
+          f"largest {max(sizes):.1f}MB | total {sum(sizes):.1f}MB")
+    return split
 
 
-# ─── Step 7: Assemble Final JSON ─────────────────────────────────────────────
+# ─── Step 8: Assemble & Save ─────────────────────────────────────────────────
 
-def assemble_output(
-    master: dict,
-    current_navs: dict,
-    nav_history: dict,
-) -> dict:
-    """Combine all data into final fundlens_schemes.json structure."""
-    print("\n[Step 7] Assembling final JSON...")
+def assemble_and_save(master, current_navs, nav_history):
+    print("\n[Step 8] Assembling...")
 
     schemes_out = []
-    amc_set = {}
-    category_set = set()
-    no_nav_count = 0
-    no_history_count = 0
+    returns_out = {}
+    ratios_out  = {}
+    amc_set     = {}
+    cat_set     = set()
 
     for code, info in master.items():
-        nav_data    = current_navs.get(code, {})
-        history     = nav_history.get(code, [])
+        nav_data     = current_navs.get(code, {})
+        history      = nav_history.get(code, [])
+        current_nav  = nav_data.get("nav")
+        nav_date_str = nav_data.get("navDate", "")
+        nav_date_obj = parse_date(nav_date_str) if nav_date_str else TODAY
 
-        current_nav = nav_data.get("nav")
-        nav_date    = nav_data.get("navDate", "")
-
-        if not current_nav:
-            no_nav_count += 1
-            # Still include scheme — may be closed-end with no daily NAV
-            current_nav = None
-
-        if not history:
-            no_history_count += 1
-
-        # Compute returns and risk — anchor to actual NAV date, not calendar date
-        nav_date_parsed = parse_date(nav_date) if nav_date else TODAY
-        returns = compute_returns(history, current_nav, nav_date_parsed) if history and current_nav else {}
+        returns = compute_returns(history, current_nav, nav_date_obj) \
+                  if history and current_nav else {}
         risk    = compute_risk_ratios(history) if history else {}
 
-        scheme_obj = {
+        obj = {
             "id":            code,
             "name":          info["name"],
             "navName":       info.get("navName", ""),
@@ -560,125 +504,108 @@ def assemble_output(
             "structure":     info["structure"],
             "isin":          info["isin"],
             "nav":           current_nav,
-            "navDate":       nav_date,
+            "navDate":       nav_date_str,
             "inceptionDate": info["inceptionDate"],
             "returns":       returns,
             "risk":          risk,
-            "navHistory":    history,
-            # Placeholders — AUM and expense ratio not available from AMFI
-            # Will be added when we find a reliable secondary source
-            "aum":           None,
-            "expenseRatio":  None,
         }
+        schemes_out.append(obj)
+        cat_set.add(info["category"])
+        if info["amc"] not in amc_set:
+            amc_set[info["amc"]] = info["amcFull"]
 
-        schemes_out.append(scheme_obj)
-        category_set.add(info["category"])
-        amc_key = info["amc"]
-        if amc_key not in amc_set:
-            amc_set[amc_key] = info["amcFull"]
+        if returns:
+            returns_out[code] = {
+                **returns,
+                "amc":       info["amc"],
+                "category":  info["category"],
+                "type":      info["type"],
+                "plan":      info["plan"],
+                "structure": info["structure"],
+            }
+        if risk:
+            ratios_out[code] = risk
 
-    # Sort schemes: by AMC then scheme name
     schemes_out.sort(key=lambda x: (x["amc"], x["name"]))
+    amcs_list = sorted([{"name": k, "fullName": v} for k, v in amc_set.items()],
+                       key=lambda x: x["name"])
+    cats_list = sorted(cat_set)
 
-    # Build AMC list
-    amcs_list = sorted([
-        {"name": short, "fullName": full}
-        for short, full in amc_set.items()
-    ], key=lambda x: x["name"])
+    cat_index = build_category_index(schemes_out)
+    split_nav_history(schemes_out, nav_history)
 
-    # Build categories list
-    categories_list = sorted(list(category_set))
-
-    # Build leaderboard and rolling
-    leaderboard = build_leaderboard(schemes_out)
-    rolling     = build_rolling_returns(schemes_out)
-
-    output = {
-        "meta": {
-            "lastUpdated":   TODAY_STR,
-            "navDate":       TODAY_STR,
-            "schemeCount":   len(schemes_out),
-            "historyMonths": HISTORY_MONTHS,
-            "source":        "AMFI Direct (amfiindia.com)",
-            "pipelineVersion": "2.0",
-        },
-        "amcs":       amcs_list,
-        "categories": categories_list,
-        "leaderboard": leaderboard,
-        "schemes":    schemes_out,
-        "rolling":    rolling,
-    }
-
-    print(f"  [Step 7] ✅ Assembled: {len(schemes_out)} schemes, "
-          f"{len(amcs_list)} AMCs, {len(categories_list)} categories.")
-    print(f"  [Step 7]    {no_nav_count} schemes had no current NAV (closed/wound-up).")
-    print(f"  [Step 7]    {no_history_count} schemes had no NAV history.")
-
-    # ── Slim schemes for Gist size — strip heavy fields before upload
-    KEEP_FIELDS = {
-        'id', 'name', 'navName', 'amc', 'category', 'type', 'plan',
-        'structure', 'nav', 'navDate', 'returns'
-    }
+    # Slim schemes — strip heavy fields before saving
+    KEEP = {"id", "name", "navName", "amc", "category", "type",
+            "plan", "structure", "nav", "navDate", "returns"}
     for s in schemes_out:
-        for key in list(s.keys()):
-            if key not in KEEP_FIELDS:
-                del s[key]
+        for k in list(s.keys()):
+            if k not in KEEP:
+                del s[k]
 
-    # Save extras (leaderboard + rolling) separately
-    import json as _json
-    extras = {
-        'meta':        output['meta'],
-        'leaderboard': leaderboard,
-        'rolling':     rolling,
+    meta = {
+        "lastUpdated":     TODAY_STR,
+        "schemeCount":     len(schemes_out),
+        "historyMonths":   HISTORY_MONTHS,
+        "source":          "AMFI Direct",
+        "pipelineVersion": "4.0",
     }
-    with open('fundlens_extras.json', 'w', encoding='utf-8') as f:
-        _json.dump(extras, f, separators=(',', ':'))
-    extras_mb = len(_json.dumps(extras, separators=(',',':')).encode()) / (1024*1024)
-    print(f"  [Step 7] Extras saved: fundlens_extras.json ({extras_mb:.2f}MB)")
-    
-    return output
+
+    files = {
+        "fundlens_schemes.json": {
+            "meta": meta, "amcs": amcs_list,
+            "categories": cats_list, "schemes": schemes_out,
+        },
+        "fundlens_returns.json": {
+            "meta": meta, "returns": returns_out,
+        },
+        "fundlens_ratios.json": {
+            "meta": meta, "ratios": ratios_out,
+        },
+        "fundlens_category_index.json": {
+            "meta": meta, "index": cat_index,
+        },
+    }
+
+    print("\n  Saving output files:")
+    for fname, content in files.items():
+        with open(fname, "w", encoding="utf-8") as f:
+            json.dump(content, f, separators=(",", ":"), ensure_ascii=False)
+        mb = os.path.getsize(fname) / (1024 * 1024)
+        print(f"    {fname:<40} {mb:.2f}MB")
+
+    with_returns = sum(1 for s in schemes_out if s.get("returns"))
+    print(f"\n  [Step 8] ✅ {len(schemes_out)} schemes | "
+          f"{len(amcs_list)} AMCs | {len(cats_list)} categories | "
+          f"{with_returns} with returns | {len(ratios_out)} with ratios")
+
+    return files["fundlens_schemes.json"]
 
 
-# ─── Main Entry Point ─────────────────────────────────────────────────────────
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def run_pipeline():
     print("=" * 60)
-    print("FundLens Pipeline v2.0 — AMFI Direct")
+    print("FundLens Pipeline v4.0")
     print(f"Run date: {TODAY_STR}")
     print("=" * 60)
 
-    # Step 1: Scheme master
-    master = fetch_scheme_master()
-
-    # Step 2: Current NAVs
+    master       = fetch_scheme_master()
     current_navs = fetch_current_navs()
+    nav_history  = fetch_nav_history(months_back=HISTORY_MONTHS)
+    output       = assemble_and_save(master, current_navs, nav_history)
 
-    # Step 3: NAV history (36 months)
-    nav_history = fetch_nav_history(months_back=HISTORY_MONTHS)
-
-    # Steps 4–6 happen inside assemble_output
-    output = assemble_output(master, current_navs, nav_history)
-
-    # Step 7: Validate before saving
-    print(f"\n[Step 8] Validating output...")
+    print(f"\n[Step 9] Validating...")
     try:
         warnings = validate_main_gist(output, TODAY_STR)
         print_validation_summary(warnings)
     except ValidationError as e:
         print(str(e))
-        print("\n⛔ Pipeline aborted. Output NOT saved. Existing Gist preserved.")
+        print("\nAborted. Existing Gists preserved.")
         return None
 
-    # Step 8: Save locally
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(output, f, separators=(",", ":"), ensure_ascii=False)
-
-    size_mb = len(json.dumps(output, separators=(",", ":")).encode()) / (1024 * 1024)
-    print(f"\n✅ Pipeline complete. Saved: {OUTPUT_FILE} ({size_mb:.2f}MB)")
-    print("   Run Cell 2 to upload to Gist.")
+    print("\n✅ Pipeline complete. Run Cell 2 to upload all files.")
     return output
 
 
-# ─── Run ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     run_pipeline()
