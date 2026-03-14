@@ -33,7 +33,7 @@ AMFI_SCHEME_MASTER_URL = "https://portal.amfiindia.com/DownloadSchemeData_Po.asp
 AMFI_NAV_ALL_URL       = "https://www.amfiindia.com/spages/NAVAll.txt"
 AMFI_NAV_HISTORY_URL   = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 
-HISTORY_MONTHS         = 24        # months of NAV history to fetch (keep file size ~15MB)
+HISTORY_MONTHS         = 24        # months of NAV history to fetch (keeps file ~15MB)
 RISK_FREE_RATE_ANNUAL  = 0.065     # 6.5% — used for Sharpe/Sortino
 REQUEST_DELAY_SEC      = 1.5       # polite delay between AMFI calls
 MAX_RETRIES            = 3         # retry count per HTTP call
@@ -311,22 +311,27 @@ def fetch_nav_history(months_back: int = HISTORY_MONTHS) -> dict:
 
 # ─── Step 4: Compute Returns ─────────────────────────────────────────────────
 
-def compute_returns(nav_history: list[dict], current_nav: float) -> dict:
+def compute_returns(nav_history: list[dict], current_nav: float, nav_date: date = None) -> dict:
     """
-    Compute returns using calendar-based NAV lookup (not index counting).
-    nav_history: [ {date: 'YYYY-MM-DD', nav: float}, ... ] oldest→newest
-    current_nav: today's NAV from NAVAll.txt
+    Compute returns using calendar-based NAV lookup anchored to nav_date.
 
-    Fix: previously used index counting (history[-n]) which drifts whenever
-    a month has no data. Now uses bisect on actual dates — finds the closest
-    NAV on-or-before the target date, matching SEBI / industry convention.
+    nav_history : [{date: 'YYYY-MM-DD', nav: float}] oldest → newest (monthly)
+    current_nav : latest NAV value from NAVAll.txt
+    nav_date    : date of current_nav (from NAVAll.txt).
+                  CRITICAL — use this, not date.today().
+                  On weekends / holidays date.today() has no NAV; anchoring to
+                  nav_date ensures all period lookups are relative to the last
+                  actual trading day, matching SEBI / industry convention.
 
     Return methodology (matches JM Financial / industry platforms):
-      <1Y  → Absolute return %          e.g. 1M, 3M, 6M
-      ≥1Y  → CAGR (compound annualised) e.g. 1Y, 3Y
+      < 1Y  →  Absolute return %           e.g. 1M, 3M, 6M
+      ≥ 1Y  →  CAGR (compound annualised)  e.g. 1Y, 3Y
     """
-    if not nav_history:
+    if not nav_history or not current_nav:
         return {}
+
+    # Anchor date: use actual NAV date, fall back to today only if unavailable
+    anchor = nav_date if nav_date else TODAY
 
     # Build parallel sorted lists for binary search
     dates = []
@@ -342,8 +347,8 @@ def compute_returns(nav_history: list[dict], current_nav: float) -> dict:
 
     def nav_on_or_before(target_date) -> float | None:
         """
-        Find the most recent NAV that existed on or before target_date.
-        This correctly handles weekends, holidays, and data gaps.
+        Find the most recent NAV on or before target_date.
+        Handles weekends, public holidays, and data gaps correctly.
         """
         idx = bisect.bisect_right(dates, target_date) - 1
         if idx < 0:
@@ -351,30 +356,28 @@ def compute_returns(nav_history: list[dict], current_nav: float) -> dict:
         return navs_list[idx]
 
     returns = {}
-    now_nav = current_nav
 
-    # Short-term: absolute return % (industry standard for periods < 1 year)
+    # Short-term: absolute return % (industry standard for < 1 year)
     for days, key in [(30, "1M"), (91, "3M"), (182, "6M")]:
-        target = TODAY - timedelta(days=days)
+        target = anchor - timedelta(days=days)
         nav_then = nav_on_or_before(target)
-        if nav_then and now_nav:
-            returns[key] = absolute_return(nav_then, now_nav)
+        if nav_then and current_nav:
+            returns[key] = absolute_return(nav_then, current_nav)
 
     # Long-term: CAGR / compound annualised (industry standard for >= 1 year)
     for days, years, key in [(365, 1.0, "1Y"), (1095, 3.0, "3Y")]:
-        target = TODAY - timedelta(days=days)
+        target = anchor - timedelta(days=days)
         nav_then = nav_on_or_before(target)
-        if nav_then and now_nav:
-            returns[key] = cagr(nav_then, now_nav, years)
+        if nav_then and current_nav:
+            returns[key] = cagr(nav_then, current_nav, years)
 
-    # 1W — only valid if a NAV point exists within the last 7 days in history.
-    # Monthly snapshots cannot reliably represent a 7-day window; if the
-    # closest available NAV is the same as the month-end proxy, suppress 1W
-    # so the frontend shows "—" rather than a misleading number.
-    target_1w = TODAY - timedelta(days=7)
+    # 1W — suppress if monthly data can't support it meaningfully
+    # (month-end snapshots make 1W unreliable; only compute if a data point
+    # exists within the last 7 days of the anchor date)
+    target_1w = anchor - timedelta(days=7)
     nav_1w = nav_on_or_before(target_1w)
-    if nav_1w and now_nav and nav_1w != now_nav:
-        returns["1W"] = absolute_return(nav_1w, now_nav)
+    if nav_1w and current_nav and nav_1w != current_nav:
+        returns["1W"] = absolute_return(nav_1w, current_nav)
 
     return returns
 
@@ -540,8 +543,9 @@ def assemble_output(
         if not history:
             no_history_count += 1
 
-        # Compute returns and risk
-        returns = compute_returns(history, current_nav) if history and current_nav else {}
+        # Compute returns and risk — anchor to actual NAV date, not calendar date
+        nav_date_parsed = parse_date(nav_date) if nav_date else TODAY
+        returns = compute_returns(history, current_nav, nav_date_parsed) if history and current_nav else {}
         risk    = compute_risk_ratios(history) if history else {}
 
         scheme_obj = {
