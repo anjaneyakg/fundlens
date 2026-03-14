@@ -1,127 +1,223 @@
 # pipeline_cell2.py
-# FundLens Pipeline — Cell 2
-# Upload fundlens_schemes.json to GitHub Gist
-# Unchanged in structure from v1 — just updated comments and error handling.
+# FundLens Data Pipeline — Cell 2 — v4.0
+# Uploads all output files from Cell 1 to their respective Gists.
 #
-# Required: GITHUB_TOKEN env variable or set directly below (Colab secret)
+# Gist map:
+#   GIST_MAIN     — fundlens_schemes.json
+#   GIST_RETURNS  — fundlens_returns.json
+#   GIST_RATIOS   — fundlens_ratios.json
+#   GIST_CATINDEX — fundlens_category_index.json
+#   GIST_NAVHIST  — nav_history/*.json (one file per category x plan, ~74 files)
+#
+# Run Cell 1 first. Cell 2 reads the files Cell 1 saved locally.
 
 import json
 import os
 import requests
 
-# ─── Config ──────────────────────────────────────────────────────────────────
-
-# In Colab: use userdata.get or os.environ
-# In GitHub Action: set as repository secret GITHUB_TOKEN
 try:
     from google.colab import userdata
-    GITHUB_TOKEN = userdata.get("GITHUB_TOKEN")
+    GITHUB_TOKEN = userdata.get('GITHUB_TOKEN')
 except Exception:
-    GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 
-# Your existing Gist ID (fundlens_schemes.json)
-MAIN_GIST_ID   = "64368e3f1dfef3f82da8fa9f0f164211"
-MAIN_GIST_FILE = "fundlens_schemes.json"
-INPUT_FILE     = "fundlens_schemes.json"
+# ─── Gist IDs ────────────────────────────────────────────────────────────────
+# Update GIST_RETURNS, GIST_RATIOS, GIST_CATINDEX, GIST_NAVHIST after
+# creating them for the first time (see first-run instructions below).
 
-# ─── Upload ───────────────────────────────────────────────────────────────────
+GIST_MAIN     = "64368e3f1dfef3f82da8fa9f0f164211"   # existing — fundlens_schemes.json
+GIST_RETURNS  = "REPLACE_WITH_NEW_GIST_ID"            # new — fundlens_returns.json
+GIST_RATIOS   = "REPLACE_WITH_NEW_GIST_ID"            # new — fundlens_ratios.json
+GIST_CATINDEX = "REPLACE_WITH_NEW_GIST_ID"            # new — fundlens_category_index.json
+GIST_NAVHIST  = "REPLACE_WITH_NEW_GIST_ID"            # new — all nav_history/*.json files
 
-def upload_to_gist(gist_id: str, filename: str, content: str, token: str) -> bool:
-    """PATCH an existing Gist file with new content."""
-    url     = f"https://api.github.com/gists/{gist_id}"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept":        "application/vnd.github.v3+json",
-    }
-    payload = {
-        "files": {
-            filename: {"content": content}
-        }
-    }
-    resp = requests.patch(url, headers=headers, json=payload, timeout=60)
+NAV_HISTORY_DIR = "nav_history"
+
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept":        "application/vnd.github.v3+json",
+}
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def upload_single_file_gist(gist_id, filename, local_path, label):
+    """Upload one file to a single-file Gist."""
+    print(f"\n  Uploading {label}...", end=" ")
+    if not os.path.exists(local_path):
+        print(f"SKIPPED — {local_path} not found.")
+        return False
+
+    content = open(local_path, encoding="utf-8").read()
+    mb = len(content.encode()) / (1024 * 1024)
+
+    resp = requests.patch(
+        f"https://api.github.com/gists/{gist_id}",
+        headers=HEADERS,
+        json={"files": {filename: {"content": content}}},
+        timeout=120,
+    )
     if resp.status_code == 200:
-        gist_data = resp.json()
-        raw_url = gist_data["files"][filename]["raw_url"]
-        print(f"  ✅ Uploaded to Gist: {raw_url}")
+        print(f"✅ ({mb:.2f}MB)")
         return True
     else:
-        print(f"  ❌ Upload failed: HTTP {resp.status_code}")
-        print(f"     {resp.text[:300]}")
+        print(f"❌ {resp.status_code}: {resp.text[:200]}")
         return False
 
 
-def create_new_gist(filename: str, content: str, token: str,
-                    description: str = "FundLens Data") -> str | None:
-    """Create a new Gist. Returns gist_id or None on failure."""
-    url     = "https://api.github.com/gists"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept":        "application/vnd.github.v3+json",
-    }
-    payload = {
-        "description": description,
-        "public":      True,
-        "files": {
-            filename: {"content": content}
-        }
-    }
-    resp = requests.post(url, headers=headers, json=payload, timeout=60)
+def upload_nav_history_gist(gist_id):
+    """
+    Upload all nav_history/*.json files to a single Gist.
+    GitHub Gist supports multiple files per Gist — we use one Gist
+    for all ~74 category x plan NAV history files.
+
+    Handles stale file cleanup: if a category was renamed or removed,
+    the old file is deleted from the Gist automatically.
+    """
+    print(f"\n  Uploading NAV history files to Gist {gist_id}...")
+
+    if not os.path.isdir(NAV_HISTORY_DIR):
+        print(f"  SKIPPED — {NAV_HISTORY_DIR}/ not found.")
+        return False
+
+    # Build files payload
+    files_payload = {}
+    local_files = [f for f in os.listdir(NAV_HISTORY_DIR) if f.endswith(".json")]
+    total_mb = 0
+
+    for fname in sorted(local_files):
+        path    = os.path.join(NAV_HISTORY_DIR, fname)
+        content = open(path, encoding="utf-8").read()
+        mb      = len(content.encode()) / (1024 * 1024)
+        total_mb += mb
+        files_payload[fname] = {"content": content}
+
+    print(f"  {len(files_payload)} files | {total_mb:.1f}MB total")
+
+    # Fetch existing Gist file list to detect stale files
+    existing_resp = requests.get(
+        f"https://api.github.com/gists/{gist_id}",
+        headers=HEADERS, timeout=30
+    )
+    if existing_resp.status_code == 200:
+        existing_files = set(existing_resp.json().get("files", {}).keys())
+        current_files  = set(files_payload.keys())
+        stale_files    = existing_files - current_files
+        for stale in stale_files:
+            print(f"  Removing stale file: {stale}")
+            files_payload[stale] = None  # GitHub API: null = delete file
+
+    resp = requests.patch(
+        f"https://api.github.com/gists/{gist_id}",
+        headers=HEADERS,
+        json={"files": files_payload},
+        timeout=300,
+    )
+    if resp.status_code == 200:
+        print(f"  ✅ NAV history uploaded: {len(local_files)} files")
+        return True
+    else:
+        print(f"  ❌ {resp.status_code}: {resp.text[:200]}")
+        return False
+
+
+def create_new_gist(filename, content, description):
+    """
+    Create a brand-new Gist. Used on first run for new Gist IDs.
+    Returns the new Gist ID.
+    """
+    resp = requests.post(
+        "https://api.github.com/gists",
+        headers=HEADERS,
+        json={
+            "description": description,
+            "public":      False,
+            "files":       {filename: {"content": content}},
+        },
+        timeout=120,
+    )
     if resp.status_code == 201:
-        gist_data = resp.json()
-        gist_id  = gist_data["id"]
-        raw_url  = gist_data["files"][filename]["raw_url"]
-        print(f"  ✅ New Gist created!")
-        print(f"     Gist ID : {gist_id}")
-        print(f"     Raw URL : {raw_url}")
-        print(f"\n  ⚠️  IMPORTANT: Copy the Gist ID above into:")
-        print(f"     1. pipeline_cell2.py → MAIN_GIST_ID")
-        print(f"     2. Your FundLens app's data fetch URL")
+        gist_id = resp.json()["id"]
+        print(f"  ✅ Created new Gist: {gist_id}")
         return gist_id
     else:
-        print(f"  ❌ Gist creation failed: HTTP {resp.status_code}")
-        print(f"     {resp.text[:300]}")
+        print(f"  ❌ Failed to create Gist: {resp.status_code}")
         return None
 
 
+# ─── First-Run Setup ─────────────────────────────────────────────────────────
+
+def first_run_create_gists():
+    """
+    Run this ONCE to create the 4 new Gists.
+    Copy the printed IDs into the GIST_* constants above,
+    then commit pipeline_cell2.py back to GitHub.
+    """
+    print("=== FIRST RUN — Creating new Gists ===\n")
+
+    new_gists = {}
+
+    for fname, desc in [
+        ("fundlens_returns.json",        "FundLens — Returns data"),
+        ("fundlens_ratios.json",         "FundLens — Risk ratios"),
+        ("fundlens_category_index.json", "FundLens — Category index"),
+        ("fundlens_nav_placeholder.json","FundLens — NAV history (category x plan)"),
+    ]:
+        placeholder = json.dumps({"meta": {"note": "placeholder — run pipeline"}})
+        gist_id = create_new_gist(fname, placeholder, desc)
+        new_gists[fname] = gist_id
+        print(f"  {fname}: {gist_id}\n")
+
+    print("\n=== Copy these IDs into pipeline_cell2.py ===")
+    print(f"GIST_RETURNS  = \"{new_gists.get('fundlens_returns.json')}\"")
+    print(f"GIST_RATIOS   = \"{new_gists.get('fundlens_ratios.json')}\"")
+    print(f"GIST_CATINDEX = \"{new_gists.get('fundlens_category_index.json')}\"")
+    print(f"GIST_NAVHIST  = \"{new_gists.get('fundlens_nav_placeholder.json')}\"")
+    return new_gists
+
+
+# ─── Main Upload ─────────────────────────────────────────────────────────────
+
 def run_upload():
     print("=" * 60)
-    print("FundLens Pipeline v2.0 — Cell 2: Gist Upload")
+    print("FundLens Pipeline v4.0 — Cell 2: Upload")
     print("=" * 60)
 
-    # Load the validated JSON from Cell 1 output
-    if not os.path.exists(INPUT_FILE):
-        print(f"❌ {INPUT_FILE} not found. Run Cell 1 first.")
+    # Guard against placeholder IDs
+    placeholder_ids = [GIST_RETURNS, GIST_RATIOS, GIST_CATINDEX, GIST_NAVHIST]
+    if any(g == "REPLACE_WITH_NEW_GIST_ID" for g in placeholder_ids):
+        print("\n⚠️  New Gist IDs not set. Running first-run setup...\n")
+        first_run_create_gists()
+        print("\nPaste the IDs above into pipeline_cell2.py and run again.")
         return
 
-    with open(INPUT_FILE, "r", encoding="utf-8") as f:
-        content = f.read()
+    results = []
 
-    size_mb = len(content.encode("utf-8")) / (1024 * 1024)
-    print(f"  File loaded: {INPUT_FILE} ({size_mb:.2f}MB)")
+    results.append(upload_single_file_gist(
+        GIST_MAIN, "fundlens_schemes.json",
+        "fundlens_schemes.json", "Schemes (main)"
+    ))
+    results.append(upload_single_file_gist(
+        GIST_RETURNS, "fundlens_returns.json",
+        "fundlens_returns.json", "Returns"
+    ))
+    results.append(upload_single_file_gist(
+        GIST_RATIOS, "fundlens_ratios.json",
+        "fundlens_ratios.json", "Ratios"
+    ))
+    results.append(upload_single_file_gist(
+        GIST_CATINDEX, "fundlens_category_index.json",
+        "fundlens_category_index.json", "Category index"
+    ))
+    results.append(upload_nav_history_gist(GIST_NAVHIST))
 
-    # Verify token
-    if not GITHUB_TOKEN:
-        print("❌ GITHUB_TOKEN not set. Add it to Colab secrets or env.")
-        return
-
-    # Upload
-    print(f"\n  Uploading to Gist {MAIN_GIST_ID}...")
-    success = upload_to_gist(MAIN_GIST_ID, MAIN_GIST_FILE, content, GITHUB_TOKEN)
-
-    if success:
-        # Quick parse to show summary
-        data = json.loads(content)
-        meta = data.get("meta", {})
-        print(f"\n  Summary:")
-        print(f"    Schemes    : {meta.get('schemeCount', '?')}")
-        print(f"    Last update: {meta.get('lastUpdated', '?')}")
-        print(f"    History    : {meta.get('historyMonths', '?')} months")
-        print(f"    Source     : {meta.get('source', '?')}")
-        print(f"\n  🚀 App will reflect new data on next page load (no Vercel redeploy needed).")
+    passed = sum(results)
+    print(f"\n{'=' * 60}")
+    print(f"Upload complete: {passed}/{len(results)} files succeeded.")
+    if passed == len(results):
+        print("✅ All Gists updated. Site will reflect changes within 60 seconds.")
     else:
-        print("\n  ⛔ Upload failed. Existing Gist preserved. Website unaffected.")
+        print("⚠️  Some uploads failed. Check errors above. Existing Gists preserved.")
 
 
-# ─── Run ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     run_upload()
