@@ -1,5 +1,14 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+
+// ── PLAN UNIVERSE — shared localStorage key used by all scheme tools ──────────
+export const PLAN_KEY = 'fundlens_plan_universe'
+export const getStoredPlan = () => localStorage.getItem(PLAN_KEY) || 'Direct'
+export const setStoredPlan = (plan) => {
+  localStorage.setItem(PLAN_KEY, plan)
+  // Dispatch event so other components on the same page can react
+  window.dispatchEvent(new CustomEvent('fundlens_plan_change', { detail: plan }))
+}
 
 const navStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Syne:wght@400;600&display=swap');
@@ -184,6 +193,41 @@ const navStyle = `
     background: rgba(99,91,255,0.04);
   }
 
+  /* ── PLAN UNIVERSE TOGGLE ── */
+  .fl-plan-toggle {
+    display: flex; align-items: center; gap: 6px;
+    margin-left: auto; flex-shrink: 0;
+  }
+  .fl-plan-label {
+    font-family: 'DM Mono'; font-size: 9px;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: #9aa0c8;
+  }
+  .fl-plan-group {
+    display: flex;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(99,91,255,0.15);
+    border-radius: 6px; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(99,91,255,0.06);
+  }
+  .fl-plan-btn {
+    padding: 5px 12px; border: none; cursor: pointer;
+    font-family: 'DM Mono'; font-size: 10px; letter-spacing: 0.5px;
+    background: transparent; color: #9aa0c8;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .fl-plan-btn.active-direct {
+    background: linear-gradient(135deg, #635bff, #4f46e5);
+    color: #fff;
+  }
+  .fl-plan-btn.active-regular {
+    background: linear-gradient(135deg, #f43f8e, #e11d48);
+    color: #fff;
+  }
+  .fl-plan-btn:not(.active-direct):not(.active-regular):hover {
+    color: #635bff; background: rgba(99,91,255,0.06);
+  }
+
   /* ── MOBILE ── */
   @media (max-width: 900px) {
     .fl-nav { padding: 0 1rem; }
@@ -207,7 +251,7 @@ const GROUPS = [
       { code:"Z5", name:"Fund Manager Track",        tagline:"xxx",         path:"/swp-projection",   live:false },
       { code:"Z6", name:"Rolling Return Consistency",         tagline:"xxx",              path:"/scheme-basket",    live:false },
       { code:"Z7", name:"Market Cycle Overlay",         tagline:"xxx",              path:"/scheme-basket",    live:false },
-      { code:"Z8", name:"Scheme Ranking",         tagline:"xxx",              path:"/scheme-basket",    live:false },
+      { code:"Z8", name:"Category Leaderboard",  tagline:"Top funds ranked by category · Growth only", path:"/category-leaderboard", live:true  },
     ]
   },
 {
@@ -353,8 +397,14 @@ function GroupDropdown({ group, currentPath }) {
 
 // ── MAIN NAV ──────────────────────────────────────────────────────────────────
 export default function Nav() {
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const location = useLocation()
+  const currentPath = location.pathname
+  const [plan, setPlan] = useState(getStoredPlan)
+
+  const handlePlanChange = useCallback((newPlan) => {
+    setPlan(newPlan)
+    setStoredPlan(newPlan)
+  }, [])
 
   return (
     <>
@@ -376,8 +426,20 @@ export default function Nav() {
           ))}
         </div>
 
-        <div className="fl-nav-tag">Advisor Terminal</div>
+        <div className="fl-plan-toggle">
+          <span className="fl-plan-label">Universe</span>
+          <div className="fl-plan-group">
+            <button
+              className={`fl-plan-btn${plan === 'Direct' ? ' active-direct' : ''}`}
+              onClick={() => handlePlanChange('Direct')}
+            >Direct</button>
+            <button
+              className={`fl-plan-btn${plan === 'Regular' ? ' active-regular' : ''}`}
+              onClick={() => handlePlanChange('Regular')}
+            >Regular</button>
+          </div>
+        </div>
       </nav>
     </>
-  );
+  )
 }
