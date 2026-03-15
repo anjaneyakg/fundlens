@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // Main slim Gist — schemes list (~3MB), loaded on every page load
-const DATA_URL = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
-// Extras Gist — leaderboard + rolling returns, loaded separately
-const EXTRAS_URL = "https://gist.githubusercontent.com/anjaneyakg/3610ed9080ed30e896e2973c7f9ee462/raw/fundlens_extras.json";
+const DATA_URL      = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
+const CATINDEX_URL  = "https://gist.githubusercontent.com/anjaneyakg/377985ac0904a27a0a328c0834faffda/raw/fundlens_category_index.json";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n >= 1000 ? `₹${(n/1000).toFixed(1)}K Cr` : `₹${n} Cr`;
@@ -737,22 +736,31 @@ export default function App() {
       setCategoryList(json.categories || []);
       setMeta(json.meta               || null);
 
-      // Fetch extras (leaderboard + rolling) separately if URL is set
-      if (EXTRAS_URL) {
-        setLoadMsg("Loading leaderboard data...");
+      // Fetch v4 category index (leaderboard data) separately
+      if (CATINDEX_URL) {
+        setLoadMsg("Loading category index...");
         try {
-          const extResp = await fetch(EXTRAS_URL);
-          if (extResp.ok) {
-            const ext = await extResp.json();
-            setLeaderboard(ext.leaderboard || {});
-            setRollingMap(ext.rolling      || {});
+          const catResp = await fetch(CATINDEX_URL);
+          if (catResp.ok) {
+            const cat = await catResp.json();
+            // v4 structure: { index: { "Large Cap|Direct": [...] } }
+            // Flatten to plan-filtered map: { "Large Cap": [...] }
+            // Uses user's plan universe setting — show only matching plan
+            const planUniverse = localStorage.getItem('fundlens_plan_universe') || 'Direct';
+            const filtered = {};
+            for (const [key, funds] of Object.entries(cat.index || {})) {
+              const [category, plan] = key.split("|");
+              if (plan === planUniverse) {
+                filtered[category] = funds;
+              }
+            }
+            setLeaderboard(filtered);
           }
         } catch (e) {
-          console.warn("Extras fetch failed:", e.message);
+          console.warn("Category index fetch failed:", e.message);
         }
       } else {
         setLeaderboard(json.leaderboard || {});
-        setRollingMap(json.rolling      || {});
       }
 
       setLoadPct(100); setLoadMsg("Ready!");
@@ -767,9 +775,22 @@ export default function App() {
 
   // Sync plan universe when changed via Nav toggle
   useEffect(() => {
-    const handler = (e) => setPlanFilter(e.detail)
-    window.addEventListener('fundlens_plan_change', handler)
-    return () => window.removeEventListener('fundlens_plan_change', handler)
+    const handler = (e) => {
+      setPlanFilter(e.detail);
+      // Re-filter leaderboard for new plan universe
+      if (CATINDEX_URL) {
+        fetch(CATINDEX_URL).then(r => r.json()).then(cat => {
+          const filtered = {};
+          for (const [key, funds] of Object.entries(cat.index || {})) {
+            const [category, plan] = key.split("|");
+            if (plan === e.detail) filtered[category] = funds;
+          }
+          setLeaderboard(filtered);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('fundlens_plan_change', handler);
+    return () => window.removeEventListener('fundlens_plan_change', handler);
   }, []);
 
   // ── Derive option (Growth/IDCW) from navName (full name) or name
@@ -1450,7 +1471,15 @@ export default function App() {
                   <div className="lb-row" key={f.id}
                     onClick={()=>{
                       const full = allSchemes.find(s=>s.id===f.id);
-                      if(full){setSelected(full);setPeerExpanded(false);setTab("schemes");}
+                      if(full){
+                        setSelected(full);
+                        setPeerExpanded(false);
+                        // Set filters to match clicked scheme's context
+                        setCatFilter(full.category);
+                        setPlanFilter(full.plan);
+                        if(full.plan !== "All") localStorage.setItem('fundlens_plan_universe', full.plan);
+                        setTab("schemes");
+                      }
                     }}
                     style={{cursor:"pointer"}}>
                     <div className="lb-row-rank">{i+1}</div>
