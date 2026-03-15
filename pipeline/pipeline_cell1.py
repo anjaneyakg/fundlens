@@ -430,10 +430,18 @@ def build_category_index(schemes_out):
             "risk":     s.get("risk", {}),
         })
 
-    index = {
-        k: sorted(v, key=lambda x: x["return1Y"], reverse=True)[:10]
-        for k, v in by_key.items()
-    }
+    index = {}
+    for k, v in by_key.items():
+        # Deduplicate by scheme name — same fund can have multiple AMFI codes.
+        # Keep the entry with the best 1Y return per unique name.
+        best_by_name = {}
+        for entry in v:
+            name = entry["name"].strip().lower()
+            if name not in best_by_name or entry["return1Y"] > best_by_name[name]["return1Y"]:
+                best_by_name[name] = entry
+        deduped = sorted(best_by_name.values(), key=lambda x: x["return1Y"], reverse=True)
+        index[k] = deduped[:10]
+
     print(f"  [Step 6] ✅ {len(index)} category x plan combinations.")
     return index
 
