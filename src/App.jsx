@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
 import Schemes from './pages/Schemes.jsx'
+import CategoryLeaderboard from './pages/CategoryLeaderboard.jsx'
 import LoanVsSIP from './pages/LoanVsSIP.jsx'
 import SIPCalculator from './pages/SIPCalculator.jsx'
 import WealthCreator from './pages/WealthCreator.jsx'
@@ -19,20 +20,20 @@ export default function App() {
     <>
       <Nav />
       <Routes>
-        <Route path="/"                element={<Home />} />
-        <Route path="/schemes"         element={<Schemes />} />
-        <Route path="/loan-vs-sip"     element={<LoanVsSIP />} />
-        <Route path="/sip-performance" element={<SIPCalculator />} />
-        <Route path="/wealth-creator"  element={<WealthCreator />} />
-        <Route path="/fd-calculator"   element={<FDCalculator />} />
-        <Route path="/swp-performance" element={<SWPCalculator />} />
-        <Route path="/fd-vs-mf" element={<FDvsMF />} />
-        <Route path="/goal-sip" element={<GoalSIP />} />
-        <Route path="/goal-calculator" element={<GoalCalculator />} />
-        <Route path="/loan-calculator" element={<LoanCalc />} />
-        <Route path="/prepay-vs-invest" element={<PrepayVsInvest />} />
-        <Route path="/stp-calculator" element={<STPCalculator />} />
-        
+        <Route path="/"                     element={<Home />} />
+        <Route path="/schemes"              element={<Schemes />} />
+        <Route path="/category-leaderboard" element={<CategoryLeaderboard />} />
+        <Route path="/loan-vs-sip"          element={<LoanVsSIP />} />
+        <Route path="/sip-performance"      element={<SIPCalculator />} />
+        <Route path="/wealth-creator"       element={<WealthCreator />} />
+        <Route path="/fd-calculator"        element={<FDCalculator />} />
+        <Route path="/swp-performance"      element={<SWPCalculator />} />
+        <Route path="/fd-vs-mf"             element={<FDvsMF />} />
+        <Route path="/goal-sip"             element={<GoalSIP />} />
+        <Route path="/goal-calculator"      element={<GoalCalculator />} />
+        <Route path="/loan-calculator"      element={<LoanCalc />} />
+        <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
+        <Route path="/stp-calculator"       element={<STPCalculator />} />
       </Routes>
     </>
   )
