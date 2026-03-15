@@ -190,6 +190,23 @@ const fmtRet  = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`
 const fmtRisk = (v, decimals=2) => v == null ? "—" : v.toFixed(decimals);
 const returnColor = (v) => v == null ? "#6b72a0" : v > 0 ? "#059669" : v < 0 ? "#e11d48" : "#6b72a0";
 
+const calcYearReturns = (hist) => {
+  if (!hist || hist.length < 2) return {};
+  const byYear = {};
+  for (const e of hist) {
+    const y = e.date.slice(0,4);
+    if (!byYear[y]) byYear[y] = { first: e, last: e };
+    byYear[y].last = e;
+    if (e.date < byYear[y].first.date) byYear[y].first = e;
+  }
+  const result = {};
+  for (const [year, {first, last}] of Object.entries(byYear)) {
+    if (first.nav > 0 && first.date !== last.date)
+      result[year] = parseFloat(((last.nav / first.nav - 1) * 100).toFixed(2));
+  }
+  return result;
+};
+
 const categorySlug = (category, plan) => {
   const slug = category.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
   return `nav_${slug}_${plan.toLowerCase()}.json`;
@@ -216,7 +233,7 @@ function getRanks(values, higherBetter=true) {
 function IndexedChart({ navHistories, schemes, startDate }) {
   if (!navHistories || navHistories.length === 0) return null;
 
-  const W = 720, H = 260, PAD = { t:16, r:20, b:36, l:56 };
+  const W = 720, H = 260, PAD = { t:16, r:52, b:36, l:56 };
   const IW = W - PAD.l - PAD.r, IH = H - PAD.t - PAD.b;
 
   // Build indexed series for each scheme
@@ -328,7 +345,7 @@ function IndexedChart({ navHistories, schemes, startDate }) {
 }
 
 // ─── Rolling Returns Chart (per scheme) ──────────────────────────────────────
-function RollingSparkline({ navHist, color, label }) {
+function RollingSparkline({ navHist, color, label, yearReturns }) {
   if (!navHist || navHist.length < 252) return (
     <div>
       <div className="z2-rolling-label">{label}</div>
@@ -338,7 +355,6 @@ function RollingSparkline({ navHist, color, label }) {
     </div>
   );
 
-  // Compute 1Y rolling returns
   const rolling = [];
   for (let i = 252; i < navHist.length; i++) {
     const ret = ((navHist[i].nav - navHist[i-252].nav) / navHist[i-252].nav) * 100;
@@ -346,45 +362,72 @@ function RollingSparkline({ navHist, color, label }) {
   }
   if (rolling.length < 2) return null;
 
-  const vals  = rolling.map(d => d.ret);
-  const min   = Math.min(...vals);
-  const max   = Math.max(...vals);
-  const range = (max - min) || 1;
-  const W = 280, H = 60;
-  const pts = rolling.map((d,i) => {
-    const x = (i / (rolling.length-1)) * W;
-    const y = H - ((d.ret - min) / range) * (H-8) - 4;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const zeroY = H - ((0 - min) / range) * (H-8) - 4;
+  const vals   = rolling.map(d => d.ret);
+  const minVal = Math.min(...vals);
+  const maxVal = Math.max(...vals);
+  const range  = (maxVal - minVal) || 1;
   const latest = rolling[rolling.length-1].ret;
+
+  // Chart dimensions with left padding for Y axis
+  const W = 300, H = 80, PL = 32, PR = 8, PT = 4, PB = 4;
+  const IW = W - PL - PR, IH = H - PT - PB;
+
+  const xS = (i) => PL + (i / (rolling.length-1)) * IW;
+  const yS = (v) => PT + IH - ((v - minVal) / range) * IH;
+
+  const pts = rolling.map((d,i) => `${xS(i).toFixed(1)},${yS(d.ret).toFixed(1)}`).join(" ");
+  const zeroY = yS(0);
+
+  // Y axis ticks — 3 values: min, mid, max (rounded nicely)
+  const step = Math.pow(10, Math.floor(Math.log10(range))) * (range > 5*Math.pow(10,Math.floor(Math.log10(range)))*0.5 ? 2 : 1);
+  const tickStart = Math.ceil(minVal / step) * step;
+  const yTicks = [];
+  for (let v = tickStart; v <= maxVal + 0.01; v += step) yTicks.push(parseFloat(v.toFixed(1)));
+  if (yTicks.length > 5) { const keep=[yTicks[0], yTicks[Math.floor(yTicks.length/2)], yTicks[yTicks.length-1]]; yTicks.splice(0, yTicks.length, ...keep); }
 
   return (
     <div>
-      <div className="z2-rolling-label" style={{color}}>
-        {label}
-        <span style={{marginLeft:8,fontSize:11,fontWeight:500}}>
-          {latest >= 0 ? "+" : ""}{latest.toFixed(1)}% latest
+      <div className="z2-rolling-label" style={{color, display:"flex", justifyContent:"space-between", alignItems:"baseline"}}>
+        <span>{label}</span>
+        <span style={{fontSize:11,fontWeight:500}}>
+          Latest: {latest >= 0 ? "+" : ""}{latest.toFixed(1)}%
         </span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2,fontFamily:"'DM Mono'",fontSize:9,color:"#6b72a0"}}>
+        <span>Min: {minVal.toFixed(1)}%</span>
+        <span style={{marginLeft:"auto"}}>Max: {maxVal.toFixed(1)}%</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxWidth:W,display:"block"}}>
         <defs>
-          <linearGradient id={`rg${label.replace(/\s/g,"")}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`rg${label.replace(/\W/g,"")}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
             <stop offset="100%" stopColor={color} stopOpacity="0.01"/>
           </linearGradient>
         </defs>
-        {min < 0 && max > 0 && (
-          <line x1="0" y1={zeroY} x2={W} y2={zeroY}
-            stroke="rgba(99,91,255,0.2)" strokeWidth="0.8" strokeDasharray="3,3"/>
+        {/* Y axis ticks */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line x1={PL} y1={yS(v)} x2={PL+IW} y2={yS(v)}
+              stroke="rgba(99,91,255,0.07)" strokeWidth="0.5"/>
+            <text x={PL-3} y={yS(v)+3} textAnchor="end"
+              fill="#9aa0c8" fontSize="7.5" fontFamily="DM Mono, monospace">
+              {v > 0 ? "+" : ""}{v.toFixed(0)}%
+            </text>
+          </g>
+        ))}
+        {/* Zero line */}
+        {minVal < 0 && maxVal > 0 && (
+          <line x1={PL} y1={zeroY} x2={PL+IW} y2={zeroY}
+            stroke="rgba(99,91,255,0.25)" strokeWidth="0.8" strokeDasharray="3,3"/>
         )}
-        <polyline points={`0,${H} ${pts} ${W},${H}`}
-          fill={`url(#rg${label.replace(/\s/g,"")})`} stroke="none"/>
+        {/* Area + line */}
+        <polyline points={`${PL},${PT+IH} ${pts} ${PL+IW},${PT+IH}`}
+          fill={`url(#rg${label.replace(/\W/g,"")})`} stroke="none"/>
         <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
-      <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'DM Mono'",fontSize:9,color:"#6b72a0",marginTop:3}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'DM Mono'",fontSize:8.5,color:"#6b72a0",marginTop:2}}>
         <span>{rolling[0].date.slice(0,7)}</span>
-        <span>1Y Rolling Returns</span>
+        <span style={{color}}>1Y Rolling Returns</span>
         <span>{rolling[rolling.length-1].date.slice(0,7)}</span>
       </div>
     </div>
@@ -409,6 +452,12 @@ export default function CompareSchemes() {
   const [navLoading,   setNavLoading]   = useState(false);
   const [overlapInfo,  setOverlapInfo]  = useState(null);
 
+  // Returns table controls
+  const [returnPeriod, setReturnPeriod] = useState("1Y");
+  const [returnMode,   setReturnMode]   = useState("p2p"); // p2p | year
+  const [activeYear,   setActiveYear]   = useState("");
+  const [yearMaps,     setYearMaps]     = useState([null,null,null]); // per-slot year returns
+
   // Comparison params
   const [startDate, setStartDate] = useState("");
   const [comparing, setComparing] = useState(false);
@@ -431,10 +480,16 @@ export default function CompareSchemes() {
     const newQ = [...queries]; newQ[idx] = q; setQueries(newQ);
     if (!q || q.length < 2) { const nd=[...dropdowns]; nd[idx]=false; setDropdowns(nd); return; }
     const lq = q.toLowerCase();
-    const hits = allSchemes
+    const raw = allSchemes
       .filter(s => s.plan === planUniverse && getOption(s) === "Growth")
-      .filter(s => s.name.toLowerCase().includes(lq) || s.amc.toLowerCase().includes(lq))
-      .slice(0, 25);
+      .filter(s => s.name.toLowerCase().includes(lq) || s.amc.toLowerCase().includes(lq));
+    // Deduplicate by name — keep latest navDate per unique name
+    const seen = new Map();
+    for (const s of raw) {
+      const existing = seen.get(s.name);
+      if (!existing || (s.navDate || "") > (existing.navDate || "")) seen.set(s.name, s);
+    }
+    const hits = Array.from(seen.values()).slice(0, 25);
     const nr = [...results]; nr[idx] = hits; setResults(nr);
     const nd = [...dropdowns]; nd[idx] = hits.length > 0; setDropdowns(nd);
   }, [allSchemes, queries, dropdowns, results, planUniverse]);
@@ -483,6 +538,15 @@ export default function CompareSchemes() {
     });
     Promise.all(fetches).then(hists => {
       setNavHistories(hists);
+      // Compute year returns per slot
+      const newYearMaps = hists.map(h => {
+        if (!h) return null;
+        return calcYearReturns(h);
+      });
+      setYearMaps(newYearMaps);
+      // Default active year = most recent complete year across all slots
+      const allYears = newYearMaps.flatMap(m => m ? Object.keys(m) : []).sort().reverse();
+      if (allYears.length) setActiveYear(allYears[0]);
       // Compute overlap
       const active = hists.filter(h => h && h.length > 0);
       if (active.length < 2) { setNavLoading(false); return; }
@@ -647,39 +711,131 @@ export default function CompareSchemes() {
 
               {/* Returns table */}
               <div className="z2-card">
-                <div className="z2-section-title">Trailing Returns (%)</div>
-                <table className="z2-table">
-                  <thead>
-                    <tr>
-                      <th>Period</th>
-                      {activeSlots.map(({scheme,color}) => (
-                        <th key={scheme.id} style={{color}}>
-                          {scheme.name.split(" ").slice(0,3).join(" ")}
-                        </th>
+                {/* Header row: title + P2P/Year toggle */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:8,borderBottom:"1px solid rgba(99,91,255,0.1)"}}>
+                  <div style={{fontFamily:"'DM Mono'",fontSize:10,color:"#6b72a0",letterSpacing:"0.18em",textTransform:"uppercase"}}>
+                    {returnMode === "p2p" ? "Trailing Returns (%)" : "Calendar Year Returns (%)"}
+                  </div>
+                  <div style={{display:"flex",background:"rgba(255,255,255,0.9)",border:"1px solid rgba(99,91,255,0.15)",borderRadius:5,overflow:"hidden"}}>
+                    <button onClick={() => setReturnMode("p2p")} style={{padding:"4px 10px",border:"none",cursor:"pointer",fontFamily:"'DM Mono'",fontSize:9,background:returnMode==="p2p"?"#635bff":"transparent",color:returnMode==="p2p"?"#fff":"#6b72a0"}}>P2P</button>
+                    <button onClick={() => setReturnMode("year")} style={{padding:"4px 10px",border:"none",cursor:"pointer",fontFamily:"'DM Mono'",fontSize:9,background:returnMode==="year"?"#635bff":"transparent",color:returnMode==="year"?"#fff":"#6b72a0"}}>Year</button>
+                  </div>
+                </div>
+
+                {returnMode === "p2p" ? (
+                  <>
+                    {/* Period pills */}
+                    <div style={{display:"flex",gap:5,marginBottom:12,flexWrap:"wrap"}}>
+                      {["1W","1M","3M","6M","1Y","3Y"].map(p => (
+                        <button key={p} onClick={() => setReturnPeriod(p)} style={{
+                          padding:"3px 9px",borderRadius:10,border:"none",cursor:"pointer",
+                          fontFamily:"'DM Mono'",fontSize:9,
+                          background: returnPeriod===p ? "linear-gradient(135deg,#635bff,#4f46e5)" : "rgba(99,91,255,0.06)",
+                          color: returnPeriod===p ? "#fff" : "#6b72a0",
+                          border: returnPeriod===p ? "none" : "1px solid rgba(99,91,255,0.15)",
+                        }}>{p}</button>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {RETURN_PERIODS.map(({key,label,higherBetter}) => {
-                      const vals = activeSlots.map(({scheme}) => scheme.returns?.[key] ?? null);
-                      const ranks = getRanks(vals, higherBetter);
-                      return (
-                        <tr key={key}>
-                          <td>{label}</td>
-                          {activeSlots.map(({scheme,color},i) => {
-                            const v = scheme.returns?.[key] ?? null;
-                            return (
-                              <td key={scheme.id} style={{color: returnColor(v)}}>
-                                {fmtRet(v)}
-                                <RankBadge rank={ranks[i]} />
-                              </td>
-                            );
-                          })}
+                    </div>
+                    <table className="z2-table">
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          {activeSlots.map(({scheme,color}) => (
+                            <th key={scheme.id} style={{color}}>{scheme.name.split(" ").slice(0,3).join(" ")}</th>
+                          ))}
                         </tr>
+                      </thead>
+                      <tbody>
+                        {RETURN_PERIODS.map(({key,label,higherBetter}) => {
+                          const vals = activeSlots.map(({scheme}) => scheme.returns?.[key] ?? null);
+                          const ranks = getRanks(vals, higherBetter);
+                          return (
+                            <tr key={key} style={{background: key===returnPeriod ? "rgba(99,91,255,0.04)" : undefined}}>
+                              <td style={{color: key===returnPeriod ? "#635bff" : undefined, fontWeight: key===returnPeriod ? 500 : 400}}>{label}</td>
+                              {activeSlots.map(({scheme},i) => {
+                                const v = scheme.returns?.[key] ?? null;
+                                return (
+                                  <td key={scheme.id} style={{color: returnColor(v)}}>
+                                    {fmtRet(v)}<RankBadge rank={ranks[i]} />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>
+                ) : (
+                  <>
+                    {/* Year pills */}
+                    {(() => {
+                      const allYears = [...new Set(yearMaps.flatMap(m => m ? Object.keys(m) : []))].sort().reverse();
+                      return (
+                        <>
+                          <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",flexWrap:"nowrap"}}>
+                            {allYears.map(y => (
+                              <button key={y} onClick={() => setActiveYear(y)} style={{
+                                padding:"3px 9px",borderRadius:10,border:"none",cursor:"pointer",
+                                fontFamily:"'DM Mono'",fontSize:9,whiteSpace:"nowrap",flexShrink:0,
+                                background: activeYear===y ? "linear-gradient(135deg,#635bff,#4f46e5)" : "rgba(99,91,255,0.06)",
+                                color: activeYear===y ? "#fff" : "#6b72a0",
+                                border: activeYear===y ? "none" : "1px solid rgba(99,91,255,0.15)",
+                              }}>{y === String(new Date().getFullYear()) ? `${y} YTD` : y}</button>
+                            ))}
+                          </div>
+                          <div style={{overflowX:"auto"}}>
+                            <table className="z2-table" style={{minWidth:`${150 + allYears.length*60}px`}}>
+                              <thead>
+                                <tr>
+                                  <th>Scheme</th>
+                                  {allYears.map(y => (
+                                    <th key={y} onClick={() => setActiveYear(y)}
+                                      style={{cursor:"pointer",color:y===activeYear?"#635bff":undefined}}>
+                                      {y===String(new Date().getFullYear())?`${y}*`:y}{y===activeYear?" ↓":""}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {activeSlots.map(({scheme,color},si) => {
+                                  const ymap = yearMaps[slots.indexOf(scheme)] || {};
+                                  const yearVals = allYears.map(y => ymap[y] ?? null);
+                                  const activeVals = activeSlots.map(({scheme:s},i) => {
+                                    const m = yearMaps[slots.indexOf(s)] || {};
+                                    return m[activeYear] ?? null;
+                                  });
+                                  const ranks = getRanks(activeVals, true);
+                                  return (
+                                    <tr key={scheme.id}>
+                                      <td style={{color,fontWeight:500}}>{scheme.name.split(" ").slice(0,3).join(" ")}</td>
+                                      {allYears.map((y,yi) => {
+                                        const v = yearVals[yi];
+                                        return (
+                                          <td key={y} style={{
+                                            color: returnColor(v),
+                                            fontWeight: y===activeYear ? 500 : 400,
+                                            background: y===activeYear ? "rgba(99,91,255,0.04)" : undefined
+                                          }}>
+                                            {v != null ? `${v>0?"+":""}${v}%` : "—"}
+                                            {y===activeYear && <RankBadge rank={ranks[si]} />}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div style={{fontFamily:"'DM Mono'",fontSize:9,color:"#9aa0c8",marginTop:8}}>
+                            * YTD · Calendar year: Jan 1 → Dec 31 · — = scheme not yet in existence
+                          </div>
+                        </>
                       );
-                    })}
-                  </tbody>
-                </table>
+                    })()}
+                  </>
+                )}
               </div>
 
               {/* Risk metrics table */}
