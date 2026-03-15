@@ -376,6 +376,64 @@ const style = `
     .sort-bar, .scheme-card { grid-template-columns: 1fr auto auto; }
     .col-hide { display: none; }
 
+    /* MOBILE CARD — Option A */
+    .scheme-card { display: block; padding: 12px; }
+    .mobile-card-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .mobile-card-name-block { flex: 1; padding-right: 10px; }
+    .mobile-card-name {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      line-height: 1.3; margin-bottom: 5px;
+    }
+    .mobile-card-metric {
+      text-align: right; flex-shrink: 0; min-width: 64px;
+    }
+    .mobile-card-metric-label {
+      font-family: 'DM Mono'; font-size: 9px; color: var(--violet);
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px;
+    }
+    .mobile-card-metric-val {
+      font-family: 'Bebas Neue'; font-size: 1.5rem; letter-spacing: 1px; line-height: 1;
+    }
+    .mobile-card-secondary {
+      display: flex; gap: 0;
+      border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px;
+    }
+    .mobile-card-sec-item {
+      flex: 1; text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .mobile-card-sec-item:last-child { border-right: none; }
+    .mobile-card-sec-label {
+      font-family: 'DM Mono'; font-size: 9px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;
+    }
+    .mobile-card-sec-val {
+      font-family: 'DM Mono'; font-size: 11px; font-weight: 500;
+    }
+
+    /* MOBILE SORT BAR — 4 cols, scrollable */
+    .sort-bar {
+      display: flex; gap: 0; overflow-x: auto;
+      padding: 8px 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.7);
+      position: sticky; top: 60px; z-index: 80;
+      border-bottom: 1px solid var(--border);
+      -webkit-overflow-scrolling: touch;
+    }
+    .sort-bar::-webkit-scrollbar { display: none; }
+    .sort-btn {
+      padding: 6px 14px; border-radius: 20px; white-space: nowrap;
+      border: 1px solid var(--border); margin-right: 6px;
+      background: rgba(255,255,255,0.9);
+    }
+    .sort-btn.active {
+      background: linear-gradient(135deg, var(--violet), var(--pink));
+      color: #fff; border-color: transparent;
+    }
+
     /* Search full width */
     .filters-bar .search-wrap { max-width: 100%; flex: 1; }
     .filters-bar .results-count { display: none; }
@@ -653,6 +711,13 @@ export default function App() {
   const [tab,           setTab]          = useState("schemes");
   const [peerExpanded,   setPeerExpanded]   = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   // ── Fetch data
   const loadData = useCallback(async () => {
@@ -1057,46 +1122,118 @@ export default function App() {
 
         <div className="main">
           <div className="scheme-list">
-            <div className="sort-bar">
-              <div>Scheme</div>
-              {sortCols.map(c => (
-                <button key={c.key} className={`sort-btn ${sortKey===c.key?"active":""}`}
-                  onClick={()=>handleSort(c.key)}>
-                  {c.label} {sortKey===c.key ? (sortDir===-1?"↓":"↑") : ""}
-                </button>
-              ))}
-            </div>
+            {isMobile ? (
+              /* MOBILE SORT BAR — scrollable pill strip */
+              <div className="sort-bar">
+                {sortCols.map(c => (
+                  <button key={c.key} className={`sort-btn ${sortKey===c.key?"active":""}`}
+                    onClick={()=>handleSort(c.key)}>
+                    {c.label} {sortKey===c.key ? (sortDir===-1?"↓":"↑") : ""}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* DESKTOP SORT BAR — column headers */
+              <div className="sort-bar">
+                <div>Scheme</div>
+                {sortCols.map(c => (
+                  <button key={c.key} className={`sort-btn ${sortKey===c.key?"active":""}`}
+                    onClick={()=>handleSort(c.key)}>
+                    {c.label} {sortKey===c.key ? (sortDir===-1?"↓":"↑") : ""}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {deduped.length === 0 && (
               <div className="no-results">No schemes match your filters.</div>
             )}
 
-            {deduped.slice(0,80).map((s,i) => (
-              <div key={s.id}
-                className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
-                style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
-                onClick={() => { setSelected(s); setPeerExpanded(false); }}
-              >
-                <div className="scheme-name-col">
-                  <div className="scheme-name">{s.name}</div>
-                  <div className="scheme-meta">
-                    <span className="tag tag-cat">{s.category}</span>
-                    <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
-                    <span className="tag" style={{background:"rgba(99,91,255,0.07)",color:"var(--muted)",border:"1px solid var(--border)"}}>
-                      {getOption(s)}
-                    </span>
-                  </div>
+            {deduped.slice(0,80).map((s,i) => {
+              // Contextual secondary row: all periods minus active sortKey, take first 3
+              const allPeriods = ["1M","3M","6M","1Y","3Y","SHARPE"];
+              const secPeriods = allPeriods.filter(p => p !== sortKey).slice(0, 3);
+              const getVal = (scheme, key) => {
+                if (key === "SHARPE") return scheme.risk?.sharpe != null ? scheme.risk.sharpe.toFixed(2) : null;
+                return scheme.returns?.[key] != null ? scheme.returns[key] : null;
+              };
+              const fmtVal = (val, key) => {
+                if (val == null) return "—";
+                if (key === "SHARPE") return val;
+                return `${val > 0 ? "+" : ""}${val}%`;
+              };
+              const primaryVal = getVal(s, sortKey);
+              const primaryFmt = fmtVal(primaryVal, sortKey);
+              const primaryColor = sortKey === "SHARPE"
+                ? ((s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
+                : returnColor(primaryVal);
+
+              return (
+                <div key={s.id}
+                  className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
+                  style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
+                  onClick={() => { setSelected(s); setPeerExpanded(false); }}
+                >
+                  {isMobile ? (
+                    /* ── MOBILE CARD — Option A ── */
+                    <>
+                      <div className="mobile-card-top">
+                        <div className="mobile-card-name-block">
+                          <div className="mobile-card-name">{s.name}</div>
+                          <div className="scheme-meta">
+                            <span className="tag tag-cat">{s.category}</span>
+                            <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
+                          </div>
+                        </div>
+                        <div className="mobile-card-metric">
+                          <div className="mobile-card-metric-label">{sortKey}</div>
+                          <div className="mobile-card-metric-val" style={{color: primaryColor}}>
+                            {primaryFmt}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-card-secondary">
+                        {secPeriods.map(p => {
+                          const v = getVal(s, p);
+                          return (
+                            <div className="mobile-card-sec-item" key={p}>
+                              <div className="mobile-card-sec-label">{p}</div>
+                              <div className="mobile-card-sec-val" style={{color: p === "SHARPE"
+                                ? ((s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
+                                : returnColor(v)}}>
+                                {fmtVal(v, p)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    /* ── DESKTOP CARD — original grid ── */
+                    <>
+                      <div className="scheme-name-col">
+                        <div className="scheme-name">{s.name}</div>
+                        <div className="scheme-meta">
+                          <span className="tag tag-cat">{s.category}</span>
+                          <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
+                          <span className="tag" style={{background:"rgba(99,91,255,0.07)",color:"var(--muted)",border:"1px solid var(--border)"}}>
+                            {getOption(s)}
+                          </span>
+                        </div>
+                      </div>
+                      <ReturnCell value={s.returns?.["1M"]} />
+                      <ReturnCell value={s.returns?.["3M"]} />
+                      <ReturnCell value={s.returns?.["6M"]} />
+                      <ReturnCell value={s.returns?.["1Y"]} />
+                      <ReturnCell value={s.returns?.["3Y"]} />
+                      <div className="ret-cell" style={{color: (s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)"}}>
+                        {s.risk?.sharpe != null ? s.risk.sharpe.toFixed(2) : "—"}
+                      </div>
+                    </>
+                  )}
                 </div>
-                <ReturnCell value={s.returns?.["1M"]} />
-                <ReturnCell value={s.returns?.["3M"]} />
-                <ReturnCell value={s.returns?.["6M"]} />
-                <ReturnCell value={s.returns?.["1Y"]} />
-                <ReturnCell value={s.returns?.["3Y"]} />
-                <div className="ret-cell" style={{color: (s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)"}}>
-                  {s.risk?.sharpe != null ? s.risk.sharpe.toFixed(2) : "—"}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {deduped.length > 80 && (
               <div style={{textAlign:"center",padding:"1rem",fontFamily:"'DM Mono'",
                 fontSize:"11px",color:"var(--muted)"}}>
