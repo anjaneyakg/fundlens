@@ -154,7 +154,7 @@ const GROUPS = [
     id: "Z", label: "MF Explorer",
     items: [
       { code:"Z1", name:"Scheme Explorer",            tagline:"Check MF Scheme Snapshot",                   path:"/schemes",              live:true  },
-      { code:"Z2", name:"Compare Schemes",            tagline:"xxx",                                        path:"/wealth-creator",       live:false },
+      { code:"Z2", name:"Compare Schemes",           tagline:"Side-by-side scheme comparison",     path:"/compare-schemes",       live:true  },
       { code:"Z3", name:"Fund Screener - Features",   tagline:"xxx",                                        path:"/swp-performance",      live:false },
       { code:"Z4", name:"Fund Screener - Ratios",     tagline:"xxx",                                        path:"/stp-performance",      live:false },
       { code:"Z5", name:"Fund Manager Track",         tagline:"xxx",                                        path:"/swp-projection",       live:false },
