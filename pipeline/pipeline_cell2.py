@@ -1,7 +1,8 @@
 # pipeline_cell2.py — FundLens v4.0
 # Upload all 5 outputs to Gists
 
-import json, os, requests
+import json, os, sys, requests
+from validate import validate_main_gist, print_validation_summary, ValidationError
 
 # Works in both GitHub Actions (env var) and Colab (userdata)
 try:
@@ -24,6 +25,27 @@ GIST_CATINDEX = "377985ac0904a27a0a328c0834faffda"
 GIST_NAVHIST  = "6f82d116b7067a8d13aa620e99aa783f"
 
 NAV_HISTORY_DIR = "nav_history"
+
+# ── Validation Gate ───────────────────────────────────────────────────────────
+
+def run_validation_gate():
+    """
+    Validate fundlens_schemes.json before any uploads.
+    Raises ValidationError (aborting the cell) if data fails quality checks.
+    """
+    from datetime import date
+    today = date.today().isoformat()
+
+    print("\n  Running validation gate...")
+    if not os.path.exists("fundlens_schemes.json"):
+        raise ValidationError("fundlens_schemes.json not found — cannot validate. Aborting.")
+
+    with open("fundlens_schemes.json", encoding="utf-8") as f:
+        data = json.load(f)
+
+    warnings = validate_main_gist(data, today)
+    print_validation_summary(warnings, label="Main Gist")
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +125,19 @@ def upload_nav_history(gist_id):
 
 print("=" * 60)
 print("FundLens Pipeline v4.0 — Cell 2: Upload")
+print("=" * 60)
+
+# ── VALIDATION GATE — aborts cell if data quality fails ──────────────────────
+try:
+    run_validation_gate()
+except ValidationError as e:
+    print(e)
+    print("\n🚫 Upload aborted. Existing live Gists preserved. Site unaffected.")
+    # Stops execution in both Colab (raises) and GitHub Actions (sys.exit)
+    raise SystemExit(1)
+
+# ── All clear — proceed with uploads ─────────────────────────────────────────
+print("\n✅ Validation passed. Proceeding with uploads...")
 print("=" * 60)
 
 results = [
