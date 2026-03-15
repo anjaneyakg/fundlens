@@ -18,7 +18,7 @@ const style = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #f0f4ff;
+    --bg: #eef2ff;
     --surface: rgba(255,255,255,0.75);
     --surface2: rgba(255,255,255,0.55);
     --border: rgba(99,91,255,0.12);
@@ -271,6 +271,43 @@ const style = `
   .lb-row-rank { font-family: 'Bebas Neue'; font-size: 13px; color: var(--muted); width: 20px; margin-right: 8px; }
 
   .no-results { padding: 3rem; text-align: center; color: var(--muted); font-family: 'DM Mono'; font-size: 13px; }
+
+  /* PEER FULLSCREEN OVERLAY */
+  .peer-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(15,12,46,0.55); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 2rem;
+  }
+  .peer-overlay-panel {
+    background: #fff; border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 80px rgba(99,91,255,0.18);
+    width: 100%; max-width: 860px; max-height: 88vh;
+    overflow-y: auto; padding: 2rem;
+    position: relative;
+  }
+  .peer-overlay-close {
+    position: absolute; top: 1rem; right: 1rem;
+    background: rgba(99,91,255,0.08); border: 1px solid var(--border);
+    border-radius: 6px; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--muted); font-size: 16px;
+    transition: all 0.15s;
+  }
+  .peer-overlay-close:hover { background: rgba(99,91,255,0.15); color: var(--text); }
+  .peer-expand-btn {
+    background: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 3px 7px; cursor: pointer;
+    color: var(--muted); font-size: 11px; line-height: 1;
+    transition: all 0.15s; margin-left: auto;
+  }
+  .peer-expand-btn:hover { border-color: var(--violet); color: var(--violet); }
+  .peer-section-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  .peer-section-header .panel-section-title { margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; }
 
   @media (max-width: 1024px) {
     .main { grid-template-columns: 1fr; }
@@ -542,6 +579,7 @@ export default function App() {
   const [sortDir,       setSortDir]      = useState(-1);
   const [selected,      setSelected]     = useState(null);
   const [tab,           setTab]          = useState("schemes");
+  const [peerFullscreen, setPeerFullscreen] = useState(false);
 
   // ── Fetch data
   const loadData = useCallback(async () => {
@@ -671,6 +709,28 @@ export default function App() {
   const peers = selected
     ? allSchemes.filter(s => s.category === selected.category && s.plan === selected.plan)
     : [];
+
+  // AMC dedup — Option A:
+  // Only deduplicate when 3+ distinct AMCs in pool (avoids wiping single-AMC categories)
+  // Always keep the selected scheme. Take top 1Y returner per AMC, top 6 total.
+  const dedupedPeers = (() => {
+    if (!selected || peers.length === 0) return [];
+    const distinctAmcs = new Set(peers.map(p => p.amc)).size;
+    if (distinctAmcs < 3) return [...peers].sort((a,b) => (b.returns?.["1Y"]??-999) - (a.returns?.["1Y"]??-999));
+    // Deduplicate: best 1Y per AMC, always include selected scheme
+    const byAmc = new Map();
+    for (const p of peers) {
+      const existing = byAmc.get(p.amc);
+      if (!existing || (p.returns?.["1Y"]??-999) > (existing.returns?.["1Y"]??-999)) {
+        byAmc.set(p.amc, p);
+      }
+    }
+    const deduped = Array.from(byAmc.values()).sort((a,b) => (b.returns?.["1Y"]??-999) - (a.returns?.["1Y"]??-999));
+    // Ensure selected scheme is always present
+    const hasSelected = deduped.some(p => p.id === selected.id);
+    if (!hasSelected) deduped.push(selected);
+    return deduped;
+  })();
 
   const sortCols = [
     { key:"1M",     label:"1M"    },
@@ -865,9 +925,11 @@ export default function App() {
                       <div className="panel-nav-val">₹{selected.nav}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div className="panel-nav-label">Since</div>
+                      <div className="panel-nav-label">NAV Since</div>
                       <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
-                        {selected.inceptionDate}
+                        {selected.navDate
+                          ? new Date(selected.navDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})
+                          : "—"}
                       </div>
                     </div>
                   </div>
@@ -919,56 +981,93 @@ export default function App() {
                 <div className="panel-section-title">1Y Rolling Returns</div>
                 <RollingChart data={rollingMap[String(selected.id)] || []} />
 
-                {/* Peer bar chart */}
-                {peers.length > 1 && (() => {
-                  const sorted = [...peers].sort((a,b)=>(b.returns?.["1Y"]??-999)-(a.returns?.["1Y"]??-999)).slice(0,6);
-                  const maxRet = Math.max(...sorted.map(p=>p.returns?.["1Y"]??0));
+                {/* Peer comparison — AMC-deduped, plan-matched */}
+                {dedupedPeers.length > 1 && (() => {
+                  const barPeers = dedupedPeers.slice(0, 6);
+                  const tablePeers = [...dedupedPeers].sort((a,b) => (b.returns?.["1Y"]??-999) - (a.returns?.["1Y"]??-999));
+                  const maxRet = Math.max(...barPeers.map(p => p.returns?.["1Y"] ?? 0));
+
+                  const PeerBarChart = ({ ps }) => (
+                    <div className="bar-chart">
+                      {ps.map(p => (
+                        <div className="bar-row" key={p.id}>
+                          <div className="bar-label" style={{color: p.id===selected.id ? "var(--violet)" : undefined, fontSize:"9px"}}>
+                            {p.amc.split(" ")[0].slice(0,4).toUpperCase()}
+                          </div>
+                          <div className="bar-track">
+                            <div className="bar-fill" style={{
+                              width: `${Math.max(2, ((p.returns?.["1Y"]??0) / maxRet) * 100)}%`,
+                              background: p.id===selected.id
+                                ? "linear-gradient(90deg,var(--violet),var(--pink))"
+                                : "rgba(99,91,255,0.12)"
+                            }}/>
+                          </div>
+                          <div className="bar-val" style={{color: p.id===selected.id ? "var(--violet)" : returnColor(p.returns?.["1Y"])}}>
+                            {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+
+                  const PeerTable = ({ ps, limit }) => (
+                    <table className="peer-table">
+                      <thead><tr>
+                        <th>#</th><th>Fund</th><th>1Y</th><th>3Y</th><th>Sharpe</th>
+                      </tr></thead>
+                      <tbody>
+                        {ps.slice(0, limit).map((p, i) => (
+                          <tr key={p.id} className={p.id===selected.id ? "highlight" : ""}>
+                            <td><span className="peer-rank">{i+1}</span></td>
+                            <td><div className="peer-name" title={p.name}>{p.amc}</div></td>
+                            <td style={{color: returnColor(p.returns?.["1Y"])}}>
+                              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+                            </td>
+                            <td style={{color: returnColor(p.returns?.["3Y"])}}>
+                              {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
+                            </td>
+                            <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+
                   return (
                     <>
-                      <div className="panel-section-title">1Y Return — Peer Benchmark</div>
-                      <div className="bar-chart">
-                        {sorted.map(p => (
-                          <div className="bar-row" key={p.id}>
-                            <div className="bar-label" style={{color:p.id===selected.id?"var(--violet)":undefined,fontSize:"9px"}}>
-                              {p.amc.split(" ")[0].slice(0,4).toUpperCase()}
-                            </div>
-                            <div className="bar-track">
-                              <div className="bar-fill" style={{
-                                width:`${Math.max(2,((p.returns?.["1Y"]??0)/maxRet)*100)}%`,
-                                background: p.id===selected.id
-                                  ? "linear-gradient(90deg,var(--violet),var(--pink))"
-                                  : "rgba(99,91,255,0.12)"
-                              }}/>
-                            </div>
-                            <div className="bar-val" style={{color:p.id===selected.id?"var(--violet)":returnColor(p.returns?.["1Y"])}}>
-                              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="peer-section-header">
+                        <div className="panel-section-title">1Y Return — Peer Benchmark</div>
+                        <button className="peer-expand-btn" onClick={() => setPeerFullscreen(true)} title="Enlarge">⤢</button>
                       </div>
+                      <PeerBarChart ps={barPeers} />
 
-                      <div className="panel-section-title">Category Ranking — 1Y</div>
-                      <table className="peer-table">
-                        <thead><tr>
-                          <th>#</th><th>Fund</th><th>1Y</th><th>3Y</th><th>Sharpe</th>
-                        </tr></thead>
-                        <tbody>
-                          {[...peers].sort((a,b)=>(b.returns?.["1Y"]??-999)-(a.returns?.["1Y"]??-999))
-                            .slice(0,8).map((p,i) => (
-                            <tr key={p.id} className={p.id===selected.id?"highlight":""}>
-                              <td><span className="peer-rank">{i+1}</span></td>
-                              <td><div className="peer-name" title={p.name}>{p.amc}</div></td>
-                              <td style={{color:returnColor(p.returns?.["1Y"])}}>
-                                {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                              </td>
-                              <td style={{color:returnColor(p.returns?.["3Y"])}}>
-                                {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
-                              </td>
-                              <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="peer-section-header" style={{marginTop:"1rem"}}>
+                        <div className="panel-section-title">Category Ranking — 1Y</div>
+                      </div>
+                      <PeerTable ps={tablePeers} limit={8} />
+
+                      {/* Fullscreen overlay */}
+                      {peerFullscreen && (
+                        <div className="peer-overlay" onClick={e => { if (e.target.classList.contains("peer-overlay")) setPeerFullscreen(false); }}>
+                          <div className="peer-overlay-panel">
+                            <button className="peer-overlay-close" onClick={() => setPeerFullscreen(false)}>✕</button>
+                            <div style={{fontFamily:"'Bebas Neue'",fontSize:"1.3rem",letterSpacing:"2px",color:"var(--text)",marginBottom:"4px"}}>
+                              {selected.name}
+                            </div>
+                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--violet)",letterSpacing:"1px",marginBottom:"1.5rem"}}>
+                              {selected.category} · {selected.plan} · Peer Comparison
+                            </div>
+                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--muted)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"10px",paddingBottom:"6px",borderBottom:"1px solid var(--border)"}}>
+                              1Y Return — Peer Benchmark
+                            </div>
+                            <PeerBarChart ps={dedupedPeers.slice(0,10)} />
+                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--muted)",letterSpacing:"2px",textTransform:"uppercase",margin:"1.5rem 0 10px",paddingBottom:"6px",borderBottom:"1px solid var(--border)"}}>
+                              Full Category Ranking — 1Y ({tablePeers.length} funds · {selected.plan})
+                            </div>
+                            <PeerTable ps={tablePeers} limit={tablePeers.length} />
+                          </div>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
@@ -1004,6 +1103,25 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* SOURCE ATTRIBUTION */}
+      <footer style={{
+        padding:"1rem 2rem",
+        borderTop:"1px solid var(--border)",
+        textAlign:"center",
+        fontFamily:"'DM Mono'",
+        fontSize:"10px",
+        color:"var(--muted)",
+        letterSpacing:"0.5px",
+        background:"rgba(255,255,255,0.3)"
+      }}>
+        Source:{" "}
+        <a href="https://www.amfiindia.com" target="_blank" rel="noopener noreferrer"
+          style={{color:"var(--violet)",textDecoration:"none"}}>
+          AMFI India (amfiindia.com)
+        </a>
+        {" "}· Data updated daily
+      </footer>
     </div>
   );
 }
