@@ -5,11 +5,37 @@ import { useLocation } from "react-router-dom";
 // Main slim Gist — schemes list (~3MB), loaded on every page load
 const DATA_URL      = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 const CATINDEX_URL  = "https://gist.githubusercontent.com/anjaneyakg/377985ac0904a27a0a328c0834faffda/raw/fundlens_category_index.json";
+const NAVHIST_BASE  = "https://gist.githubusercontent.com/anjaneyakg/6f82d116b7067a8d13aa620e99aa783f/raw";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n >= 1000 ? `₹${(n/1000).toFixed(1)}K Cr` : `₹${n} Cr`;
 const returnColor = (v) => v > 0 ? "#059669" : v < 0 ? "#e11d48" : "#6b72a0";
 const riskColor = (r) => ({ "Low":"#059669","Moderate":"#d97706","High":"#ea580c","Very High":"#e11d48" }[r] || "#6b72a0");
+
+const categorySlug = (category, plan) => {
+  const slug = (category||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  return `nav_${slug}_${(plan||"").toLowerCase()}.json`;
+};
+
+// Compute calendar year returns from NAV history array [{date,nav}]
+// Returns { 2024: 12.4, 2023: -3.1, ... }
+const calcYearReturns = (hist) => {
+  if (!hist || hist.length < 2) return {};
+  const byYear = {};
+  for (const e of hist) {
+    const y = e.date.slice(0,4);
+    if (!byYear[y]) byYear[y] = { first: e, last: e };
+    byYear[y].last = e;
+    if (e.date < byYear[y].first.date) byYear[y].first = e;
+  }
+  const result = {};
+  for (const [year, {first, last}] of Object.entries(byYear)) {
+    if (first.nav > 0 && first.date !== last.date) {
+      result[year] = parseFloat(((last.nav / first.nav - 1) * 100).toFixed(2));
+    }
+  }
+  return result;
+};
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const style = `
@@ -278,6 +304,65 @@ const style = `
     margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
   }
   .peer-section-header .panel-section-title { margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; }
+
+  /* PEER PANEL — new tabbed design */
+  .peer-panel { margin-top: 1.5rem; }
+  .peer-tabs {
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border); margin-bottom: 0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .peer-tabs::-webkit-scrollbar { display: none; }
+  .peer-tab-group { display: flex; }
+  .peer-tab {
+    padding: 8px 11px; border: none; background: none; cursor: pointer;
+    font-family: 'DM Mono'; font-size: 10px; letter-spacing: 0.8px;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .peer-tab.active { color: var(--violet); border-bottom-color: var(--violet); }
+  .peer-toggle {
+    display: flex; flex-shrink: 0; margin-left: 8px;
+    background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+    border-radius: 5px; overflow: hidden;
+  }
+  .peer-toggle-btn {
+    padding: 4px 9px; border: none; background: transparent; cursor: pointer;
+    font-family: 'DM Mono'; font-size: 9px; color: var(--muted);
+    transition: all 0.15s;
+  }
+  .peer-toggle-btn.active { background: var(--violet); color: #fff; }
+  .peer-pills {
+    display: flex; gap: 5px; padding: 7px 0 6px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .peer-pills::-webkit-scrollbar { display: none; }
+  .peer-pill {
+    padding: 3px 9px; border-radius: 10px; border: none; cursor: pointer;
+    font-family: 'DM Mono'; font-size: 9px; white-space: nowrap;
+    background: rgba(99,91,255,0.06); color: var(--muted);
+    border: 1px solid rgba(99,91,255,0.15); transition: all 0.15s;
+  }
+  .peer-pill.active { background: linear-gradient(135deg,var(--violet),var(--indigo)); color: #fff; border-color: transparent; }
+
+  /* peer table */
+  .peer-tbl { width: 100%; border-collapse: collapse; font-family: 'DM Mono'; }
+  .peer-tbl th {
+    font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border);
+    cursor: pointer; white-space: nowrap;
+  }
+  .peer-tbl th:first-child { text-align: left; width: 20px; }
+  .peer-tbl th:nth-child(2) { text-align: left; }
+  .peer-tbl th.sort-active { color: var(--violet); }
+  .peer-tbl td { padding: 7px 8px; border-bottom: 1px solid rgba(99,91,255,0.05); font-size: 11px; text-align: right; }
+  .peer-tbl td:first-child { text-align: left; }
+  .peer-tbl td:nth-child(2) { text-align: left; max-width: 130px; }
+  .peer-tbl tr.peer-selected td { background: rgba(99,91,255,0.05); }
+  .peer-tbl tr:last-child td { border-bottom: none; }
+  .peer-rank-badge { font-family: 'Bebas Neue'; font-size: 14px; color: var(--orange); }
+  .peer-scheme-name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .peer-scheme-amc  { font-size: 9px; color: var(--muted); margin-top: 1px; }
 
   /* MOBILE FILTER BAR — Option 1 */
   .mobile-filter-bar { display: none; }
@@ -710,6 +795,15 @@ export default function App() {
   const [selected,      setSelected]     = useState(null);
   const [peerExpanded,   setPeerExpanded]   = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  // Peer panel state
+  const [peerMetric,     setPeerMetric]     = useState("returns"); // returns|sharpe|stddev|maxdd|sortino
+  const [peerReturnMode, setPeerReturnMode] = useState("p2p");     // p2p|year
+  const [peerPeriod,     setPeerPeriod]     = useState("1Y");      // 1M|3M|6M|1Y|3Y
+  const [peerYear,       setPeerYear]       = useState("");        // e.g. "2025"
+  const [peerSortBy,     setPeerSortBy]     = useState("metric");  // metric|aum
+  const [peerNavHist,    setPeerNavHist]    = useState(null);      // NAV history for selected scheme's category
+  const [peerNavLoading, setPeerNavLoading] = useState(false);
+  const [peerYearReturns,setPeerYearReturns]= useState({});        // {schemeId: {2024:12.4,...}}
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
 
   useEffect(() => {
@@ -782,6 +876,30 @@ export default function App() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Fetch NAV history for selected scheme's category+plan when scheme selected
+  // Used for: rolling returns chart + calendar year returns in peer panel
+  useEffect(() => {
+    if (!selected) { setPeerNavHist(null); setPeerYearReturns({}); return; }
+    setPeerNavLoading(true);
+    const file = categorySlug(selected.category, selected.plan);
+    fetch(`${NAVHIST_BASE}/${file}`)
+      .then(r => r.json())
+      .then(json => {
+        setPeerNavHist(json);
+        // Compute year returns for all peers in this category+plan
+        const yearMap = {};
+        for (const [id, hist] of Object.entries(json)) {
+          yearMap[id] = calcYearReturns(hist);
+        }
+        setPeerYearReturns(yearMap);
+        // Set default year to most recent complete year
+        const years = Object.keys(yearMap[selected.id] || {}).sort().reverse();
+        if (years.length > 0) setPeerYear(years[0]);
+      })
+      .catch(() => { setPeerNavHist(null); setPeerYearReturns({}); })
+      .finally(() => setPeerNavLoading(false));
+  }, [selected?.id]);
 
   // Auto-select scheme when navigated from Z8 Category Leaderboard
   const location = useLocation();
@@ -1231,7 +1349,7 @@ export default function App() {
                 <div key={s.id}
                   className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
                   style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
-                  onClick={() => { setSelected(s); setPeerExpanded(false); }}
+                  onClick={() => { setSelected(s); setPeerExpanded(false); setPeerMetric("returns"); setPeerReturnMode("p2p"); setPeerPeriod("1Y"); }}
                 >
                   {isMobile ? (
                     /* ── MOBILE CARD — Option A ── */
@@ -1384,107 +1502,260 @@ export default function App() {
 
                 {/* Rolling returns chart */}
                 <div className="panel-section-title">1Y Rolling Returns</div>
-                <RollingChart data={rollingMap[String(selected.id)] || []} />
+                <RollingChart data={peerNavHist?.[String(selected.id)] || rollingMap[String(selected.id)] || []} />
 
                 {/* Peer comparison — plan-matched, AMC-deduped */}
                 {dedupedPeers.length > 1 && (() => {
-                  const barPeers = dedupedPeers.slice(0, 6);
-                  const tablePeers = [...dedupedPeers].sort((a,b) => (b.returns?.["1Y"]??-999) - (a.returns?.["1Y"]??-999));
-                  const maxRet = Math.max(...barPeers.map(p => p.returns?.["1Y"] ?? 0), 1);
-                  const visibleRows = peerExpanded ? tablePeers.length : 8;
+                  // ── Peer panel helpers ───────────────────────────────────
+                  const METRIC_TABS = [
+                    { key:"returns",  label:"Returns" },
+                    { key:"sharpe",   label:"Sharpe"  },
+                    { key:"stddev",   label:"Std Dev" },
+                    { key:"maxdd",    label:"Max DD"  },
+                    { key:"sortino",  label:"Sortino" },
+                  ];
+                  const P2P_PERIODS = ["1M","3M","6M","1Y","3Y"];
 
-                  // Short display name: strip AMC prefix if it leads the name
+                  // Get metric value for a peer
+                  const getMetricVal = (p) => {
+                    if (peerMetric === "returns") {
+                      if (peerReturnMode === "p2p") return p.returns?.[peerPeriod] ?? null;
+                      return peerYearReturns[p.id]?.[peerYear] ?? null;
+                    }
+                    if (peerMetric === "sharpe")  return p.risk?.sharpe   ?? null;
+                    if (peerMetric === "stddev")  return p.risk?.stdDev   ?? null;
+                    if (peerMetric === "maxdd")   return p.risk?.maxDrawdown ?? null;
+                    if (peerMetric === "sortino") return p.risk?.sortino  ?? null;
+                    return null;
+                  };
+
+                  const fmtMetric = (v) => {
+                    if (v == null) return "—";
+                    if (peerMetric === "returns") return `${v > 0 ? "+" : ""}${v}%`;
+                    return v.toFixed(2);
+                  };
+
+                  const metricColor = (v, p) => {
+                    if (v == null) return "var(--muted)";
+                    if (p.id === selected.id) return "var(--violet)";
+                    if (peerMetric === "returns") return returnColor(v);
+                    if (peerMetric === "sharpe" || peerMetric === "sortino")
+                      return v > 1 ? "#059669" : v > 0 ? "var(--text)" : "#e11d48";
+                    return "var(--text)";
+                  };
+
+                  // Sort peers
+                  const sortedPeers = [...dedupedPeers].sort((a, b) => {
+                    if (peerSortBy === "aum") return 0; // AUM not available yet
+                    const av = getMetricVal(a) ?? -9999;
+                    const bv = getMetricVal(b) ?? -9999;
+                    // For stddev + maxdd: lower = better, so sort ascending
+                    const lowerBetter = peerMetric === "stddev" || peerMetric === "maxdd";
+                    return lowerBetter ? av - bv : bv - av;
+                  });
+
+                  const visibleRows  = peerExpanded ? sortedPeers.length : 8;
+                  const barPeers     = sortedPeers.slice(0, 6);
+                  const maxAbsVal    = Math.max(...barPeers.map(p => Math.abs(getMetricVal(p) ?? 0)), 0.01);
+
+                  // Available years from selected scheme
+                  const availYears = Object.keys(peerYearReturns[selected.id] || {})
+                    .sort().reverse();
+
+                  // Short name
                   const shortName = (p) => {
                     const n = p.name || "";
                     const amc = (p.amc || "").split(" ")[0];
                     const stripped = n.startsWith(amc) ? n.slice(amc.length).trim() : n;
                     return stripped.length > 22 ? stripped.slice(0, 21) + "…" : stripped;
                   };
+                  const barLabel = (p) => (p.name || p.amc || "").split(" ")[0].slice(0,4).toUpperCase();
 
-                  // Bar label: first meaningful word of scheme name, max 4 chars
-                  const barLabel = (p) => {
-                    const words = (p.name || p.amc || "").split(" ");
-                    return words[0].slice(0, 4).toUpperCase();
-                  };
+                  // Year table: columns = all available years sorted desc
+                  const yearCols = availYears;
 
                   return (
-                    <>
-                      <div className="panel-section-title">1Y Return — Peer Benchmark</div>
-                      <div className="bar-chart">
-                        {barPeers.map(p => (
-                          <div className="bar-row" key={p.id} title={p.name}>
-                            <div className="bar-label" style={{
-                              color: p.id===selected.id ? "var(--violet)" : undefined,
-                              fontSize: "9px", cursor: "default"
-                            }}>
-                              {barLabel(p)}
-                            </div>
-                            <div className="bar-track">
-                              <div className="bar-fill" style={{
-                                width: `${Math.max(2, ((p.returns?.["1Y"]??0) / maxRet) * 100)}%`,
-                                background: p.id===selected.id
-                                  ? "linear-gradient(90deg,var(--violet),var(--pink))"
-                                  : "rgba(99,91,255,0.12)"
-                              }}/>
-                            </div>
-                            <div className="bar-val" style={{color: p.id===selected.id ? "var(--violet)" : returnColor(p.returns?.["1Y"])}}>
-                              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="peer-section-header" style={{marginTop:"1rem"}}>
-                        <div className="panel-section-title">Category Ranking — 1Y</div>
-                      </div>
-                      <table className="peer-table">
-                        <thead><tr>
-                          <th>#</th><th>Scheme</th><th>1Y</th><th>3Y</th><th>Sharpe</th>
-                        </tr></thead>
-                        <tbody>
-                          {tablePeers.slice(0, visibleRows).map((p, i) => (
-                            <tr key={p.id} className={p.id===selected.id ? "highlight" : ""}>
-                              <td><span className="peer-rank">{i+1}</span></td>
-                              <td>
-                                <div className="peer-name" title={p.name}>
-                                  {shortName(p)}
-                                </div>
-                                <div style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"120px"}} title={p.amc}>
-                                  {p.amc}
-                                </div>
-                              </td>
-                              <td style={{color: returnColor(p.returns?.["1Y"])}}>
-                                {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                              </td>
-                              <td style={{color: returnColor(p.returns?.["3Y"])}}>
-                                {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
-                              </td>
-                              <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
-                            </tr>
+                    <div className="peer-panel">
+                      {/* Metric tabs + P2P|Year toggle */}
+                      <div className="peer-tabs">
+                        <div className="peer-tab-group">
+                          {METRIC_TABS.map(t => (
+                            <button key={t.key}
+                              className={`peer-tab${peerMetric===t.key?" active":""}`}
+                              onClick={() => { setPeerMetric(t.key); if(t.key!=="returns") setPeerReturnMode("p2p"); }}>
+                              {t.label}
+                            </button>
                           ))}
-                        </tbody>
-                      </table>
+                        </div>
+                        {peerMetric === "returns" && (
+                          <div className="peer-toggle">
+                            <button className={`peer-toggle-btn${peerReturnMode==="p2p"?" active":""}`}
+                              onClick={() => setPeerReturnMode("p2p")}>P2P</button>
+                            <button className={`peer-toggle-btn${peerReturnMode==="year"?" active":""}`}
+                              onClick={() => setPeerReturnMode("year")}>Year</button>
+                          </div>
+                        )}
+                      </div>
 
-                      {/* Inline expand — Option B */}
-                      {tablePeers.length > 8 && (
-                        <button
-                          onClick={() => setPeerExpanded(e => !e)}
-                          style={{
-                            width:"100%", marginTop:"8px", padding:"8px",
-                            background:"rgba(99,91,255,0.04)",
-                            border:"1px dashed rgba(99,91,255,0.2)",
-                            borderRadius:"6px", cursor:"pointer",
-                            fontFamily:"'DM Mono'", fontSize:"10px",
-                            color:"var(--violet)", letterSpacing:"1px",
-                            transition:"all 0.15s"
-                          }}
-                        >
-                          {peerExpanded
-                            ? `▲ Show less`
-                            : `▼ Show all ${tablePeers.length} funds in category`}
-                        </button>
+                      {/* Period pills */}
+                      {peerMetric === "returns" && (
+                        <div className="peer-pills">
+                          {peerReturnMode === "p2p" ? (
+                            P2P_PERIODS.map(p => (
+                              <button key={p} className={`peer-pill${peerPeriod===p?" active":""}`}
+                                onClick={() => setPeerPeriod(p)}>{p}</button>
+                            ))
+                          ) : peerNavLoading ? (
+                            <span style={{fontFamily:"'DM Mono'",fontSize:10,color:"var(--muted)"}}>Loading year data...</span>
+                          ) : (
+                            availYears.map(y => (
+                              <button key={y} className={`peer-pill${peerYear===y?" active":""}`}
+                                onClick={() => setPeerYear(y)}>
+                                {y === new Date().getFullYear().toString() ? `${y} YTD` : y}
+                              </button>
+                            ))
+                          )}
+                        </div>
                       )}
-                    </>
+
+                      {/* Bar chart */}
+                      <div className="bar-chart" style={{marginTop:"4px"}}>
+                        {barPeers.map(p => {
+                          const v = getMetricVal(p);
+                          const w = v != null ? Math.max(3, (Math.abs(v) / maxAbsVal) * 100) : 3;
+                          return (
+                            <div className="bar-row" key={p.id} title={p.name}>
+                              <div className="bar-label" style={{color: p.id===selected.id ? "var(--violet)" : undefined, fontSize:"9px"}}>
+                                {barLabel(p)}
+                              </div>
+                              <div className="bar-track">
+                                <div className="bar-fill" style={{
+                                  width:`${w}%`,
+                                  background: p.id===selected.id
+                                    ? "linear-gradient(90deg,var(--violet),var(--pink))"
+                                    : "rgba(99,91,255,0.12)"
+                                }}/>
+                              </div>
+                              <div className="bar-val" style={{color: metricColor(v, p)}}>
+                                {fmtMetric(v)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Peer table */}
+                      <div style={{borderTop:"1px solid var(--border)",marginTop:"8px",overflowX:"auto"}}>
+                        {peerMetric === "returns" && peerReturnMode === "year" ? (
+                          /* YEAR TABLE — all years as columns */
+                          <table className="peer-tbl" style={{minWidth: `${200 + yearCols.length * 52}px`}}>
+                            <thead><tr>
+                              <th style={{textAlign:"left"}}>Scheme</th>
+                              <th style={{textAlign:"right",cursor:"pointer"}}
+                                className={peerSortBy==="aum"?"sort-active":""}
+                                onClick={() => setPeerSortBy("aum")}>AUM ↕</th>
+                              {yearCols.map(y => (
+                                <th key={y}
+                                  className={peerYear===y?"sort-active":""}
+                                  style={{textAlign:"right",cursor:"pointer",color:peerYear===y?"var(--violet)":undefined}}
+                                  onClick={() => { setPeerYear(y); setPeerSortBy("metric"); }}>
+                                  {y === new Date().getFullYear().toString() ? `${y}*` : y}
+                                  {peerYear===y?" ↓":""}
+                                </th>
+                              ))}
+                            </tr></thead>
+                            <tbody>
+                              {sortedPeers.slice(0, visibleRows).map((p) => (
+                                <tr key={p.id} className={p.id===selected.id?"peer-selected":""}>
+                                  <td>
+                                    <div className="peer-scheme-name" title={p.name}
+                                      style={{color: p.id===selected.id ? "var(--violet)" : undefined}}>
+                                      {shortName(p)}
+                                    </div>
+                                    <div className="peer-scheme-amc">{p.amc}</div>
+                                  </td>
+                                  <td style={{color:"var(--muted)"}}>—</td>
+                                  {yearCols.map(y => {
+                                    const v = peerYearReturns[p.id]?.[y] ?? null;
+                                    return (
+                                      <td key={y} style={{
+                                        color: p.id===selected.id && y===peerYear ? "var(--violet)"
+                                          : returnColor(v),
+                                        fontWeight: y===peerYear ? 500 : 400
+                                      }}>
+                                        {v != null ? `${v>0?"+":""}${v}%` : "—"}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          /* P2P / RISK TABLE */
+                          <table className="peer-tbl">
+                            <thead><tr>
+                              <th>#</th>
+                              <th>Scheme</th>
+                              <th className={peerSortBy==="aum"?"sort-active":""}
+                                style={{cursor:"pointer"}} onClick={() => setPeerSortBy("aum")}>AUM ↕</th>
+                              <th className={peerSortBy==="metric"?"sort-active":""}
+                                style={{color:"var(--violet)",cursor:"pointer"}}
+                                onClick={() => setPeerSortBy("metric")}>
+                                {peerMetric==="returns" ? peerPeriod
+                                  : peerMetric==="sharpe" ? "Sharpe"
+                                  : peerMetric==="stddev" ? "StdDev"
+                                  : peerMetric==="maxdd"  ? "MaxDD"
+                                  : "Sortino"} ↓
+                              </th>
+                            </tr></thead>
+                            <tbody>
+                              {sortedPeers.slice(0, visibleRows).map((p, i) => {
+                                const v = getMetricVal(p);
+                                return (
+                                  <tr key={p.id} className={p.id===selected.id?"peer-selected":""}>
+                                    <td><span className="peer-rank-badge">{i+1}</span></td>
+                                    <td>
+                                      <div className="peer-scheme-name" title={p.name}
+                                        style={{color: p.id===selected.id ? "var(--violet)" : undefined}}>
+                                        {shortName(p)}
+                                      </div>
+                                      <div className="peer-scheme-amc">
+                                        {p.amc}
+                                        {p.id===selected.id && <span style={{color:"var(--violet)",marginLeft:4}}>· selected</span>}
+                                      </div>
+                                    </td>
+                                    <td style={{color:"var(--muted)"}}>—</td>
+                                    <td style={{color: metricColor(v,p), fontWeight: p.id===selected.id?500:400}}>
+                                      {fmtMetric(v)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+
+                        {/* Expand button */}
+                        {sortedPeers.length > 8 && (
+                          <button onClick={() => setPeerExpanded(e => !e)} style={{
+                            width:"100%", padding:"7px",
+                            background:"rgba(99,91,255,0.03)",
+                            border:"none", borderTop:"1px dashed rgba(99,91,255,0.18)",
+                            cursor:"pointer", fontFamily:"'DM Mono'", fontSize:"10px",
+                            color:"var(--violet)", letterSpacing:"1px",
+                          }}>
+                            {peerExpanded ? "▲ Show less" : `▼ Show all ${sortedPeers.length} funds`}
+                          </button>
+                        )}
+
+                        {/* Footer */}
+                        <div style={{padding:"5px 8px 6px",fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)"}}>
+                          {peerMetric==="returns" && peerReturnMode==="year" && `* YTD · `}
+                          AUM: data source pending · Returns: AMFI India
+                        </div>
+                      </div>
+                    </div>
                   );
                 })()}
               </div>
