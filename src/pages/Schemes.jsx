@@ -1445,7 +1445,23 @@ export default function App() {
                     }}
                     style={{cursor:"pointer"}}>
                     <div className="lb-row-rank">{i+1}</div>
-                    <div className="lb-row-name" title={f.name}>{f.amc}</div>
+                    <div className="lb-row-name" title={f.name} style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                      <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        {f.name || f.amc}
+                      </span>
+                      <span style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        {f.amc}
+                        {f.plan && (
+                          <span style={{
+                            marginLeft:"5px", padding:"1px 5px", borderRadius:"3px",
+                            background: f.plan==="Direct" ? "rgba(99,91,255,0.08)" : "rgba(107,114,160,0.08)",
+                            color: f.plan==="Direct" ? "var(--violet)" : "var(--muted)",
+                            border: `1px solid ${f.plan==="Direct" ? "rgba(99,91,255,0.18)" : "var(--border)"}`,
+                            fontSize:"8px"
+                          }}>{f.plan}</span>
+                        )}
+                      </span>
+                    </div>
                     <div className="lb-row-ret" style={{color:returnColor(f["1Y"])}}>
                       {f["1Y"] != null ? `${f["1Y"]>0?"+":""}${f["1Y"]}%` : "—"}
                     </div>
