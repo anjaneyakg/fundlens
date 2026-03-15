@@ -400,20 +400,31 @@ def build_category_index(schemes_out):
     Top-10 leaderboard per category x plan combination.
     Key: "Large Cap|Direct"
     Only schemes with a 1Y return. Sorted by 1Y descending.
+    Growth option only — IDCW, Dividend, Bonus variants excluded to
+    prevent duplicate scheme names flooding the leaderboard.
     Frontend uses this for instant peer display without joining other files.
     """
     print("\n[Step 6] Building category index...")
+
+    def is_growth(s):
+        """Return True if scheme is Growth option (not IDCW/Dividend/Bonus)."""
+        n = ((s.get("navName") or s.get("name")) or "").lower()
+        return not any(kw in n for kw in ("idcw", "dividend", "payout", "reinvestment", "bonus"))
+
     by_key = defaultdict(list)
 
     for s in schemes_out:
         r1y = s.get("returns", {}).get("1Y")
         if r1y is None:
             continue
+        if not is_growth(s):
+            continue
         key = f"{s['category']}|{s['plan']}"
         by_key[key].append({
             "id":       s["id"],
             "name":     s["name"],
             "amc":      s["amc"],
+            "plan":     s["plan"],
             "return1Y": r1y,
             "returns":  s.get("returns", {}),
             "risk":     s.get("risk", {}),
