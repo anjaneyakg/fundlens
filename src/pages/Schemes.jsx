@@ -272,42 +272,114 @@ const style = `
 
   .no-results { padding: 3rem; text-align: center; color: var(--muted); font-family: 'DM Mono'; font-size: 13px; }
 
-  /* PEER FULLSCREEN OVERLAY */
-  .peer-overlay {
-    position: fixed; inset: 0; z-index: 500;
-    background: rgba(15,12,46,0.55); backdrop-filter: blur(8px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 2rem;
-  }
-  .peer-overlay-panel {
-    background: #fff; border-radius: 16px;
-    border: 1px solid var(--border);
-    box-shadow: 0 24px 80px rgba(99,91,255,0.18);
-    width: 100%; max-width: 860px; max-height: 88vh;
-    overflow-y: auto; padding: 2rem;
-    position: relative;
-  }
-  .peer-overlay-close {
-    position: absolute; top: 1rem; right: 1rem;
-    background: rgba(99,91,255,0.08); border: 1px solid var(--border);
-    border-radius: 6px; width: 32px; height: 32px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: var(--muted); font-size: 16px;
-    transition: all 0.15s;
-  }
-  .peer-overlay-close:hover { background: rgba(99,91,255,0.15); color: var(--text); }
-  .peer-expand-btn {
-    background: none; border: 1px solid var(--border);
-    border-radius: 5px; padding: 3px 7px; cursor: pointer;
-    color: var(--muted); font-size: 11px; line-height: 1;
-    transition: all 0.15s; margin-left: auto;
-  }
-  .peer-expand-btn:hover { border-color: var(--violet); color: var(--violet); }
+  /* PEER SECTION HEADER */
   .peer-section-header {
     display: flex; align-items: center; gap: 8px;
     margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
   }
   .peer-section-header .panel-section-title { margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; }
+
+  /* MOBILE FILTER BAR — Option 1 */
+  .mobile-filter-bar { display: none; }
+  .filter-chips { display: none; }
+
+  @media (max-width: 768px) {
+    /* Hide desktop filter toggles */
+    .filters-bar .toggle-group,
+    .filters-bar .filter-select,
+    .filters-bar .aum-filter { display: none !important; }
+
+    /* Show mobile bar */
+    .mobile-filter-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0.75rem 1rem;
+      background: rgba(255,255,255,0.6);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 60px; z-index: 90;
+      backdrop-filter: blur(16px);
+    }
+    .mobile-filter-btn {
+      padding: 8px 14px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.9);
+      font-family: 'DM Mono'; font-size: 11px;
+      color: var(--text); cursor: pointer; white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .mobile-filter-btn.has-active {
+      border-color: var(--violet); color: var(--violet);
+      background: rgba(99,91,255,0.06);
+    }
+    .filter-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.5);
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-chip {
+      font-family: 'DM Mono'; font-size: 10px; letter-spacing: 0.3px;
+      padding: 3px 8px; border-radius: 10px;
+      background: rgba(99,91,255,0.08); color: var(--violet);
+      border: 1px solid rgba(99,91,255,0.18);
+      display: flex; align-items: center; gap: 4px; cursor: pointer;
+    }
+    .filter-chip-x { opacity: 0.6; font-size: 10px; }
+
+    /* Filter sheet panel */
+    .filter-sheet {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(15,12,46,0.4); backdrop-filter: blur(4px);
+    }
+    .filter-sheet-panel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: #fff; border-radius: 16px 16px 0 0;
+      padding: 1.25rem 1.25rem 2rem;
+      max-height: 80vh; overflow-y: auto;
+    }
+    .filter-sheet-handle {
+      width: 36px; height: 3px; background: rgba(99,91,255,0.2);
+      border-radius: 2px; margin: 0 auto 1.25rem;
+    }
+    .filter-sheet-title {
+      font-family: 'DM Mono'; font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
+    }
+    .filter-sheet-group { margin-bottom: 1.25rem; }
+    .filter-sheet-label {
+      font-family: 'DM Mono'; font-size: 10px; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+    }
+    .filter-sheet-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-sheet-btn {
+      padding: 7px 14px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.9);
+      font-family: 'DM Mono'; font-size: 11px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .filter-sheet-btn.active {
+      background: linear-gradient(135deg, var(--violet), var(--pink));
+      color: #fff; border-color: transparent;
+    }
+    .filter-sheet-select {
+      width: 100%; padding: 9px 12px;
+      background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: 'DM Mono'; font-size: 12px; outline: none;
+    }
+
+    /* Main layout stacks on mobile */
+    .main { grid-template-columns: 1fr; }
+    .detail-panel { position: static; height: auto; border-top: 1px solid var(--border); }
+
+    /* Scheme card columns collapse */
+    .sort-bar, .scheme-card { grid-template-columns: 1fr auto auto; }
+    .col-hide { display: none; }
+
+    /* Search full width */
+    .filters-bar .search-wrap { max-width: 100%; flex: 1; }
+    .filters-bar .results-count { display: none; }
+  }
 
   @media (max-width: 1024px) {
     .main { grid-template-columns: 1fr; }
@@ -572,14 +644,15 @@ export default function App() {
   const [amcFilter,     setAmcFilter]    = useState("All");
   const [catFilter,     setCatFilter]    = useState("Large Cap");
   const [typeFilter,    setTypeFilter]   = useState("All");
-  const [planFilter,    setPlanFilter]   = useState("Direct");
+  const [planFilter,    setPlanFilter]   = useState(() => localStorage.getItem('fundlens_plan_universe') || 'Direct');
   const [optionFilter,  setOptionFilter] = useState("Growth");
   const [natureFilter,  setNatureFilter] = useState("Open Ended");
   const [sortKey,       setSortKey]      = useState("1Y");
   const [sortDir,       setSortDir]      = useState(-1);
   const [selected,      setSelected]     = useState(null);
   const [tab,           setTab]          = useState("schemes");
-  const [peerFullscreen, setPeerFullscreen] = useState(false);
+  const [peerExpanded,   setPeerExpanded]   = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
 
   // ── Fetch data
   const loadData = useCallback(async () => {
@@ -626,6 +699,13 @@ export default function App() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Sync plan universe when changed via Nav toggle
+  useEffect(() => {
+    const handler = (e) => setPlanFilter(e.detail)
+    window.addEventListener('fundlens_plan_change', handler)
+    return () => window.removeEventListener('fundlens_plan_change', handler)
+  }, []);
 
   // ── Derive option (Growth/IDCW) from navName (full name) or name
   const getOption = (s) => {
@@ -799,7 +879,10 @@ export default function App() {
           <div className="toggle-group">
             {["All","Direct","Regular"].map(p => (
               <button key={p} className={`toggle-btn ${planFilter===p?"active":""}`}
-                onClick={()=>setPlanFilter(p)}>{p}</button>
+                onClick={() => {
+                  setPlanFilter(p);
+                  if (p !== "All") localStorage.setItem('fundlens_plan_universe', p);
+                }}>{p}</button>
             ))}
           </div>
 
@@ -850,6 +933,128 @@ export default function App() {
           <div className="results-count"><span>{deduped.length}</span> of {allSchemes.length} schemes</div>
         </div>
 
+        {/* MOBILE FILTER BAR */}
+        {(() => {
+          const activeFilters = [
+            planFilter !== "All"   && { key:"plan",   label: planFilter,   clear: ()=>setPlanFilter("All") },
+            optionFilter !== "All" && { key:"option", label: optionFilter, clear: ()=>setOptionFilter("All") },
+            typeFilter !== "All"   && { key:"type",   label: typeFilter,   clear: ()=>setTypeFilter("All") },
+            natureFilter !== "All" && { key:"nature", label: natureFilter === "Open Ended" ? "Open" : natureFilter === "Close Ended" ? "Close" : natureFilter, clear: ()=>setNatureFilter("All") },
+            amcFilter !== "All"    && { key:"amc",    label: amcFilter.split(" ")[0], clear: ()=>setAmcFilter("All") },
+            catFilter !== "All"    && { key:"cat",    label: catFilter,    clear: ()=>setCatFilter("All") },
+          ].filter(Boolean);
+
+          return (
+            <>
+              <div className="mobile-filter-bar">
+                <button
+                  className={`mobile-filter-btn${activeFilters.length > 0 ? " has-active" : ""}`}
+                  onClick={() => setShowFilterSheet(true)}
+                >
+                  ⚙ Filters{activeFilters.length > 0 ? ` (${activeFilters.length})` : ""} ▾
+                </button>
+                <div className="results-count" style={{display:"block"}}>
+                  <span>{deduped.length}</span> of {allSchemes.length}
+                </div>
+              </div>
+
+              {activeFilters.length > 0 && (
+                <div className="filter-chips">
+                  {activeFilters.map(f => (
+                    <div key={f.key} className="filter-chip" onClick={f.clear}>
+                      {f.label} <span className="filter-chip-x">✕</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showFilterSheet && (
+                <div className="filter-sheet" onClick={e => { if(e.target.classList.contains("filter-sheet")) setShowFilterSheet(false); }}>
+                  <div className="filter-sheet-panel">
+                    <div className="filter-sheet-handle" />
+                    <div className="filter-sheet-title">Filters</div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">Plan</div>
+                      <div className="filter-sheet-row">
+                        {["All","Direct","Regular"].map(p => (
+                          <button key={p} className={`filter-sheet-btn${planFilter===p?" active":""}`}
+                            onClick={()=>{ setPlanFilter(p); if(p!=="All") localStorage.setItem('fundlens_plan_universe',p); }}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">Option</div>
+                      <div className="filter-sheet-row">
+                        {["All","Growth","IDCW","Bonus"].map(o => (
+                          <button key={o} className={`filter-sheet-btn${optionFilter===o?" active":""}`}
+                            onClick={()=>setOptionFilter(o)}>{o}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">Type</div>
+                      <div className="filter-sheet-row">
+                        {["All","Equity","Debt","Hybrid","Passive"].map(t => (
+                          <button key={t} className={`filter-sheet-btn${typeFilter===t?" active":""}`}
+                            onClick={()=>{ setTypeFilter(t); if(t!=="All") setCatFilter("All"); }}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">Structure</div>
+                      <div className="filter-sheet-row">
+                        {["All","Open Ended","Close Ended","Interval"].map(n => (
+                          <button key={n} className={`filter-sheet-btn${natureFilter===n?" active":""}`}
+                            onClick={()=>setNatureFilter(n)}>
+                            {n==="Open Ended"?"Open":n==="Close Ended"?"Close":n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">Category</div>
+                      <select className="filter-sheet-select" value={catFilter}
+                        onChange={e=>{ setCatFilter(e.target.value); if(e.target.value!=="All") setTypeFilter("All"); }}>
+                        <option value="All">All Categories</option>
+                        {categoryList.map(c=><option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="filter-sheet-group">
+                      <div className="filter-sheet-label">AMC</div>
+                      <select className="filter-sheet-select" value={amcFilter}
+                        onChange={e=>setAmcFilter(e.target.value)}>
+                        <option value="All">All AMCs</option>
+                        {amcList.map(a=>{ const n=typeof a==="string"?a:a.name; return <option key={n} value={n}>{n}</option>; })}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => setShowFilterSheet(false)}
+                      style={{
+                        width:"100%", padding:"12px", marginTop:"8px",
+                        background:"linear-gradient(135deg,var(--violet),var(--pink))",
+                        border:"none", borderRadius:"10px", color:"#fff",
+                        fontFamily:"'DM Mono'", fontSize:"12px", letterSpacing:"1px",
+                        cursor:"pointer"
+                      }}
+                    >
+                      APPLY — {deduped.length} schemes
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
         <div className="main">
           <div className="scheme-list">
             <div className="sort-bar">
@@ -870,7 +1075,7 @@ export default function App() {
               <div key={s.id}
                 className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
                 style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
-                onClick={() => setSelected(s)}
+                onClick={() => { setSelected(s); setPeerExpanded(false); }}
               >
                 <div className="scheme-name-col">
                   <div className="scheme-name">{s.name}</div>
@@ -915,8 +1120,8 @@ export default function App() {
                   <div className="panel-tags">
                     <span className="tag tag-cat">{selected.category}</span>
                     <span className="tag tag-plan-d">{selected.type}</span>
-                    <span className="tag" style={{background:"rgba(244,63,142,0.1)",color:"var(--pink)",border:"1px solid rgba(244,63,142,0.2)"}}>
-                      Direct
+                    <span className={`tag ${selected.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>
+                      {selected.plan}
                     </span>
                   </div>
                   <div className="panel-nav-row">
@@ -981,92 +1186,103 @@ export default function App() {
                 <div className="panel-section-title">1Y Rolling Returns</div>
                 <RollingChart data={rollingMap[String(selected.id)] || []} />
 
-                {/* Peer comparison — AMC-deduped, plan-matched */}
+                {/* Peer comparison — plan-matched, AMC-deduped */}
                 {dedupedPeers.length > 1 && (() => {
                   const barPeers = dedupedPeers.slice(0, 6);
                   const tablePeers = [...dedupedPeers].sort((a,b) => (b.returns?.["1Y"]??-999) - (a.returns?.["1Y"]??-999));
-                  const maxRet = Math.max(...barPeers.map(p => p.returns?.["1Y"] ?? 0));
+                  const maxRet = Math.max(...barPeers.map(p => p.returns?.["1Y"] ?? 0), 1);
+                  const visibleRows = peerExpanded ? tablePeers.length : 8;
 
-                  const PeerBarChart = ({ ps }) => (
-                    <div className="bar-chart">
-                      {ps.map(p => (
-                        <div className="bar-row" key={p.id}>
-                          <div className="bar-label" style={{color: p.id===selected.id ? "var(--violet)" : undefined, fontSize:"9px"}}>
-                            {p.amc.split(" ")[0].slice(0,4).toUpperCase()}
-                          </div>
-                          <div className="bar-track">
-                            <div className="bar-fill" style={{
-                              width: `${Math.max(2, ((p.returns?.["1Y"]??0) / maxRet) * 100)}%`,
-                              background: p.id===selected.id
-                                ? "linear-gradient(90deg,var(--violet),var(--pink))"
-                                : "rgba(99,91,255,0.12)"
-                            }}/>
-                          </div>
-                          <div className="bar-val" style={{color: p.id===selected.id ? "var(--violet)" : returnColor(p.returns?.["1Y"])}}>
-                            {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
+                  // Short display name: strip AMC prefix if it leads the name
+                  const shortName = (p) => {
+                    const n = p.name || "";
+                    const amc = (p.amc || "").split(" ")[0];
+                    const stripped = n.startsWith(amc) ? n.slice(amc.length).trim() : n;
+                    return stripped.length > 22 ? stripped.slice(0, 21) + "…" : stripped;
+                  };
 
-                  const PeerTable = ({ ps, limit }) => (
-                    <table className="peer-table">
-                      <thead><tr>
-                        <th>#</th><th>Fund</th><th>1Y</th><th>3Y</th><th>Sharpe</th>
-                      </tr></thead>
-                      <tbody>
-                        {ps.slice(0, limit).map((p, i) => (
-                          <tr key={p.id} className={p.id===selected.id ? "highlight" : ""}>
-                            <td><span className="peer-rank">{i+1}</span></td>
-                            <td><div className="peer-name" title={p.name}>{p.amc}</div></td>
-                            <td style={{color: returnColor(p.returns?.["1Y"])}}>
-                              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
-                            </td>
-                            <td style={{color: returnColor(p.returns?.["3Y"])}}>
-                              {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
-                            </td>
-                            <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  );
+                  // Bar label: first meaningful word of scheme name, max 4 chars
+                  const barLabel = (p) => {
+                    const words = (p.name || p.amc || "").split(" ");
+                    return words[0].slice(0, 4).toUpperCase();
+                  };
 
                   return (
                     <>
-                      <div className="peer-section-header">
-                        <div className="panel-section-title">1Y Return — Peer Benchmark</div>
-                        <button className="peer-expand-btn" onClick={() => setPeerFullscreen(true)} title="Enlarge">⤢</button>
+                      <div className="panel-section-title">1Y Return — Peer Benchmark</div>
+                      <div className="bar-chart">
+                        {barPeers.map(p => (
+                          <div className="bar-row" key={p.id} title={p.name}>
+                            <div className="bar-label" style={{
+                              color: p.id===selected.id ? "var(--violet)" : undefined,
+                              fontSize: "9px", cursor: "default"
+                            }}>
+                              {barLabel(p)}
+                            </div>
+                            <div className="bar-track">
+                              <div className="bar-fill" style={{
+                                width: `${Math.max(2, ((p.returns?.["1Y"]??0) / maxRet) * 100)}%`,
+                                background: p.id===selected.id
+                                  ? "linear-gradient(90deg,var(--violet),var(--pink))"
+                                  : "rgba(99,91,255,0.12)"
+                              }}/>
+                            </div>
+                            <div className="bar-val" style={{color: p.id===selected.id ? "var(--violet)" : returnColor(p.returns?.["1Y"])}}>
+                              {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <PeerBarChart ps={barPeers} />
 
                       <div className="peer-section-header" style={{marginTop:"1rem"}}>
                         <div className="panel-section-title">Category Ranking — 1Y</div>
                       </div>
-                      <PeerTable ps={tablePeers} limit={8} />
+                      <table className="peer-table">
+                        <thead><tr>
+                          <th>#</th><th>Scheme</th><th>1Y</th><th>3Y</th><th>Sharpe</th>
+                        </tr></thead>
+                        <tbody>
+                          {tablePeers.slice(0, visibleRows).map((p, i) => (
+                            <tr key={p.id} className={p.id===selected.id ? "highlight" : ""}>
+                              <td><span className="peer-rank">{i+1}</span></td>
+                              <td>
+                                <div className="peer-name" title={p.name}>
+                                  {shortName(p)}
+                                </div>
+                                <div style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"120px"}} title={p.amc}>
+                                  {p.amc}
+                                </div>
+                              </td>
+                              <td style={{color: returnColor(p.returns?.["1Y"])}}>
+                                {p.returns?.["1Y"] != null ? `${p.returns["1Y"]>0?"+":""}${p.returns["1Y"]}%` : "—"}
+                              </td>
+                              <td style={{color: returnColor(p.returns?.["3Y"])}}>
+                                {p.returns?.["3Y"] != null ? `${p.returns["3Y"]>0?"+":""}${p.returns["3Y"]}%` : "—"}
+                              </td>
+                              <td style={{color:"var(--muted)"}}>{p.risk?.sharpe ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
 
-                      {/* Fullscreen overlay */}
-                      {peerFullscreen && (
-                        <div className="peer-overlay" onClick={e => { if (e.target.classList.contains("peer-overlay")) setPeerFullscreen(false); }}>
-                          <div className="peer-overlay-panel">
-                            <button className="peer-overlay-close" onClick={() => setPeerFullscreen(false)}>✕</button>
-                            <div style={{fontFamily:"'Bebas Neue'",fontSize:"1.3rem",letterSpacing:"2px",color:"var(--text)",marginBottom:"4px"}}>
-                              {selected.name}
-                            </div>
-                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--violet)",letterSpacing:"1px",marginBottom:"1.5rem"}}>
-                              {selected.category} · {selected.plan} · Peer Comparison
-                            </div>
-                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--muted)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"10px",paddingBottom:"6px",borderBottom:"1px solid var(--border)"}}>
-                              1Y Return — Peer Benchmark
-                            </div>
-                            <PeerBarChart ps={dedupedPeers.slice(0,10)} />
-                            <div style={{fontFamily:"'DM Mono'",fontSize:"10px",color:"var(--muted)",letterSpacing:"2px",textTransform:"uppercase",margin:"1.5rem 0 10px",paddingBottom:"6px",borderBottom:"1px solid var(--border)"}}>
-                              Full Category Ranking — 1Y ({tablePeers.length} funds · {selected.plan})
-                            </div>
-                            <PeerTable ps={tablePeers} limit={tablePeers.length} />
-                          </div>
-                        </div>
+                      {/* Inline expand — Option B */}
+                      {tablePeers.length > 8 && (
+                        <button
+                          onClick={() => setPeerExpanded(e => !e)}
+                          style={{
+                            width:"100%", marginTop:"8px", padding:"8px",
+                            background:"rgba(99,91,255,0.04)",
+                            border:"1px dashed rgba(99,91,255,0.2)",
+                            borderRadius:"6px", cursor:"pointer",
+                            fontFamily:"'DM Mono'", fontSize:"10px",
+                            color:"var(--violet)", letterSpacing:"1px",
+                            transition:"all 0.15s"
+                          }}
+                        >
+                          {peerExpanded
+                            ? `▲ Show less`
+                            : `▼ Show all ${tablePeers.length} funds in category`}
+                        </button>
                       )}
                     </>
                   );
@@ -1088,7 +1304,7 @@ export default function App() {
                   <div className="lb-row" key={f.id}
                     onClick={()=>{
                       const full = allSchemes.find(s=>s.id===f.id);
-                      if(full){setSelected(full);setTab("schemes");}
+                      if(full){setSelected(full);setPeerExpanded(false);setTab("schemes");}
                     }}
                     style={{cursor:"pointer"}}>
                     <div className="lb-row-rank">{i+1}</div>
