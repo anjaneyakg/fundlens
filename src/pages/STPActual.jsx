@@ -441,9 +441,19 @@ export default function STPActual() {
   const srcCategories = [...new Set(amcSchemes.map(s => s.category))].sort();
   const tgtCategories = srcCategories;
 
-  const srcSchemes = amcSchemes.filter(s => s.category === srcCategory);
-  // Target: same AMC, same plan, Growth, different category
-  const tgtSchemes = amcSchemes.filter(s => s.category === tgtCategory);
+  // Deduplicate scheme lists by exact name — multiple AMFI codes can exist
+  // for the same fund (legacy codes, restructuring). Keep latest navDate.
+  const dedupeSchemes = (list) => {
+    const seen = new Map();
+    for (const s of list) {
+      const existing = seen.get(s.name);
+      if (!existing || (s.navDate || "") > (existing.navDate || "")) seen.set(s.name, s);
+    }
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const srcSchemes = dedupeSchemes(amcSchemes.filter(s => s.category === srcCategory));
+  const tgtSchemes = dedupeSchemes(amcSchemes.filter(s => s.category === tgtCategory));
 
   const srcScheme = allSchemes.find(s => s.id === srcSchemeId);
   const tgtScheme = allSchemes.find(s => s.id === tgtSchemeId);
