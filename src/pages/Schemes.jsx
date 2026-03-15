@@ -1433,6 +1433,15 @@ export default function App() {
       {tab === "leaderboard" && (
         <div className="leaderboard">
           <div className="lb-title">◆ TOP PERFORMERS BY CATEGORY — 1Y RETURNS</div>
+          <div style={{
+            fontFamily:"'DM Mono'", fontSize:"10px", color:"var(--muted)",
+            letterSpacing:"0.5px", marginBottom:"1rem",
+            padding:"6px 12px", background:"rgba(99,91,255,0.04)",
+            borderRadius:"6px", border:"1px solid var(--border)",
+            display:"inline-block"
+          }}>
+            Growth option only · ranked by 1Y return · one entry per scheme
+          </div>
           <div className="lb-grid">
             {Object.entries(leaderboard).map(([cat, funds]) => (
               <div className="lb-card" key={cat}>
