@@ -407,9 +407,21 @@ def build_category_index(schemes_out):
     print("\n[Step 6] Building category index...")
 
     def is_growth(s):
-        """Return True if scheme is Growth option (not IDCW/Dividend/Bonus)."""
+        """
+        Return True if scheme is Growth option (not IDCW/Dividend/Bonus).
+        Uses navName for precision — option suffix appears at end of navName.
+        Deliberately avoids bare 'dividend' match to preserve Dividend Yield
+        category schemes (e.g. 'HDFC Dividend Yield Fund - Growth').
+        """
         n = ((s.get("navName") or s.get("name")) or "").lower()
-        return not any(kw in n for kw in ("idcw", "dividend", "payout", "reinvestment", "bonus"))
+        return not any(kw in n for kw in (
+            "idcw",
+            "dividend payout",
+            "dividend reinvestment",
+            "payout",
+            "reinvestment",
+            "bonus",
+        ))
 
     by_key = defaultdict(list)
 
