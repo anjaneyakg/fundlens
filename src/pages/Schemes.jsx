@@ -814,9 +814,11 @@ export default function App() {
   }, []);
 
   // ── Derive option (Growth/IDCW) from navName (full name) or name
+  // Uses compound phrases to avoid misclassifying "Dividend Yield Fund - Growth"
+  // as IDCW. Bare "dividend" is deliberately excluded from the match list.
   const getOption = (s) => {
     const n = ((s.navName || s.name) || "").toLowerCase();
-    if (n.includes("idcw") || n.includes("dividend") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
+    if (n.includes("idcw") || n.includes("dividend payout") || n.includes("dividend reinvestment") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
     if (n.includes("bonus")) return "Bonus";
     return "Growth";
   };
