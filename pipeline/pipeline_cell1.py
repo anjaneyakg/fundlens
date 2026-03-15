@@ -567,7 +567,7 @@ def assemble_and_save(master, current_navs, nav_history):
 
     # Slim schemes — strip heavy fields before saving
     KEEP = {"id", "name", "navName", "amc", "category", "type",
-            "plan", "structure", "nav", "navDate", "returns"}
+            "plan", "structure", "nav", "navDate", "inceptionDate", "returns"}
     for s in schemes_out:
         for k in list(s.keys()):
             if k not in KEEP:
