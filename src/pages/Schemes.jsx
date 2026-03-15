@@ -827,13 +827,16 @@ export default function App() {
     return () => window.removeEventListener('fundlens_plan_change', handler);
   }, []);
 
-  // ── Derive option (Growth/IDCW) from navName (full name) or name
-  // Uses compound phrases to avoid misclassifying "Dividend Yield Fund - Growth"
-  // as IDCW. Bare "dividend" is deliberately excluded from the match list.
+  // ── Derive option (Growth/IDCW) from navName suffix
+  // AMFI navName format: "Scheme Name - Option" e.g. "HDFC Top 100 - Growth"
+  // Splitting on last "-" and checking the suffix is more precise than
+  // substring matching the full name — prevents Dividend Yield category
+  // schemes from being misclassified as IDCW.
   const getOption = (s) => {
-    const n = ((s.navName || s.name) || "").toLowerCase();
-    if (n.includes("idcw") || n.includes("dividend payout") || n.includes("dividend reinvestment") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
-    if (n.includes("bonus")) return "Bonus";
+    const full = ((s.navName || s.name) || "").trim();
+    const suffix = full.split("-").pop().trim().toLowerCase();
+    if (suffix.includes("idcw") || suffix.includes("dividend") || suffix.includes("payout") || suffix.includes("reinvestment")) return "IDCW";
+    if (suffix.includes("bonus")) return "Bonus";
     return "Growth";
   };
 
@@ -1323,11 +1326,15 @@ export default function App() {
                       <div className="panel-nav-val">₹{selected.nav}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div className="panel-nav-label">NAV Since</div>
+                      <div className="panel-nav-label">
+                        {selected.inceptionDate ? "Launch Date" : "NAV Since"}
+                      </div>
                       <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
-                        {selected.navDate
-                          ? new Date(selected.navDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})
-                          : "—"}
+                        {(() => {
+                          const d = selected.inceptionDate || selected.navDate;
+                          if (!d) return "NA";
+                          return new Date(d).toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"});
+                        })()}
                       </div>
                     </div>
                   </div>
