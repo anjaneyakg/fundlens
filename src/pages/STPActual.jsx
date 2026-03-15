@@ -75,8 +75,13 @@ function xirr(cashflows) {
   return null;
 }
 
-// Absolute return %
+// Show Abs% for < 12 months, XIRR/CAGR for >= 12 months
 const absReturn = (invested, final) => invested > 0 ? ((final - invested) / invested) * 100 : null;
+
+const returnLabel         = (months) => months < 12 ? "Abs Return" : "XIRR";
+const returnVal           = (months, xirrV, absPct) => months < 12 ? fmtPct(absPct) : fmtPct(xirrV, 2);
+const baselineReturnLabel = (months) => months < 12 ? "Abs Return" : "CAGR";
+const baselineReturnVal   = (months, cagrV, absPct) => months < 12 ? fmtPct(absPct) : fmtPct(cagrV, 2);
 
 // CAGR
 const cagr = (invested, final, years) =>
@@ -163,83 +168,101 @@ function runSTP({ srcNav, tgtNav, startDate, months, corpus, transferMode, trans
     });
   }
 
-  // Final values
+  // Final values at period-end
   const endNavSrc = closestNav(srcMap, endDate);
   const endNavTgt = closestNav(tgtMap, endDate);
   if (!endNavSrc || !endNavTgt) return null;
 
-  const finalSrc = srcUnits * endNavSrc.nav;
-  const finalTgt = tgtUnits * endNavTgt.nav;
+  const finalSrc   = srcUnits * endNavSrc.nav;
+  const finalTgt   = tgtUnits * endNavTgt.nav;
   const finalTotal = finalSrc + finalTgt;
 
-  // Overall XIRR: initial corpus out, terminal combined value in
+  // Latest-NAV values (current market value of same units)
+  const latestSrcEntries = [...srcMap.keys()].sort();
+  const latestTgtEntries = [...tgtMap.keys()].sort();
+  const latestSrcDate = latestSrcEntries[latestSrcEntries.length - 1];
+  const latestTgtDate = latestTgtEntries[latestTgtEntries.length - 1];
+  const latestSrcNav  = srcMap.get(latestSrcDate);
+  const latestTgtNav  = tgtMap.get(latestTgtDate);
+  const latestSrc     = srcUnits  * latestSrcNav;
+  const latestTgt     = tgtUnits  * latestTgtNav;
+  const latestTotal   = latestSrc + latestTgt;
+  const latestDate    = latestSrcDate < latestTgtDate ? latestSrcDate : latestTgtDate;
+
+  // Total actually transferred out of source
+  const totalTransferred = timeline.reduce((s, t) => s + t.transferAmt, 0);
+  const remainingInSrc   = corpus - totalTransferred; // cost basis of what stayed in source
+
+  // Overall XIRR (STP): initial corpus out, terminal combined value in at period-end
   cashflows.push({ date: endDate, amount: finalTotal });
   const xirrVal = xirr(cashflows);
 
-  // Source XIRR: corpus invested, each transfer is partial withdrawal, remaining is final inflow
+  // Source XIRR: corpus in, each transfer is partial withdrawal, remaining at period-end
   const srcCashflows = [{ date: startDate, amount: -corpus }];
   for (const t of timeline) srcCashflows.push({ date: t.date, amount: t.transferAmt });
   srcCashflows.push({ date: endDate, amount: finalSrc });
   const srcXirr = xirr(srcCashflows);
 
-  // Target XIRR: each transfer is an outflow (investment), final value is inflow
+  // Target XIRR: each transfer is outflow (investment), final value at period-end
   const tgtCashflows = timeline.map(t => ({ date: t.date, amount: -t.transferAmt }));
   tgtCashflows.push({ date: endDate, amount: finalTgt });
   const tgtXirr = xirr(tgtCashflows);
 
-  // Total actually transferred out of source
-  const totalTransferred = timeline.reduce((s, t) => s + t.transferAmt, 0);
-  const remainingInSrc = corpus - totalTransferred; // cost basis of what stayed in source
-
-  // Baselines
+  // Baselines at period-end
   const srcOnlyUnits = corpus / startEntry.nav;
   const srcOnlyFinal = srcOnlyUnits * endNavSrc.nav;
-
   const tgtOnlyUnits = corpus / tgtStartEntry.nav;
   const tgtOnlyFinal = tgtOnlyUnits * endNavTgt.nav;
+
+  // Baseline latest values
+  const srcOnlyLatest = srcOnlyUnits * latestSrcNav;
+  const tgtOnlyLatest = tgtOnlyUnits * latestTgtNav;
 
   const years = months / 12;
 
   return {
-    // STP results
+    // Period-end values (primary)
     finalSrc, finalTgt, finalTotal,
-    totalTransferred,
-    transferCount,
-    corpus,
-    // Source returns (on the portion that stayed)
-    srcAbsAmt: finalSrc - remainingInSrc,
-    srcAbsPct: absReturn(remainingInSrc, finalSrc),
+    totalTransferred, transferCount, corpus,
+    remainingInSrc,
+    // Source leg
+    srcAbsAmt:  finalSrc - remainingInSrc,
+    srcAbsPct:  absReturn(remainingInSrc, finalSrc),
     srcXirr,
-    // Target returns (on what was transferred in)
-    tgtAbsAmt: finalTgt - totalTransferred,
-    tgtAbsPct: absReturn(totalTransferred, finalTgt),
+    // Target leg
+    tgtAbsAmt:  finalTgt - totalTransferred,
+    tgtAbsPct:  absReturn(totalTransferred, finalTgt),
     tgtXirr,
-    // Combined
-    totalAbsAmt: finalTotal - corpus,
-    totalAbsPct: absReturn(corpus, finalTotal),
-    totalCAGR: cagr(corpus, finalTotal, years),
-    xirrVal,
-    // Baselines
+    // Combined period-end
+    totalAbsAmt:   finalTotal - corpus,
+    totalAbsPct:   absReturn(corpus, finalTotal),
+    xirrVal,                            // XIRR for STP (not CAGR — irregular cashflows)
+    // Latest-NAV values (current market value)
+    latestSrc, latestTgt, latestTotal,
+    latestDate,
+    latestSrcDate, latestTgtDate,
+    // Baselines at period-end
     srcOnlyFinal,
-    srcOnlyAbsAmt: srcOnlyFinal - corpus,
-    srcOnlyAbsPct: absReturn(corpus, srcOnlyFinal),
-    srcOnlyCAGR: cagr(corpus, srcOnlyFinal, years),
+    srcOnlyAbsAmt:  srcOnlyFinal - corpus,
+    srcOnlyAbsPct:  absReturn(corpus, srcOnlyFinal),
+    srcOnlyCAGR:    cagr(corpus, srcOnlyFinal, years),   // CAGR for lumpsum baseline
+    srcOnlyLatest,
     tgtOnlyFinal,
-    tgtOnlyAbsAmt: tgtOnlyFinal - corpus,
-    tgtOnlyAbsPct: absReturn(corpus, tgtOnlyFinal),
-    tgtOnlyCAGR: cagr(corpus, tgtOnlyFinal, years),
-    // Benefit vs baselines
-    vsSourceOnly: finalTotal - srcOnlyFinal,
+    tgtOnlyAbsAmt:  tgtOnlyFinal - corpus,
+    tgtOnlyAbsPct:  absReturn(corpus, tgtOnlyFinal),
+    tgtOnlyCAGR:    cagr(corpus, tgtOnlyFinal, years),   // CAGR for lumpsum baseline
+    tgtOnlyLatest,
+    // Benefit vs baselines (period-end comparison)
+    vsSourceOnly:    finalTotal - srcOnlyFinal,
     vsSourceOnlyPct: absReturn(srcOnlyFinal, finalTotal),
-    vsTargetOnly: finalTotal - tgtOnlyFinal,
+    vsTargetOnly:    finalTotal - tgtOnlyFinal,
     vsTargetOnlyPct: absReturn(tgtOnlyFinal, finalTotal),
     // Timeline for chart
     timeline,
     // Meta
     actualStartDate: startEntry.date,
-    actualEndDate: endNavSrc.date,
+    actualEndDate:   endNavSrc.date,
     months,
-    corpus,
   };
 }
 
@@ -706,24 +729,29 @@ export default function STPActual() {
                     <div style={S.kpi("#3d7a6e")}>
                       <div style={S.kpiLabel}>Final STP Wealth</div>
                       <div style={S.kpiVal("#3d7a6e")}>{fmt(result.finalTotal)}</div>
-                      <div style={S.kpiSub}>Source + Target combined</div>
+                      <div style={S.kpiSub}>Cost: {fmt(result.corpus)} · Gain: {fmt(result.totalAbsAmt)} ({fmtPct(result.totalAbsPct)})</div>
+                      <div style={S.kpiSub}>Current value ({fmtDate(result.latestDate)}): {fmt(result.latestTotal)}</div>
                     </div>
                     <div style={S.kpi("#c8893f")}>
                       <div style={S.kpiLabel}>Target Corpus</div>
                       <div style={S.kpiVal("#c8893f")}>{fmt(result.finalTgt)}</div>
-                      <div style={S.kpiSub}>{result.transferCount} transfers made</div>
+                      <div style={S.kpiSub}>Cost: {fmt(result.totalTransferred)} · Gain: {fmt(result.tgtAbsAmt)}</div>
+                      <div style={S.kpiSub}>{result.transferCount} transfers · current: {fmt(result.latestTgt)}</div>
                     </div>
                     <div style={S.kpi("#7b9e9a")}>
                       <div style={S.kpiLabel}>Remaining in Source</div>
                       <div style={S.kpiVal("#7b9e9a")}>{fmt(result.finalSrc)}</div>
-                      <div style={S.kpiSub}>{fmt(result.totalTransferred)} transferred out</div>
+                      <div style={S.kpiSub}>Cost: {fmt(result.remainingInSrc)} · Gain: {fmt(result.srcAbsAmt)}</div>
+                      <div style={S.kpiSub}>{fmt(result.totalTransferred)} transferred out · current: {fmt(result.latestSrc)}</div>
                     </div>
                     <div style={S.kpi("#8b5cf6")}>
-                      <div style={S.kpiLabel}>XIRR (Overall)</div>
+                      <div style={S.kpiLabel}>{returnLabel(result.months)} (Overall)</div>
                       <div style={S.kpiVal(result.xirrVal >= 0 ? "#2d6a4f" : "#b91c1c")}>
-                        {fmtPct(result.xirrVal, 2)}
+                        {returnVal(result.months, result.xirrVal, result.totalAbsPct)}
                       </div>
-                      <div style={S.kpiSub}>On total corpus deployed</div>
+                      <div style={S.kpiSub}>
+                        {result.months < 12 ? "Abs return on corpus" : "XIRR · irregular cashflows"}
+                      </div>
                     </div>
                     <div style={S.kpi(result.vsSourceOnly >= 0 ? "#2d6a4f" : "#b91c1c")}>
                       <div style={S.kpiLabel}>vs Source-only</div>
@@ -749,8 +777,8 @@ export default function STPActual() {
                         : `⚠️ Staying in ${srcScheme?.name} would have done better`}
                     </div>
                     <div style={S.verdictSub}>
-                      Source-only final: {fmt(result.srcOnlyFinal)} · STP final: {fmt(result.finalTotal)} ·
-                      Difference: {fmt(Math.abs(result.vsSourceOnly))} ({fmtPct(Math.abs(result.vsSourceOnlyPct))})
+                      Source-only at period-end: {fmt(result.srcOnlyFinal)} (cost {fmt(result.corpus)}) ·
+                      STP final: {fmt(result.finalTotal)} · Difference: {fmt(Math.abs(result.vsSourceOnly))} ({fmtPct(Math.abs(result.vsSourceOnlyPct))})
                     </div>
                   </div>
 
@@ -761,8 +789,8 @@ export default function STPActual() {
                         : `⚠️ Lumpsum into ${tgtScheme?.name} on day 1 would have done better`}
                     </div>
                     <div style={S.verdictSub}>
-                      Target-only final: {fmt(result.tgtOnlyFinal)} · STP final: {fmt(result.finalTotal)} ·
-                      Difference: {fmt(Math.abs(result.vsTargetOnly))} ({fmtPct(Math.abs(result.vsTargetOnlyPct))})
+                      Target-only at period-end: {fmt(result.tgtOnlyFinal)} (cost {fmt(result.corpus)}) ·
+                      STP final: {fmt(result.finalTotal)} · Difference: {fmt(Math.abs(result.vsTargetOnly))} ({fmtPct(Math.abs(result.vsTargetOnlyPct))})
                     </div>
                   </div>
                 </>
@@ -778,32 +806,34 @@ export default function STPActual() {
                     {/* Source */}
                     <div>
                       <div style={S.outputHeader}>Source · {srcScheme?.name?.split(" ").slice(0,3).join(" ")}</div>
-                      <div style={S.row}><span style={S.rowLabel}>Final corpus</span><span style={S.kpiVal("#7b9e9a")}>{fmt(result.finalSrc)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>Remaining invested</span><span style={S.rowVal()}>{fmt(result.corpus - result.totalTransferred)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Period-end corpus</span><span style={S.kpiVal("#7b9e9a")}>{fmt(result.finalSrc)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Current value</span><span style={S.rowVal()}>{fmt(result.latestSrc)} <span style={{fontSize:9,color:"#9a9490"}}>({fmtDate(result.latestSrcDate)})</span></span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Cost (remaining)</span><span style={S.rowVal()}>{fmt(result.remainingInSrc)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (₹)</span><span style={S.rowVal(result.srcAbsAmt >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmt(result.srcAbsAmt)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (%)</span><span style={S.rowVal(result.srcAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.srcAbsPct)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.srcXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.srcXirr, 2)}</span></div>
+                      {months >= 12 && <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.srcXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.srcXirr, 2)}</span></div>}
                     </div>
 
                     {/* Target */}
                     <div>
                       <div style={S.outputHeader}>Target · {tgtScheme?.name?.split(" ").slice(0,3).join(" ")}</div>
-                      <div style={S.row}><span style={S.rowLabel}>Final corpus</span><span style={S.kpiVal("#c8893f")}>{fmt(result.finalTgt)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>Total invested</span><span style={S.rowVal()}>{fmt(result.totalTransferred)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Period-end corpus</span><span style={S.kpiVal("#c8893f")}>{fmt(result.finalTgt)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Current value</span><span style={S.rowVal()}>{fmt(result.latestTgt)} <span style={{fontSize:9,color:"#9a9490"}}>({fmtDate(result.latestTgtDate)})</span></span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Cost (invested)</span><span style={S.rowVal()}>{fmt(result.totalTransferred)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (₹)</span><span style={S.rowVal(result.tgtAbsAmt >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmt(result.tgtAbsAmt)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (%)</span><span style={S.rowVal(result.tgtAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.tgtAbsPct)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.tgtXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.tgtXirr, 2)}</span></div>
+                      {months >= 12 && <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.tgtXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.tgtXirr, 2)}</span></div>}
                     </div>
 
                     {/* Combined */}
                     <div style={{ background:"#f5f1ea", borderRadius:4, padding:"0 12px 12px" }}>
                       <div style={{ ...S.outputHeader, marginTop:12 }}>Combined STP Result</div>
-                      <div style={S.row}><span style={S.rowLabel}>Final corpus</span><span style={S.kpiVal("#3d7a6e")}>{fmt(result.finalTotal)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>Initial corpus</span><span style={S.rowVal()}>{fmt(result.corpus)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Period-end corpus</span><span style={S.kpiVal("#3d7a6e")}>{fmt(result.finalTotal)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Current value</span><span style={S.rowVal()}>{fmt(result.latestTotal)} <span style={{fontSize:9,color:"#9a9490"}}>({fmtDate(result.latestDate)})</span></span></div>
+                      <div style={S.row}><span style={S.rowLabel}>Cost (initial corpus)</span><span style={S.rowVal()}>{fmt(result.corpus)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (₹)</span><span style={S.rowVal(result.totalAbsAmt >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmt(result.totalAbsAmt)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (%)</span><span style={S.rowVal(result.totalAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.totalAbsPct)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>CAGR</span><span style={S.rowVal(result.totalCAGR >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.totalCAGR, 2)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.xirrVal >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.xirrVal, 2)}</span></div>
+                      {months >= 12 && <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.xirrVal >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.xirrVal, 2)}</span></div>}
                     </div>
                   </div>
 
@@ -828,12 +858,18 @@ export default function STPActual() {
                       </thead>
                       <tbody>
                         {[
-                          ["Final Corpus",     fmt(result.finalTotal),          fmt(result.srcOnlyFinal),    fmt(result.tgtOnlyFinal)],
-                          ["Abs Return (₹)",   fmt(result.totalAbsAmt),         fmt(result.srcOnlyAbsAmt),   fmt(result.tgtOnlyAbsAmt)],
-                          ["Abs Return (%)",   fmtPct(result.totalAbsPct),      fmtPct(result.srcOnlyAbsPct), fmtPct(result.tgtOnlyAbsPct)],
-                          ["CAGR",             fmtPct(result.totalCAGR,2),      fmtPct(result.srcOnlyCAGR,2), fmtPct(result.tgtOnlyCAGR,2)],
-                          ["XIRR (STP)",       fmtPct(result.xirrVal,2),        "—",                          "—"],
-                          ["Benefit vs STP",   "—",                             fmt(result.vsSourceOnly) + " · " + fmtPct(result.vsSourceOnlyPct), fmt(result.vsTargetOnly) + " · " + fmtPct(result.vsTargetOnlyPct)],
+                          ["Period-end Corpus",   fmt(result.finalTotal),          fmt(result.srcOnlyFinal),    fmt(result.tgtOnlyFinal)],
+                          ["Cost (Invested)",      fmt(result.corpus),              fmt(result.corpus),          fmt(result.corpus)],
+                          ["Current Value",        fmt(result.latestTotal),         fmt(result.srcOnlyLatest),   fmt(result.tgtOnlyLatest)],
+                          ["Abs Return (₹)",       fmt(result.totalAbsAmt),         fmt(result.srcOnlyAbsAmt),   fmt(result.tgtOnlyAbsAmt)],
+                          ["Abs Return (%)",       fmtPct(result.totalAbsPct),      fmtPct(result.srcOnlyAbsPct), fmtPct(result.tgtOnlyAbsPct)],
+                          [baselineReturnLabel(result.months) + " / XIRR",
+                            months >= 12 ? fmtPct(result.xirrVal,2)+" (XIRR)" : fmtPct(result.totalAbsPct),
+                            baselineReturnVal(result.months, result.srcOnlyCAGR, result.srcOnlyAbsPct),
+                            baselineReturnVal(result.months, result.tgtOnlyCAGR, result.tgtOnlyAbsPct)],
+                          ["Benefit vs STP",       "—",
+                            fmt(result.vsSourceOnly) + " · " + fmtPct(result.vsSourceOnlyPct),
+                            fmt(result.vsTargetOnly) + " · " + fmtPct(result.vsTargetOnlyPct)],
                         ].map(([label, stp, srcOnly, tgtOnly], i) => (
                           <tr key={label} style={{ borderBottom:"0.5px solid #ddd8d0", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.4)" }}>
                             <td style={{ padding:"8px 12px", color:"#8a8278", fontSize:11 }}>{label}</td>
@@ -846,7 +882,7 @@ export default function STPActual() {
                     </table>
                   </div>
                   <div style={{ fontFamily:"DM Mono, monospace", fontSize:10, color:"#9a9490", marginTop:12 }}>
-                    Benefit column shows STP Final vs that baseline. Positive = STP wins. Source-only: corpus stays in {srcScheme?.name} for full period. Target-only: full corpus lumpsum into {tgtScheme?.name} on start date.
+                    Period-end: {fmtDate(result.actualEndDate)} · Current value as at {fmtDate(result.latestDate)} · Benefit: positive = STP wins · XIRR used for STP (irregular cashflows), CAGR for lumpsum baselines
                   </div>
                 </div>
               )}
