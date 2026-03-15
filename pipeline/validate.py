@@ -5,7 +5,6 @@
 import json
 from datetime import date, datetime
 
-
 class ValidationError(Exception):
     """Raised when data fails a critical quality check."""
     pass
