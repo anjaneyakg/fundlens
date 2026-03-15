@@ -32,6 +32,14 @@ const categorySlug = (category, plan) => {
   return `nav_${slug}_${plan.toLowerCase()}.json`;
 };
 
+// Option detection — compound phrases only, preserves Dividend Yield category
+const getOption = (s) => {
+  const n = ((s.navName || s.name) || "").toLowerCase();
+  if (n.includes("idcw") || n.includes("dividend payout") || n.includes("dividend reinvestment") || n.includes("payout") || n.includes("reinvestment")) return "IDCW";
+  if (n.includes("bonus")) return "Bonus";
+  return "Growth";
+};
+
 const addMonths = (dateStr, months) => {
   const d = new Date(dateStr);
   d.setMonth(d.getMonth() + months);
@@ -164,9 +172,24 @@ function runSTP({ srcNav, tgtNav, startDate, months, corpus, transferMode, trans
   const finalTgt = tgtUnits * endNavTgt.nav;
   const finalTotal = finalSrc + finalTgt;
 
-  // XIRR cashflows: add terminal inflow
+  // Overall XIRR: initial corpus out, terminal combined value in
   cashflows.push({ date: endDate, amount: finalTotal });
   const xirrVal = xirr(cashflows);
+
+  // Source XIRR: corpus invested, each transfer is partial withdrawal, remaining is final inflow
+  const srcCashflows = [{ date: startDate, amount: -corpus }];
+  for (const t of timeline) srcCashflows.push({ date: t.date, amount: t.transferAmt });
+  srcCashflows.push({ date: endDate, amount: finalSrc });
+  const srcXirr = xirr(srcCashflows);
+
+  // Target XIRR: each transfer is an outflow (investment), final value is inflow
+  const tgtCashflows = timeline.map(t => ({ date: t.date, amount: -t.transferAmt }));
+  tgtCashflows.push({ date: endDate, amount: finalTgt });
+  const tgtXirr = xirr(tgtCashflows);
+
+  // Total actually transferred out of source
+  const totalTransferred = timeline.reduce((s, t) => s + t.transferAmt, 0);
+  const remainingInSrc = corpus - totalTransferred; // cost basis of what stayed in source
 
   // Baselines
   const srcOnlyUnits = corpus / startEntry.nav;
@@ -177,22 +200,22 @@ function runSTP({ srcNav, tgtNav, startDate, months, corpus, transferMode, trans
 
   const years = months / 12;
 
-  // Total transferred
-  const totalTransferred = corpus - finalSrc; // what left source
-
   return {
     // STP results
     finalSrc, finalTgt, finalTotal,
-    srcInvested: corpus,
-    tgtInvested: totalTransferred,
     totalTransferred,
     transferCount,
-    // Returns
-    srcAbsAmt: finalSrc - (corpus - totalTransferred),
+    corpus,
+    // Source returns (on the portion that stayed)
+    srcAbsAmt: finalSrc - remainingInSrc,
+    srcAbsPct: absReturn(remainingInSrc, finalSrc),
+    srcXirr,
+    // Target returns (on what was transferred in)
     tgtAbsAmt: finalTgt - totalTransferred,
-    totalAbsAmt: finalTotal - corpus,
-    srcAbsPct: absReturn(corpus - totalTransferred, finalSrc),
     tgtAbsPct: absReturn(totalTransferred, finalTgt),
+    tgtXirr,
+    // Combined
+    totalAbsAmt: finalTotal - corpus,
     totalAbsPct: absReturn(corpus, finalTotal),
     totalCAGR: cagr(corpus, finalTotal, years),
     xirrVal,
@@ -307,9 +330,9 @@ const S = {
   sectionLabel:  { fontFamily:"DM Mono, monospace", fontSize:10, letterSpacing:"0.18em", color:"#9a9490", textTransform:"uppercase", marginBottom:16 },
   label:         { fontFamily:"DM Mono, monospace", fontSize:10, color:"#8a8278", letterSpacing:"0.1em", textTransform:"uppercase" },
   input:         { fontFamily:"DM Mono, monospace", fontSize:14, color:"#1e1c19", background:"#f0ece4", border:"1px solid #cec6ba", borderRadius:4, padding:"9px 12px", outline:"none", width:"100%", boxSizing:"border-box" },
-  select:        { fontFamily:"DM Mono, monospace", fontSize:13, color:"#1e1c19", background:"#f0ece4", border:"1px solid #cec6ba", borderRadius:4, padding:"9px 12px", outline:"none", width:"100%", boxSizing:"border-box" },
+  select:        { fontFamily:"DM Mono, monospace", fontSize:13, color:"#1e1c19", background:"#f0ece4", border:"1px solid #cec6ba", borderRadius:4, padding:"9px 12px", outline:"none", width:"100%", boxSizing:"border-box", minWidth:0 },
   inputGroup:    { display:"flex", flexDirection:"column", gap:6 },
-  inputRow:      { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:"18px 24px" },
+  inputRow:      { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:"18px 24px" },
   navInfo:       { fontFamily:"DM Mono, monospace", fontSize:11, color:"#3d7a6e", background:"#eef6f0", border:"1px solid #a3d4b0", borderRadius:4, padding:"10px 14px", marginTop:12 },
   navWarn:       { fontFamily:"DM Mono, monospace", fontSize:11, color:"#b45309", background:"#fef9ec", border:"1px solid #f4d07a", borderRadius:4, padding:"10px 14px", marginTop:12 },
   tabs:          { display:"flex", gap:0, borderBottom:"1px solid #cec6ba", marginBottom:24 },
@@ -389,14 +412,15 @@ export default function STPActual() {
   const planUniverse = localStorage.getItem("fundlens_plan_universe") || "Direct";
 
   const amcSchemes = allSchemes.filter(s =>
-    s.amc === selectedAMC && s.plan === planUniverse
+    s.amc === selectedAMC && s.plan === planUniverse && getOption(s) === "Growth"
   );
 
   const srcCategories = [...new Set(amcSchemes.map(s => s.category))].sort();
-  const tgtCategories = srcCategories; // same AMC, same plan
+  const tgtCategories = srcCategories;
 
   const srcSchemes = amcSchemes.filter(s => s.category === srcCategory);
-  const tgtSchemes = amcSchemes.filter(s => s.category === tgtCategory && s.category !== srcCategory || s.category === tgtCategory);
+  // Target: same AMC, same plan, Growth, different category
+  const tgtSchemes = amcSchemes.filter(s => s.category === tgtCategory);
 
   const srcScheme = allSchemes.find(s => s.id === srcSchemeId);
   const tgtScheme = allSchemes.find(s => s.id === tgtSchemeId);
@@ -431,7 +455,7 @@ export default function STPActual() {
       setSrcNavData(srcHist);
       setTgtNavData(tgtHist);
 
-      // Compute overlap
+      // Overlap = latest start date to earliest end date across both schemes
       const srcFrom = srcHist[0].date, srcTo = srcHist[srcHist.length - 1].date;
       const tgtFrom = tgtHist[0].date, tgtTo = tgtHist[tgtHist.length - 1].date;
       const overlapFrom = srcFrom > tgtFrom ? srcFrom : tgtFrom;
@@ -443,10 +467,13 @@ export default function STPActual() {
         return;
       }
 
+      // Max safe months: from overlapFrom to overlapTo
       const overlapMonths = monthDiff(overlapFrom, overlapTo);
+      // Default to 12 months or max available, whichever is less
+      const defaultMonths = Math.min(12, overlapMonths);
       setOverlapInfo({ from: overlapFrom, to: overlapTo, months: overlapMonths });
       setStartDate(overlapFrom);
-      setMonths(Math.min(12, overlapMonths));
+      setMonths(defaultMonths);
 
     } catch (e) {
       setNavError("Failed to fetch NAV history. Please try again.");
@@ -755,7 +782,7 @@ export default function STPActual() {
                       <div style={S.row}><span style={S.rowLabel}>Remaining invested</span><span style={S.rowVal()}>{fmt(result.corpus - result.totalTransferred)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (₹)</span><span style={S.rowVal(result.srcAbsAmt >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmt(result.srcAbsAmt)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (%)</span><span style={S.rowVal(result.srcAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.srcAbsPct)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>CAGR</span><span style={S.rowVal(result.srcAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(cagr(result.corpus - result.totalTransferred, result.finalSrc, months / 12), 2)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.srcXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.srcXirr, 2)}</span></div>
                     </div>
 
                     {/* Target */}
@@ -765,7 +792,7 @@ export default function STPActual() {
                       <div style={S.row}><span style={S.rowLabel}>Total invested</span><span style={S.rowVal()}>{fmt(result.totalTransferred)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (₹)</span><span style={S.rowVal(result.tgtAbsAmt >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmt(result.tgtAbsAmt)}</span></div>
                       <div style={S.row}><span style={S.rowLabel}>Abs return (%)</span><span style={S.rowVal(result.tgtAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.tgtAbsPct)}</span></div>
-                      <div style={S.row}><span style={S.rowLabel}>CAGR</span><span style={S.rowVal(result.tgtAbsPct >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(cagr(result.totalTransferred, result.finalTgt, months / 12), 2)}</span></div>
+                      <div style={S.row}><span style={S.rowLabel}>XIRR</span><span style={S.rowVal(result.tgtXirr >= 0 ? "#2d6a4f" : "#b91c1c")}>{fmtPct(result.tgtXirr, 2)}</span></div>
                     </div>
 
                     {/* Combined */}
@@ -804,7 +831,8 @@ export default function STPActual() {
                           ["Final Corpus",     fmt(result.finalTotal),          fmt(result.srcOnlyFinal),    fmt(result.tgtOnlyFinal)],
                           ["Abs Return (₹)",   fmt(result.totalAbsAmt),         fmt(result.srcOnlyAbsAmt),   fmt(result.tgtOnlyAbsAmt)],
                           ["Abs Return (%)",   fmtPct(result.totalAbsPct),      fmtPct(result.srcOnlyAbsPct), fmtPct(result.tgtOnlyAbsPct)],
-                          ["CAGR / XIRR",      fmtPct(result.xirrVal,2)+" (XIRR)", fmtPct(result.srcOnlyCAGR,2), fmtPct(result.tgtOnlyCAGR,2)],
+                          ["CAGR",             fmtPct(result.totalCAGR,2),      fmtPct(result.srcOnlyCAGR,2), fmtPct(result.tgtOnlyCAGR,2)],
+                          ["XIRR (STP)",       fmtPct(result.xirrVal,2),        "—",                          "—"],
                           ["Benefit vs STP",   "—",                             fmt(result.vsSourceOnly) + " · " + fmtPct(result.vsSourceOnlyPct), fmt(result.vsTargetOnly) + " · " + fmtPct(result.vsTargetOnlyPct)],
                         ].map(([label, stp, srcOnly, tgtOnly], i) => (
                           <tr key={label} style={{ borderBottom:"0.5px solid #ddd8d0", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.4)" }}>
