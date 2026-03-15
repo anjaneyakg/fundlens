@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 
 // ─── DATA SOURCE ─────────────────────────────────────────────────────────────
 // Main slim Gist — schemes list (~3MB), loaded on every page load
@@ -707,7 +708,6 @@ export default function App() {
   const [sortKey,       setSortKey]      = useState("1Y");
   const [sortDir,       setSortDir]      = useState(-1);
   const [selected,      setSelected]     = useState(null);
-  const [tab,           setTab]          = useState("schemes");
   const [peerExpanded,   setPeerExpanded]   = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
@@ -782,6 +782,20 @@ export default function App() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Auto-select scheme when navigated from Z8 Category Leaderboard
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.state?.selectId || allSchemes.length === 0) return;
+    const match = allSchemes.find(s => s.id === location.state.selectId);
+    if (match) {
+      setSelected(match);
+      setPeerExpanded(false);
+      setCatFilter(match.category);
+      setPlanFilter(match.plan);
+      if (match.plan !== "All") localStorage.setItem("fundlens_plan_universe", match.plan);
+    }
+  }, [location.state, allSchemes]);
 
   // Sync plan universe when changed via Nav toggle
   useEffect(() => {
@@ -960,22 +974,21 @@ export default function App() {
         </div>
       </div>
 
-      {/* TABS */}
+      {/* TABS — Scheme Explorer only. Category Leaderboard moved to Z8 (/category-leaderboard) */}
       <div style={{padding:"0 2rem",borderBottom:"1px solid var(--border)",display:"flex",gap:"0"}}>
-        {["schemes","leaderboard"].map(t => (
-          <button key={t} onClick={()=>setTab(t)} style={{
-            padding:"14px 20px",background:"none",border:"none",cursor:"pointer",
-            fontFamily:"'DM Mono'",fontSize:"11px",letterSpacing:"1.5px",textTransform:"uppercase",
-            color: tab===t ? "var(--violet)" : "var(--muted)",
-            borderBottom: tab===t ? "2px solid var(--violet)" : "2px solid transparent",
-            transition:"all 0.15s"
-          }}>
-            {t === "schemes" ? "◈ Scheme Explorer" : "◆ Category Leaderboard"}
-          </button>
-        ))}
+        <button style={{
+          padding:"14px 20px",background:"none",border:"none",cursor:"pointer",
+          fontFamily:"'DM Mono'",fontSize:"11px",letterSpacing:"1.5px",textTransform:"uppercase",
+          color:"var(--violet)",
+          borderBottom:"2px solid var(--violet)",
+          transition:"all 0.15s"
+        }}>
+          ◈ Scheme Explorer
+        </button>
       </div>
 
-      {tab === "schemes" && <>
+      {/* SCHEME EXPLORER */}
+      {<>
         <div className="filters-bar">
           <div className="search-wrap">
             <span className="search-icon">⌕</span>
@@ -1472,66 +1485,6 @@ export default function App() {
           </div>
         </div>
       </>}
-
-      {tab === "leaderboard" && (
-        <div className="leaderboard">
-          <div className="lb-title">◆ TOP PERFORMERS BY CATEGORY — 1Y RETURNS</div>
-          <div style={{
-            fontFamily:"'DM Mono'", fontSize:"10px", color:"var(--muted)",
-            letterSpacing:"0.5px", marginBottom:"1rem",
-            padding:"6px 12px", background:"rgba(99,91,255,0.04)",
-            borderRadius:"6px", border:"1px solid var(--border)",
-            display:"inline-block"
-          }}>
-            Growth option only · ranked by 1Y return · one entry per scheme
-          </div>
-          <div className="lb-grid">
-            {Object.entries(leaderboard).map(([cat, funds]) => (
-              <div className="lb-card" key={cat}>
-                <div className="lb-cat">{cat}</div>
-                {(funds || []).map((f,i) => (
-                  <div className="lb-row" key={f.id}
-                    onClick={()=>{
-                      const full = allSchemes.find(s=>s.id===f.id);
-                      if(full){
-                        setSelected(full);
-                        setPeerExpanded(false);
-                        // Set filters to match clicked scheme's context
-                        setCatFilter(full.category);
-                        setPlanFilter(full.plan);
-                        if(full.plan !== "All") localStorage.setItem('fundlens_plan_universe', full.plan);
-                        setTab("schemes");
-                      }
-                    }}
-                    style={{cursor:"pointer"}}>
-                    <div className="lb-row-rank">{i+1}</div>
-                    <div className="lb-row-name" title={f.name} style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-                      <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {f.name || f.amc}
-                      </span>
-                      <span style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {f.amc}
-                        {f.plan && (
-                          <span style={{
-                            marginLeft:"5px", padding:"1px 5px", borderRadius:"3px",
-                            background: f.plan==="Direct" ? "rgba(99,91,255,0.08)" : "rgba(107,114,160,0.08)",
-                            color: f.plan==="Direct" ? "var(--violet)" : "var(--muted)",
-                            border: `1px solid ${f.plan==="Direct" ? "rgba(99,91,255,0.18)" : "var(--border)"}`,
-                            fontSize:"8px"
-                          }}>{f.plan}</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="lb-row-ret" style={{color:returnColor(f["1Y"])}}>
-                      {f["1Y"] != null ? `${f["1Y"]>0?"+":""}${f["1Y"]}%` : "—"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* SOURCE ATTRIBUTION */}
       <footer style={{
