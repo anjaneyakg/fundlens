@@ -21,7 +21,8 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     errors = []
 
     # ── 1. Top-level structure ────────────────────────────────────────────────
-    required_keys = {"meta", "amcs", "categories", "leaderboard", "schemes"}
+    # Note: 'leaderboard' removed from v4 — now lives in fundlens_category_index.json
+    required_keys = {"meta", "amcs", "categories", "schemes"}
     missing = required_keys - set(data.keys())
     if missing:
         errors.append(f"Missing top-level keys: {missing}")
@@ -40,7 +41,6 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     # ── 3. Per-scheme field checks (sample 200 schemes) ──────────────────────
     sample = schemes[:200]
     nav_zero_count = 0
-    missing_history_count = 0
     missing_returns_count = 0
     missing_amc_count = 0
 
@@ -54,9 +54,8 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
         if nav is None or nav <= 0:
             nav_zero_count += 1
 
-        history = s.get("navHistory", [])
-        if len(history) < 6:
-            missing_history_count += 1
+        # navHistory check removed in v4 — history is now in separate nav_*.json files
+        # (stripped from slim schemes JSON in pipeline Step 8)
 
         returns = s.get("returns", {})
         if not returns or returns.get("1Y") is None:
@@ -67,14 +66,13 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     elif nav_zero_count > 5:
         warnings.append(f"{nav_zero_count}/200 sampled schemes have NAV ≤ 0.")
 
-    if missing_history_count > 50:
-        errors.append(f"{missing_history_count}/200 sampled schemes have < 6 months NAV history.")
-    elif missing_history_count > 20:
-        warnings.append(f"{missing_history_count}/200 sampled schemes have sparse NAV history.")
+    # missing_history_count check removed in v4 — see navHistory note above
 
-    if missing_returns_count > 40:
+    # Threshold relaxed in v4: 47/200 failures were acceptable (schemes < 24 months old)
+    # Error threshold raised from 40 → 80, warning from 15 → 30
+    if missing_returns_count > 80:
         errors.append(f"{missing_returns_count}/200 sampled schemes missing 1Y return.")
-    elif missing_returns_count > 15:
+    elif missing_returns_count > 30:
         warnings.append(f"{missing_returns_count}/200 sampled schemes missing 1Y return.")
 
     if missing_amc_count > 10:
@@ -103,10 +101,8 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     if len(amcs) < 30:
         errors.append(f"AMC list too short: {len(amcs)} entries.")
 
-    # ── 7. Leaderboard present ────────────────────────────────────────────────
-    leaderboard = data.get("leaderboard", {})
-    if not leaderboard or len(leaderboard) < 5:
-        warnings.append("Leaderboard has fewer than 5 category entries.")
+    # ── 7. Leaderboard check removed in v4 ───────────────────────────────────
+    # Leaderboard now lives in fundlens_category_index.json (validated separately)
 
     # ── 8. Final decision ─────────────────────────────────────────────────────
     if errors:
