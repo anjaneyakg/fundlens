@@ -751,7 +751,17 @@ export default function App() {
             for (const [key, funds] of Object.entries(cat.index || {})) {
               const [category, plan] = key.split("|");
               if (plan === planUniverse) {
-                filtered[category] = funds;
+                // Deduplicate by name client-side — guards against multiple AMFI
+                // codes for the same fund until next pipeline run cleans source data
+                const seen = new Map();
+                for (const f of funds) {
+                  const name = (f.name || "").trim().toLowerCase();
+                  if (!seen.has(name) || f.return1Y > seen.get(name).return1Y) {
+                    seen.set(name, f);
+                  }
+                }
+                filtered[category] = Array.from(seen.values())
+                  .sort((a, b) => b.return1Y - a.return1Y);
               }
             }
             setLeaderboard(filtered);
@@ -783,7 +793,17 @@ export default function App() {
           const filtered = {};
           for (const [key, funds] of Object.entries(cat.index || {})) {
             const [category, plan] = key.split("|");
-            if (plan === e.detail) filtered[category] = funds;
+            if (plan === e.detail) {
+              const seen = new Map();
+              for (const f of funds) {
+                const name = (f.name || "").trim().toLowerCase();
+                if (!seen.has(name) || f.return1Y > seen.get(name).return1Y) {
+                  seen.set(name, f);
+                }
+              }
+              filtered[category] = Array.from(seen.values())
+                .sort((a, b) => b.return1Y - a.return1Y);
+            }
           }
           setLeaderboard(filtered);
         }).catch(() => {});
