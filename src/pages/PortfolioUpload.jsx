@@ -1,97 +1,45 @@
 // src/pages/PortfolioUpload.jsx
-// Admin: Manual AMC Portfolio Upload
-//
-// How the upload works (no backend needed):
-//   1. User fills AMC, month, picks file
-//   2. On submit, file is sent directly to GitHub via the GitHub API
-//   3. GitHub token is read from import.meta.env.VITE_GITHUB_PAT
-//      → set this in Vercel environment variables (never hardcode it here)
-//   4. File is saved to: data/raw/YYYY-MM/<filename> in the FundInsight repo
-//
-// Security note: VITE_ prefix means this value IS visible in the browser bundle.
-// This is acceptable for an internal admin tool you access yourself.
-// If you later need stricter security, move to a backend API route.
-
 import { useState, useRef, useCallback } from "react";
 import { AMC_LIST, CAT_LABELS } from "../data/amcList";
 
-// ── Config — reads from Vercel environment variables ─────────────────────────
-const GITHUB_OWNER = "anjaneyakg";
-const GITHUB_REPO  = "FundInsight";
+const GITHUB_OWNER  = "anjaneyakg";
+const GITHUB_REPO   = "FundInsight";
 const GITHUB_BRANCH = "main";
 const GITHUB_TOKEN  = import.meta.env.VITE_GITHUB_PAT;
 
-// ── GitHub helper — saves a file to the repo ─────────────────────────────────
 async function saveFileToGitHub(path, fileBuffer, commitMessage) {
   const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
-
-  // Check if file already exists (to get its SHA for overwrite)
   let sha = null;
-  const checkRes = await fetch(apiUrl, {
-    headers: { Authorization: `token ${GITHUB_TOKEN}` },
-  });
-  if (checkRes.status === 200) {
-    const existing = await checkRes.json();
-    sha = existing.sha;
-  }
-
-  // Convert file to base64
-  const base64Content = btoa(
-    new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-  );
-
-  // Push to GitHub
-  const body = {
-    message: commitMessage,
-    content: base64Content,
-    branch: GITHUB_BRANCH,
-    ...(sha ? { sha } : {}),
-  };
-
+  const checkRes = await fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}` } });
+  if (checkRes.status === 200) { const ex = await checkRes.json(); sha = ex.sha; }
+  const base64Content = btoa(new Uint8Array(fileBuffer).reduce((d, b) => d + String.fromCharCode(b), ""));
+  const body = { message: commitMessage, content: base64Content, branch: GITHUB_BRANCH, ...(sha ? { sha } : {}) };
   const res = await fetch(apiUrl, {
     method: "PUT",
-    headers: {
-      Authorization: `token ${GITHUB_TOKEN}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `token ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.message || `GitHub error ${res.status}`);
-  }
-
-  return await res.json();
+  if (!res.ok) { const err = await res.json(); throw new Error(err.message || `GitHub error ${res.status}`); }
+  return res.json();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+function formatBytes(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
 }
-
-function getMonthLabel(yyyyMm) {
-  if (!yyyyMm) return "";
-  const [y, m] = yyyyMm.split("-");
-  return new Date(Number(y), Number(m) - 1, 1)
-    .toLocaleString("en-IN", { month: "long", year: "numeric" });
+function getMonthLabel(v) {
+  if (!v) return "";
+  const [y, m] = v.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
 }
-
 function defaultMonth() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
+  const d = new Date(); d.setMonth(d.getMonth() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// Group AMCs by category for the dropdown
-const grouped = AMC_LIST.reduce((acc, amc) => {
-  (acc[amc.category] = acc[amc.category] || []).push(amc);
-  return acc;
-}, {});
+const grouped = AMC_LIST.reduce((acc, a) => { (acc[a.category] = acc[a.category] || []).push(a); return acc; }, {});
 
-// ── Main component ────────────────────────────────────────────────────────────
 export default function PortfolioUpload() {
   const [selectedAmc, setSelectedAmc] = useState(null);
   const [useCustom,   setUseCustom]   = useState(false);
@@ -99,96 +47,79 @@ export default function PortfolioUpload() {
   const [month,       setMonth]       = useState(defaultMonth());
   const [file,        setFile]        = useState(null);
   const [isDragging,  setIsDragging]  = useState(false);
-  const [status,      setStatus]      = useState("idle"); // idle | uploading | success | error
+  const [status,      setStatus]      = useState("idle");
   const [result,      setResult]      = useState(null);
   const [errorMsg,    setErrorMsg]    = useState("");
   const [progress,    setProgress]    = useState(0);
-
   const fileInputRef = useRef(null);
 
-  // ── File handling ───────────────────────────────────────────────────────────
   const acceptFile = useCallback((f) => {
     const lower = f.name.toLowerCase();
-    if (![".xlsx", ".xls", ".zip"].some((ext) => lower.endsWith(ext))) {
-      setErrorMsg("Only .xlsx, .xls, and .zip files are accepted.");
-      return;
+    if (![".xlsx", ".xls", ".zip"].some((e) => lower.endsWith(e))) {
+      setErrorMsg("Only .xlsx, .xls, and .zip files are accepted."); return;
     }
-    setFile(f);
-    setErrorMsg("");
-    setStatus("idle");
-    setResult(null);
+    setFile(f); setErrorMsg(""); setStatus("idle"); setResult(null);
   }, []);
 
-  const onDragOver  = (e) => { e.preventDefault(); setIsDragging(true); };
-  const onDragLeave = ()  => setIsDragging(false);
-  const onDrop      = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]);
-  };
-
-  // ── Derived ─────────────────────────────────────────────────────────────────
   const effectiveAmc = useCustom ? customAmc.trim() : (selectedAmc?.name || "");
   const canSubmit    = !!effectiveAmc && !!month && !!file && status !== "uploading";
 
-  // ── Upload ──────────────────────────────────────────────────────────────────
   async function handleUpload() {
     if (!canSubmit) return;
-
-    if (!GITHUB_TOKEN) {
-      setErrorMsg("VITE_GITHUB_PAT is not set. Add it to your Vercel environment variables.");
-      return;
-    }
-
-    setStatus("uploading");
-    setProgress(10);
-    setErrorMsg("");
-
-    const progressTimer = setInterval(() => {
-      setProgress((p) => Math.min(p + Math.random() * 15, 85));
-    }, 200);
-
+    if (!GITHUB_TOKEN) { setErrorMsg("VITE_GITHUB_PAT is not set in Vercel environment variables."); return; }
+    setStatus("uploading"); setProgress(10); setErrorMsg("");
+    const t = setInterval(() => setProgress((p) => Math.min(p + Math.random() * 15, 85)), 200);
     try {
-      const buffer    = await file.arrayBuffer();
-      const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const rawPath   = `data/raw/${month}/${safeName}`;
-      const commitMsg = `raw: manual upload — ${effectiveAmc} ${month}`;
-
-      await saveFileToGitHub(rawPath, buffer, commitMsg);
-
-      clearInterval(progressTimer);
-      setProgress(100);
+      const buffer   = await file.arrayBuffer();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const rawPath  = `data/raw/${month}/${safeName}`;
+      await saveFileToGitHub(rawPath, buffer, `raw: manual upload — ${effectiveAmc} ${month}`);
+      clearInterval(t); setProgress(100);
       setResult({ amc: effectiveAmc, month, path: rawPath, size: file.size });
       setStatus("success");
     } catch (err) {
-      clearInterval(progressTimer);
-      setProgress(0);
-      setStatus("error");
-      setErrorMsg(err.message || "Upload failed. Check your GitHub token and try again.");
+      clearInterval(t); setProgress(0); setStatus("error");
+      setErrorMsg(err.message || "Upload failed. Check your GitHub token.");
     }
   }
 
   function reset() {
-    setFile(null);
-    setStatus("idle");
-    setResult(null);
-    setErrorMsg("");
-    setProgress(0);
+    setFile(null); setStatus("idle"); setResult(null);
+    setErrorMsg(""); setProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={s.page}>
-      {/* Header */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        .pu-select { width:100%; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:10px 36px 10px 14px; font-size:13.5px; color:#374151; font-family:'Plus Jakarta Sans',sans-serif; appearance:none; outline:none; cursor:pointer; transition:border-color 0.15s; }
+        .pu-select:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.1); }
+        .pu-input { width:100%; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:10px 14px; font-size:13.5px; color:#374151; font-family:'Plus Jakarta Sans',sans-serif; outline:none; transition:border-color 0.15s; box-sizing:border-box; }
+        .pu-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.1); }
+        .pu-drop { border:2px dashed #e5e7eb; border-radius:14px; padding:2.5rem; text-align:center; cursor:pointer; transition:all 0.2s; background:#fafafa; }
+        .pu-drop:hover { border-color:#6366f1; background:#f5f3ff; }
+        .pu-drop.dragging { border-color:#6366f1; background:#ede9fe; }
+        .pu-drop.has-file { padding:1rem 1.25rem; cursor:default; border-style:solid; border-color:#6366f1; background:#f5f3ff; }
+        .pu-btn { width:100%; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:10px; padding:13px; font-size:14px; font-weight:600; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; letter-spacing:0.02em; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(99,102,241,0.3); transition:opacity 0.15s,transform 0.1s; }
+        .pu-btn:hover:not(:disabled) { opacity:0.92; transform:translateY(-1px); }
+        .pu-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; box-shadow:none; }
+        .pu-ghost { background:none; border:1.5px solid #e5e7eb; border-radius:10px; padding:9px 18px; font-size:13px; font-weight:500; color:#6b7280; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; transition:all 0.15s; }
+        .pu-ghost:hover { border-color:#6366f1; color:#4f46e5; }
+        .pu-link { background:none; border:none; color:#6366f1; font-size:12px; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; padding:4px 0 0; font-weight:500; }
+        .pu-link:hover { text-decoration:underline; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        @keyframes prog { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+      `}</style>
+
+      {/* Page header */}
       <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Portfolio Upload</h1>
-          <p style={s.subtitle}>
-            Manually upload an AMC month-end portfolio file.
-            Saves directly to the FundInsight GitHub repo as a raw file.
-            Then run Cell 7M in Colab to parse and merge it.
-          </p>
+        <div style={s.headerLeft}>
+          <div style={s.headerIcon}>⬆</div>
+          <div>
+            <h1 style={s.title}>Portfolio Upload</h1>
+            <p style={s.subtitle}>Manually upload an AMC month-end portfolio file to FundInsight GitHub. Use as backup for any AMC the pipeline cannot auto-fetch.</p>
+          </div>
         </div>
         <div style={s.headerBadges}>
           <span style={s.badge}>FundInsight</span>
@@ -197,98 +128,66 @@ export default function PortfolioUpload() {
       </div>
 
       <div style={s.grid}>
-        {/* ── Left: Form ────────────────────────────────────────────────────── */}
-        <div style={s.formCol}>
-
+        {/* ── Left: Form card ── */}
+        <div style={s.card}>
           {/* AMC */}
-          <div style={s.fieldBlock}>
-            <label style={s.fieldLabel}>AMC</label>
+          <div style={s.field}>
+            <label style={s.label}>AMC name</label>
             {!useCustom ? (
               <div style={{ position: "relative" }}>
-                <select
-                  style={s.select}
+                <select className="pu-select"
                   value={selectedAmc?.id || ""}
-                  onChange={(e) => {
-                    const found = AMC_LIST.find((a) => a.id === e.target.value);
-                    setSelectedAmc(found || null);
-                  }}
-                >
+                  onChange={(e) => setSelectedAmc(AMC_LIST.find((a) => a.id === e.target.value) || null)}>
                   <option value="">— select AMC —</option>
-                  {[4, 1, 3].map((cat) =>
-                    grouped[cat]?.length ? (
-                      <optgroup key={cat} label={CAT_LABELS[cat]}>
-                        {grouped[cat].map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </optgroup>
-                    ) : null
-                  )}
+                  {[4, 1, 3].map((cat) => grouped[cat]?.length ? (
+                    <optgroup key={cat} label={CAT_LABELS[cat]}>
+                      {grouped[cat].map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </optgroup>
+                  ) : null)}
                 </select>
-                <span style={s.selectArrow}>▾</span>
+                <span style={s.arrow}>▾</span>
               </div>
             ) : (
-              <input
-                type="text"
-                style={s.textInput}
-                placeholder="Type AMC name exactly as it should appear in the CSV"
-                value={customAmc}
-                onChange={(e) => setCustomAmc(e.target.value)}
-                autoFocus
-              />
+              <input className="pu-input" type="text" placeholder="Type AMC name exactly" value={customAmc} onChange={(e) => setCustomAmc(e.target.value)} autoFocus />
             )}
-            <button style={s.linkBtn} onClick={() => { setUseCustom(!useCustom); setSelectedAmc(null); setCustomAmc(""); }}>
+            <button className="pu-link" onClick={() => { setUseCustom(!useCustom); setSelectedAmc(null); setCustomAmc(""); }}>
               {useCustom ? "← Back to list" : "AMC not in list? Type manually →"}
             </button>
             {selectedAmc?.note && (
               <div style={s.amcNote}>
-                <span style={s.noteDot} />
+                <span style={s.noteIcon}>⚠</span>
                 {selectedAmc.note}
               </div>
             )}
           </div>
 
           {/* Month */}
-          <div style={s.fieldBlock}>
-            <label style={s.fieldLabel}>Portfolio closing month</label>
-            <input
-              type="month"
-              style={{ ...s.textInput, colorScheme: "dark" }}
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
-            {month && <span style={s.monthLabel}>{getMonthLabel(month)}</span>}
+          <div style={s.field}>
+            <label style={s.label}>Portfolio closing month</label>
+            <input className="pu-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ colorScheme: "light" }} />
+            {month && <span style={s.monthHint}>{getMonthLabel(month)}</span>}
           </div>
 
           {/* Drop zone */}
-          <div style={s.fieldBlock}>
-            <label style={s.fieldLabel}>Portfolio file</label>
+          <div style={s.field}>
+            <label style={s.label}>Portfolio file</label>
             <div
-              style={{
-                ...s.dropZone,
-                ...(isDragging ? s.dropZoneDragging : {}),
-                ...(file ? s.dropZoneHasFile : {}),
-              }}
+              className={`pu-drop${isDragging ? " dragging" : ""}${file ? " has-file" : ""}`}
               onClick={() => !file && fileInputRef.current?.click()}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]); }}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.zip"
-                onChange={(e) => e.target.files?.[0] && acceptFile(e.target.files[0])}
-                style={{ display: "none" }}
-              />
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.zip" onChange={(e) => e.target.files?.[0] && acceptFile(e.target.files[0])} style={{ display: "none" }} />
               {!file ? (
                 <>
-                  <div style={s.dropIcon}>↑</div>
+                  <div style={s.dropIcon}>☁</div>
                   <div style={s.dropPrimary}>Drop file here or click to browse</div>
-                  <div style={s.dropSecondary}>.xlsx · .xls · .zip · max 20 MB</div>
+                  <div style={s.dropSub}>.xlsx · .xls · .zip · max 20 MB</div>
                 </>
               ) : (
                 <div style={s.fileRow}>
-                  <span style={s.fileIcon}>{file.name.endsWith(".zip") ? "◈" : "◆"}</span>
+                  <div style={s.fileIconWrap}>{file.name.endsWith(".zip") ? "🗜" : "📊"}</div>
                   <div style={s.fileInfo}>
                     <div style={s.fileName}>{file.name}</div>
                     <div style={s.fileSize}>{formatBytes(file.size)}</div>
@@ -299,23 +198,14 @@ export default function PortfolioUpload() {
             </div>
           </div>
 
-          {/* Error message */}
-          {errorMsg && <div style={s.errorBar}>{errorMsg}</div>}
+          {errorMsg && <div style={s.errorBar}><span>⚠</span> {errorMsg}</div>}
 
-          {/* Submit button */}
-          <button
-            style={{ ...s.submitBtn, ...((!canSubmit || status === "uploading") ? s.submitBtnDisabled : {}) }}
-            onClick={handleUpload}
-            disabled={!canSubmit}
-          >
-            {status === "uploading" ? (
-              <><span style={s.spinner} />  Uploading to GitHub…</>
-            ) : (
-              "Upload to GitHub →"
-            )}
+          <button className="pu-btn" onClick={handleUpload} disabled={!canSubmit}>
+            {status === "uploading"
+              ? <><span style={s.spinner} /> Uploading to GitHub…</>
+              : "Upload to GitHub →"}
           </button>
 
-          {/* Progress bar */}
           {status === "uploading" && (
             <div style={s.progressTrack}>
               <div style={{ ...s.progressFill, width: `${progress}%` }} />
@@ -323,76 +213,67 @@ export default function PortfolioUpload() {
           )}
         </div>
 
-        {/* ── Right: Status panel ────────────────────────────────────────────── */}
-        <div style={s.statusCol}>
+        {/* ── Right: Status panel ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Idle: checklist */}
           {status === "idle" && (
-            <div style={s.panel}>
+            <div style={s.card}>
               <div style={s.panelTitle}>Upload checklist</div>
-              <div style={s.checklist}>
+              <div style={{ marginBottom: 20 }}>
                 {[
                   { done: !!effectiveAmc, label: "AMC selected" },
                   { done: !!month,        label: "Closing month set" },
                   { done: !!file,         label: "File attached" },
                 ].map((item) => (
-                  <div key={item.label} style={{ ...s.checkItem, ...(item.done ? s.checkItemDone : {}) }}>
-                    <span style={{ ...s.checkMark, ...(item.done ? s.checkMarkDone : {}) }}>
-                      {item.done ? "✓" : "○"}
-                    </span>
+                  <div key={item.label} style={{ ...s.checkRow, ...(item.done ? s.checkRowDone : {}) }}>
+                    <div style={{ ...s.checkCircle, ...(item.done ? s.checkCircleDone : {}) }}>
+                      {item.done ? "✓" : ""}
+                    </div>
                     {item.label}
                   </div>
                 ))}
               </div>
-              <div style={s.helpSection}>
-                <div style={s.helpTitle}>What happens after upload?</div>
-                <ol style={s.helpList}>
-                  <li>File is saved to <code style={s.code}>data/raw/YYYY-MM/</code> on GitHub</li>
-                  <li>Open Colab → run <strong>Cell 7M</strong> to parse it</li>
-                  <li><code style={s.code}>holdings_latest.csv</code> gets updated</li>
-                </ol>
-              </div>
+              <div style={s.divider} />
+              <div style={s.helpTitle}>What happens after upload?</div>
+              <ol style={s.helpList}>
+                <li>File saved to <code style={s.inlineCode}>data/raw/YYYY-MM/</code> on GitHub</li>
+                <li>Open Colab → run <strong>Cell 7M</strong> to parse</li>
+                <li><code style={s.inlineCode}>holdings_latest.csv</code> updated</li>
+              </ol>
             </div>
           )}
 
-          {/* Success */}
           {status === "success" && result && (
-            <div style={{ ...s.panel, ...s.panelSuccess }}>
-              <div style={s.successIcon}>✓</div>
-              <div style={s.successTitle}>Uploaded successfully</div>
-              <div style={s.resultRows}>
+            <div style={{ ...s.card, ...s.cardSuccess }}>
+              <div style={s.successBadge}>✓ Uploaded successfully</div>
+              <div style={{ marginBottom: 20 }}>
                 {[
-                  { key: "AMC",   val: result.amc },
-                  { key: "Month", val: getMonthLabel(result.month) },
-                  { key: "Size",  val: formatBytes(result.size) },
-                  { key: "Path",  val: result.path, isCode: true },
+                  { k: "AMC",   v: result.amc },
+                  { k: "Month", v: getMonthLabel(result.month) },
+                  { k: "Size",  v: formatBytes(result.size) },
+                  { k: "Path",  v: result.path, code: true },
                 ].map((row) => (
-                  <div key={row.key} style={s.resultRow}>
-                    <span style={s.resultKey}>{row.key}</span>
-                    {row.isCode
-                      ? <code style={s.resultCode}>{row.val}</code>
-                      : <span style={s.resultVal}>{row.val}</span>}
+                  <div key={row.k} style={s.resultRow}>
+                    <span style={s.resultKey}>{row.k}</span>
+                    {row.code
+                      ? <code style={s.resultCode}>{row.v}</code>
+                      : <span style={s.resultVal}>{row.v}</span>}
                   </div>
                 ))}
               </div>
-              <div style={s.nextStep}>
+              <div style={s.nextBox}>
                 <div style={s.nextLabel}>Next step</div>
-                <div style={s.nextBody}>
-                  Open Colab and run <strong>Cell 7M</strong> to parse this file
-                  and merge it into <code style={s.code}>holdings_latest.csv</code>.
-                </div>
+                <div style={s.nextBody}>Open Colab and run <strong>Cell 7M</strong> to parse this file and merge into <code style={s.inlineCode}>holdings_latest.csv</code>.</div>
               </div>
-              <button style={s.ghostBtn} onClick={reset}>Upload another file</button>
+              <button className="pu-ghost" onClick={reset} style={{ marginTop: 12 }}>Upload another file</button>
             </div>
           )}
 
-          {/* Error */}
           {status === "error" && (
-            <div style={{ ...s.panel, ...s.panelError }}>
-              <div style={s.errorIcon}>✕</div>
-              <div style={s.errorTitle}>Upload failed</div>
+            <div style={{ ...s.card, ...s.cardError }}>
+              <div style={s.errorBadge}>✕ Upload failed</div>
               <div style={s.errorDetail}>{errorMsg}</div>
-              <button style={s.ghostBtn} onClick={() => setStatus("idle")}>Try again</button>
+              <button className="pu-ghost" onClick={() => setStatus("idle")} style={{ marginTop: 12 }}>Try again</button>
             </div>
           )}
         </div>
@@ -401,70 +282,56 @@ export default function PortfolioUpload() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = {
-  page:         { fontFamily: "'IBM Plex Mono', 'Courier New', monospace", color: "#c8d8e8", maxWidth: 960 },
-  header:       { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: "2.5rem", paddingBottom: "1.5rem", borderBottom: "1px solid #1e2430" },
-  title:        { fontSize: 22, fontWeight: 600, color: "#e8f4f8", margin: "0 0 6px", letterSpacing: "-0.5px" },
-  subtitle:     { fontSize: 12, color: "#4a5a70", margin: 0, maxWidth: 520, lineHeight: 1.7 },
+  page:     { fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#111827", maxWidth: 960 },
+  header:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid #e5e7eb" },
+  headerLeft: { display: "flex", alignItems: "flex-start", gap: 16 },
+  headerIcon: { width: 48, height: 48, borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, boxShadow: "0 4px 14px rgba(99,102,241,0.3)" },
+  title:    { fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 5px", letterSpacing: "-0.5px" },
+  subtitle: { fontSize: 13, color: "#6b7280", margin: 0, maxWidth: 480, lineHeight: 1.7 },
   headerBadges: { display: "flex", gap: 6, flexShrink: 0, marginTop: 4 },
-  badge:        { fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #1e2430", color: "#4a5a70", letterSpacing: "0.08em", fontFamily: "inherit" },
-  badgeLive:    { borderColor: "#1e4a2e", color: "#3ab86a", background: "#0d1f16" },
-  grid:         { display: "grid", gridTemplateColumns: "1fr 320px", gap: "2.5rem", alignItems: "start" },
-  formCol:      {},
-  fieldBlock:   { marginBottom: "1.75rem" },
-  fieldLabel:   { display: "block", fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#3a4e66", marginBottom: 8, fontFamily: "inherit" },
-  select:       { width: "100%", background: "#0d1017", border: "1px solid #1e2a3a", borderRadius: 6, padding: "10px 36px 10px 12px", fontSize: 13, color: "#c8d8e8", fontFamily: "'IBM Plex Mono', monospace", appearance: "none", outline: "none", cursor: "pointer", boxSizing: "border-box" },
-  selectArrow:  { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#3a4e66", pointerEvents: "none" },
-  textInput:    { width: "100%", background: "#0d1017", border: "1px solid #1e2a3a", borderRadius: 6, padding: "10px 12px", fontSize: 13, color: "#c8d8e8", fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box" },
-  monthLabel:   { display: "block", fontSize: 11, color: "#4a9eca", marginTop: 6 },
-  linkBtn:      { background: "none", border: "none", color: "#3a6a8a", fontSize: 11, fontFamily: "inherit", cursor: "pointer", padding: "4px 0 0", textDecoration: "underline" },
-  amcNote:      { display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, fontSize: 11, color: "#7a6a3a", lineHeight: 1.5 },
-  noteDot:      { width: 5, height: 5, borderRadius: "50%", background: "#a08020", flexShrink: 0, marginTop: 4, display: "inline-block" },
-  dropZone:     { border: "1px dashed #2a3a50", borderRadius: 8, padding: "2rem", textAlign: "center", cursor: "pointer", transition: "border-color 0.15s" },
-  dropZoneDragging: { borderColor: "#2a5a7a", background: "#0d1825" },
-  dropZoneHasFile:  { cursor: "default", padding: "1rem 1.25rem" },
-  dropIcon:     { fontSize: 22, color: "#2a3a50", marginBottom: 8 },
-  dropPrimary:  { fontSize: 13, color: "#7a96b0", marginBottom: 4 },
-  dropSecondary:{ fontSize: 11, color: "#3a4e66" },
-  fileRow:      { display: "flex", alignItems: "center", gap: 10, textAlign: "left" },
-  fileIcon:     { fontSize: 18, color: "#4a9eca", flexShrink: 0 },
-  fileInfo:     { flex: 1, minWidth: 0 },
-  fileName:     { fontSize: 13, color: "#c8d8e8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  fileSize:     { fontSize: 11, color: "#4a5a70", marginTop: 2 },
-  removeBtn:    { background: "none", border: "none", color: "#3a4e66", fontSize: 13, cursor: "pointer", padding: 4, flexShrink: 0, fontFamily: "inherit" },
-  errorBar:     { background: "#1a0d0d", border: "1px solid #4a1a1a", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#e87a6a", marginBottom: 16 },
-  submitBtn:    { width: "100%", background: "#4a9eca", color: "#050810", border: "none", borderRadius: 6, padding: 12, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
-  submitBtnDisabled: { opacity: 0.35, cursor: "not-allowed" },
-  spinner:      { width: 12, height: 12, border: "2px solid #7ab8d8", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.7s linear infinite" },
-  progressTrack:{ height: 2, background: "#1e2a3a", borderRadius: 2, marginTop: 10, overflow: "hidden" },
-  progressFill: { height: "100%", background: "#4a9eca", borderRadius: 2, transition: "width 0.25s ease" },
-  statusCol:    { display: "flex", flexDirection: "column", gap: 16 },
-  panel:        { background: "#0d1017", border: "1px solid #1e2430", borderRadius: 8, padding: "1.25rem 1.5rem" },
-  panelSuccess: { background: "#0a1a12", borderColor: "#1a3a24" },
-  panelError:   { background: "#130d0d", borderColor: "#3a1a1a" },
-  panelTitle:   { fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#3a4e66", marginBottom: 16 },
-  checklist:    { marginBottom: 20 },
-  checkItem:    { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#3a4e66", padding: "5px 0" },
-  checkItemDone:{ color: "#7ab8a8" },
-  checkMark:    { width: 14, fontSize: 11, flexShrink: 0 },
-  checkMarkDone:{ color: "#3ab86a" },
-  helpSection:  { borderTop: "1px solid #1e2430", paddingTop: 16 },
-  helpTitle:    { fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "#3a4e66", marginBottom: 8 },
-  helpList:     { paddingLeft: 20, margin: 0, fontSize: 11, color: "#4a5a70", lineHeight: 2.2 },
-  code:         { background: "#1a2230", padding: "1px 5px", borderRadius: 3, fontFamily: "inherit", fontSize: 10, color: "#4a9eca" },
-  successIcon:  { fontSize: 24, color: "#3ab86a", marginBottom: 8 },
-  successTitle: { fontSize: 14, fontWeight: 600, color: "#3ab86a", marginBottom: 20 },
-  resultRows:   { marginBottom: 20 },
-  resultRow:    { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid #1a3a24", gap: 16, fontSize: 12 },
-  resultKey:    { color: "#3a6a4a", flexShrink: 0 },
-  resultVal:    { color: "#a8d8b8", textAlign: "right", wordBreak: "break-all" },
-  resultCode:   { fontFamily: "inherit", fontSize: 10, color: "#4a9eca", background: "#0d1825", padding: "2px 6px", borderRadius: 3, textAlign: "right", wordBreak: "break-all" },
-  nextStep:     { background: "#0d1a24", border: "1px solid #1a3a4a", borderRadius: 6, padding: "10px 12px", marginBottom: 16 },
-  nextLabel:    { fontSize: 9, textTransform: "uppercase", letterSpacing: "0.15em", color: "#3a6a8a", marginBottom: 5 },
-  nextBody:     { fontSize: 11, color: "#7ab8d8", lineHeight: 1.6 },
-  errorIcon:    { fontSize: 20, color: "#e87a6a", marginBottom: 8 },
-  errorTitle:   { fontSize: 14, fontWeight: 600, color: "#e87a6a", marginBottom: 8 },
-  errorDetail:  { fontSize: 11, color: "#9a6a5a", marginBottom: 16, lineHeight: 1.6 },
-  ghostBtn:     { background: "none", border: "1px solid #2a3a50", borderRadius: 6, padding: "8px 16px", fontSize: 12, color: "#7a96b0", fontFamily: "inherit", cursor: "pointer" },
+  badge:    { fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20, border: "1.5px solid #e5e7eb", color: "#6b7280", background: "#fff", fontFamily: "inherit" },
+  badgeLive:{ borderColor: "#a7f3d0", color: "#059669", background: "#f0fdf4" },
+  grid:     { display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.5rem", alignItems: "start" },
+  card:     { background: "#fff", borderRadius: 16, border: "1px solid #f3f4f6", boxShadow: "0 1px 12px rgba(0,0,0,0.06)", padding: "1.75rem" },
+  cardSuccess: { border: "1.5px solid #a7f3d0", background: "linear-gradient(135deg,#f0fdf4,#ecfdf5)" },
+  cardError:   { border: "1.5px solid #fecaca", background: "linear-gradient(135deg,#fff5f5,#fef2f2)" },
+  field:    { marginBottom: "1.5rem" },
+  label:    { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 7 },
+  arrow:    { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#9ca3af", pointerEvents: "none" },
+  monthHint:{ display: "block", fontSize: 12, color: "#6366f1", fontWeight: 500, marginTop: 6 },
+  amcNote:  { display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 },
+  noteIcon: { flexShrink: 0, fontSize: 13 },
+  dropIcon: { fontSize: 32, marginBottom: 10, color: "#6366f1" },
+  dropPrimary: { fontSize: 14, fontWeight: 500, color: "#374151", marginBottom: 4 },
+  dropSub:     { fontSize: 12, color: "#9ca3af" },
+  fileRow:     { display: "flex", alignItems: "center", gap: 12, textAlign: "left" },
+  fileIconWrap:{ fontSize: 26, flexShrink: 0 },
+  fileInfo:    { flex: 1, minWidth: 0 },
+  fileName:    { fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  fileSize:    { fontSize: 12, color: "#9ca3af", marginTop: 2 },
+  removeBtn:   { background: "none", border: "none", color: "#d1d5db", fontSize: 14, cursor: "pointer", padding: 4, flexShrink: 0, fontFamily: "inherit", borderRadius: 6, transition: "color 0.15s" },
+  errorBar:    { background: "#fff5f5", border: "1.5px solid #fecaca", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 8 },
+  spinner:     { width: 14, height: 14, border: "2.5px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block", animation: "spin 0.7s linear infinite", flexShrink: 0 },
+  progressTrack: { height: 4, background: "#ede9fe", borderRadius: 4, marginTop: 12, overflow: "hidden" },
+  progressFill:  { height: "100%", background: "linear-gradient(90deg,#6366f1,#8b5cf6,#6366f1)", backgroundSize: "200% 100%", borderRadius: 4, transition: "width 0.3s ease", animation: "prog 2s linear infinite" },
+  panelTitle:  { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 14 },
+  checkRow:    { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 13, color: "#9ca3af" },
+  checkRowDone:{ color: "#374151" },
+  checkCircle: { width: 20, height: 20, borderRadius: "50%", border: "1.5px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0, color: "#d1d5db" },
+  checkCircleDone: { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none", color: "#fff" },
+  divider:     { height: 1, background: "#f3f4f6", margin: "1rem 0" },
+  helpTitle:   { fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 },
+  helpList:    { paddingLeft: 18, margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 2.2 },
+  inlineCode:  { background: "#f3f4f6", padding: "1px 5px", borderRadius: 4, fontFamily: "monospace", fontSize: 11, color: "#4f46e5" },
+  successBadge:{ fontSize: 14, fontWeight: 700, color: "#059669", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 },
+  resultRow:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid #d1fae5", gap: 16, fontSize: 12 },
+  resultKey:   { fontWeight: 600, color: "#065f46", flexShrink: 0 },
+  resultVal:   { color: "#047857", textAlign: "right", wordBreak: "break-all" },
+  resultCode:  { fontFamily: "monospace", fontSize: 11, color: "#4f46e5", background: "#ede9fe", padding: "2px 6px", borderRadius: 4, textAlign: "right", wordBreak: "break-all" },
+  nextBox:     { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "12px 14px", marginTop: 4 },
+  nextLabel:   { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#059669", marginBottom: 4 },
+  nextBody:    { fontSize: 12, color: "#047857", lineHeight: 1.7 },
+  errorBadge:  { fontSize: 14, fontWeight: 700, color: "#dc2626", marginBottom: 10 },
+  errorDetail: { fontSize: 12, color: "#b91c1c", lineHeight: 1.7 },
 };
