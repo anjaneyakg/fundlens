@@ -1,8 +1,5 @@
 // src/pages/AdminLayout.jsx
-// The Admin section shell — sidebar on the left, page content on the right.
-// Every admin page lives inside this layout via React Router's <Outlet />.
-
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 
 const NAV_ITEMS = [
   {
@@ -24,158 +21,139 @@ const NAV_ITEMS = [
 
 export default function AdminLayout() {
   return (
-    <div style={styles.shell}>
-      {/* ── Sidebar ── */}
-      <aside style={styles.sidebar}>
-        <div style={styles.wordmark}>
-          <span style={styles.wordmarkFL}>FL</span>
-          <span style={styles.wordmarkAdmin}>ADMIN</span>
+    <div style={s.shell}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; }
+        .al-link { text-decoration: none; display: block; }
+        .al-link .al-inner {
+          display: flex; align-items: center; gap: 9px;
+          padding: 9px 12px; border-radius: 10px;
+          font-size: 13.5px; font-weight: 500; color: #6b7280;
+          transition: all 0.15s; cursor: pointer;
+        }
+        .al-link:hover .al-inner { background: rgba(99,102,241,0.07); color: #4f46e5; }
+        .al-link.active .al-inner {
+          background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+          color: #4f46e5;
+          box-shadow: 0 1px 6px rgba(99,102,241,0.15);
+        }
+        .al-link.active .al-icon { color: #7c3aed; }
+      `}</style>
+
+      {/* Sidebar */}
+      <aside style={s.sidebar}>
+        <div style={s.logoWrap}>
+          <div style={s.logoBox}><span style={s.logoText}>FL</span></div>
+          <div>
+            <div style={s.logoName}>FundLens</div>
+            <div style={s.logoTag}>Admin Console</div>
+          </div>
         </div>
 
-        {NAV_ITEMS.map((group) => (
-          <div key={group.group} style={styles.navGroup}>
-            <span style={styles.groupLabel}>{group.group}</span>
-            {group.items.map((item) =>
-              item.live ? (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  style={({ isActive }) => ({
-                    ...styles.navItem,
-                    ...(isActive ? styles.navItemActive : {}),
-                  })}
-                >
-                  <span style={styles.navIcon}>{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              ) : (
-                <div key={item.to} style={{ ...styles.navItem, ...styles.navItemDisabled }}>
-                  <span style={styles.navIcon}>{item.icon}</span>
-                  {item.label}
-                  <span style={styles.soonBadge}>soon</span>
-                </div>
-              )
-            )}
-          </div>
-        ))}
+        <nav style={{ flex: 1, padding: "0 0.75rem" }}>
+          {NAV_ITEMS.map((group) => (
+            <div key={group.group} style={s.group}>
+              <span style={s.groupLabel}>{group.group}</span>
+              {group.items.map((item) =>
+                item.live ? (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => isActive ? "al-link active" : "al-link"}
+                  >
+                    <div className="al-inner">
+                      <span className="al-icon" style={s.icon}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      <span style={s.liveDot} />
+                    </div>
+                  </NavLink>
+                ) : (
+                  <div key={item.to} style={s.disabledItem}>
+                    <span style={s.icon}>{item.icon}</span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    <span style={s.soonPill}>soon</span>
+                  </div>
+                )
+              )}
+            </div>
+          ))}
+        </nav>
 
-        <div style={styles.sidebarFooter}>
-          <span style={styles.footerDot} />
-          FundInsight v1.0
+        <div style={s.footerWrap}>
+          <div style={s.footerCard}>
+            <div style={s.footerTitle}>FundInsight v1.0</div>
+            <div style={s.footerSub}>● Pipeline live · Feb 2026</div>
+          </div>
         </div>
       </aside>
 
-      {/* ── Main content area — each admin page renders here ── */}
-      <main style={styles.main}>
+      {/* Main content */}
+      <main style={s.main}>
         <Outlet />
       </main>
     </div>
   );
 }
 
-const styles = {
+const s = {
   shell: {
-    display: "flex",
-    minHeight: "100vh",
-    background: "#0b0d11",
-    fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+    display: "flex", minHeight: "100vh",
+    background: "linear-gradient(140deg, #f8f7ff 0%, #f0f9ff 50%, #f0fdf4 100%)",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   sidebar: {
-    width: 220,
-    minHeight: "100vh",
-    background: "#0d1017",
-    borderRight: "1px solid #1e2430",
-    display: "flex",
-    flexDirection: "column",
-    padding: "2rem 0 1.5rem",
-    flexShrink: 0,
+    width: 252, minHeight: "100vh", flexShrink: 0,
+    background: "rgba(255,255,255,0.8)",
+    backdropFilter: "blur(16px)",
+    borderRight: "1px solid rgba(99,102,241,0.1)",
+    boxShadow: "2px 0 20px rgba(99,102,241,0.07)",
+    display: "flex", flexDirection: "column",
+    padding: "1.5rem 0",
   },
-  wordmark: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: 8,
-    padding: "0 1.5rem 2rem",
-    borderBottom: "1px solid #1e2430",
-    marginBottom: "1.5rem",
+  logoWrap: {
+    display: "flex", alignItems: "center", gap: 12,
+    padding: "0 1.25rem 1.5rem",
+    borderBottom: "1px solid rgba(99,102,241,0.08)",
+    marginBottom: "1.25rem",
   },
-  wordmarkFL: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "#e8f4f8",
-    letterSpacing: "-0.5px",
+  logoBox: {
+    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    boxShadow: "0 4px 14px rgba(99,102,241,0.35)",
   },
-  wordmarkAdmin: {
-    fontSize: 10,
-    color: "#4a9eca",
-    letterSpacing: "0.2em",
-    fontWeight: 500,
-  },
-  navGroup: {
-    marginBottom: "1.75rem",
-    padding: "0 1rem",
-  },
+  logoText: { fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px" },
+  logoName: { fontSize: 15, fontWeight: 700, color: "#1e1b4b", lineHeight: 1.2 },
+  logoTag:  { fontSize: 11, fontWeight: 600, color: "#8b5cf6", letterSpacing: "0.04em" },
+  group:    { marginBottom: "1.5rem" },
   groupLabel: {
-    display: "block",
-    fontSize: 9,
-    letterSpacing: "0.18em",
-    color: "#3a4558",
-    textTransform: "uppercase",
-    padding: "0 0.5rem",
-    marginBottom: "0.5rem",
+    display: "block", fontSize: 10, fontWeight: 700,
+    letterSpacing: "0.1em", textTransform: "uppercase",
+    color: "#c4b5fd", padding: "0 12px", marginBottom: "0.35rem",
   },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 9,
-    padding: "7px 10px",
-    borderRadius: 6,
-    textDecoration: "none",
-    fontSize: 12.5,
-    color: "#6b7a94",
-    marginBottom: 1,
-    transition: "background 0.15s, color 0.15s",
-    cursor: "pointer",
+  icon: { fontSize: 12, width: 16, textAlign: "center", flexShrink: 0 },
+  liveDot: {
+    width: 6, height: 6, borderRadius: "50%",
+    background: "#10b981", boxShadow: "0 0 0 2px #d1fae5",
+    display: "inline-block", flexShrink: 0,
   },
-  navItemActive: {
-    background: "#162035",
-    color: "#4a9eca",
+  disabledItem: {
+    display: "flex", alignItems: "center", gap: 9,
+    padding: "9px 12px", borderRadius: 10,
+    fontSize: 13.5, fontWeight: 500, color: "#d1d5db", cursor: "default",
   },
-  navItemDisabled: {
-    opacity: 0.4,
-    cursor: "default",
+  soonPill: {
+    fontSize: 10, fontWeight: 600, color: "#c4b5fd",
+    background: "#f5f3ff", border: "1px solid #e9d5ff",
+    borderRadius: 20, padding: "2px 8px",
   },
-  navIcon: {
-    fontSize: 11,
-    width: 14,
-    textAlign: "center",
-    flexShrink: 0,
+  footerWrap: { padding: "0 0.75rem", marginTop: "auto" },
+  footerCard: {
+    background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
+    border: "1px solid #ddd6fe", borderRadius: 12, padding: "12px 14px",
   },
-  soonBadge: {
-    marginLeft: "auto",
-    fontSize: 9,
-    color: "#2e3a4e",
-  },
-  sidebarFooter: {
-    marginTop: "auto",
-    padding: "0 1.5rem",
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    fontSize: 10,
-    color: "#2e3a4e",
-  },
-  footerDot: {
-    width: 5,
-    height: 5,
-    borderRadius: "50%",
-    background: "#1e8a3c",
-    flexShrink: 0,
-    display: "inline-block",
-  },
-  main: {
-    flex: 1,
-    padding: "2.5rem 3rem",
-    overflowY: "auto",
-    color: "#c8d8e8",
-  },
+  footerTitle: { fontSize: 12, fontWeight: 700, color: "#5b21b6" },
+  footerSub:   { fontSize: 11, color: "#8b5cf6", marginTop: 3 },
+  main: { flex: 1, padding: "2.5rem 3rem", overflowY: "auto" },
 };
