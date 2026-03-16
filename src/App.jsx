@@ -1,3 +1,5 @@
+import AdminLayout from './pages/AdminLayout.jsx'
+import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import { Routes, Route } from 'react-router-dom'
 import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
@@ -38,6 +40,9 @@ export default function App() {
         <Route path="/loan-calculator"      element={<LoanCalc />} />
         <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"       element={<STPCalculator />} />
+        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="portfolio-upload" element={<PortfolioUpload />} />
+      </Route>
       </Routes>
     </>
   )
