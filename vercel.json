@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+5. Commit message: `fix client-side routing for Vercel`
+6. Click **Commit changes**
+
+Vercel will redeploy automatically. Wait about 30 seconds, then try your URL again:
+```
+yourfundlens.vercel.app/admin/portfolio-upload
