@@ -1,6 +1,4 @@
-import AdminLayout from './pages/AdminLayout.jsx'
-import PortfolioUpload from './pages/PortfolioUpload.jsx'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
 import Schemes from './pages/Schemes.jsx'
@@ -18,11 +16,17 @@ import GoalCalculator from './pages/GoalCalculator'
 import LoanCalc from './pages/LoanCalc'
 import PrepayVsInvest from './pages/PrepayVsInvest'
 import STPCalculator from './pages/STPCalculator'
+import AdminLayout from './pages/AdminLayout.jsx'
+import PortfolioUpload from './pages/PortfolioUpload.jsx'
+import CoverageDashboard from './pages/CoverageDashboard.jsx'
 
 export default function App() {
+  const location = useLocation()
+  const isAdmin  = location.pathname.startsWith('/admin')
+
   return (
     <>
-      <Nav />
+      {!isAdmin && <Nav />}
       <Routes>
         <Route path="/"                     element={<Home />} />
         <Route path="/schemes"              element={<Schemes />} />
@@ -40,9 +44,11 @@ export default function App() {
         <Route path="/loan-calculator"      element={<LoanCalc />} />
         <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"       element={<STPCalculator />} />
+
         <Route path="/admin" element={<AdminLayout />}>
-        <Route path="portfolio-upload" element={<PortfolioUpload />} />
-      </Route>
+          <Route path="portfolio-upload" element={<PortfolioUpload />} />
+          <Route path="coverage"         element={<CoverageDashboard />} />
+        </Route>
       </Routes>
     </>
   )
