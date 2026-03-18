@@ -6,7 +6,7 @@ const NAV_ITEMS = [
     group: "Data Pipeline",
     items: [
       { to: "/admin/portfolio-upload", label: "Portfolio Upload", icon: "⬆", live: true  },
-      { to: "/admin/pipeline-logs",    label: "Pipeline Logs",    icon: "◈", live: false },
+      { to: "/admin/coverage",    label: "Coverage",    icon: "◈", live: true  },
       { to: "/admin/amc-directory",    label: "AMC Directory",    icon: "◎", live: false },
     ],
   },
