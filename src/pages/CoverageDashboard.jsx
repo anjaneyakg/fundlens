@@ -186,7 +186,7 @@ export default function CoverageDashboard() {
     setError("");
 
     Promise.all([
-      fetch(`https://corsproxy.io/?${encodeURIComponent(AMFI_NAV_URL)}`)
+      fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(AMFI_NAV_URL)}`)
         .then(r => r.text())
         .then(parseAmfiNav),
       fetch(HOLDINGS_URL)
