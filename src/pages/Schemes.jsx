@@ -38,6 +38,37 @@ const calcYearReturns = (hist) => {
   return result;
 };
 
+// Compute 1Y rolling returns from raw NAV history [{date,nav}]
+// For each date, find NAV ~365 calendar days prior, compute return
+// Returns [{date, return}] series suitable for RollingChart
+const computeRolling1Y = (hist) => {
+  if (!hist || hist.length < 50) return [];
+  // hist is sorted oldest → newest (as per v4 pipeline spec)
+  const result = [];
+  for (let i = 0; i < hist.length; i++) {
+    const current = hist[i];
+    const targetDate = new Date(current.date);
+    targetDate.setFullYear(targetDate.getFullYear() - 1);
+    const targetStr = targetDate.toISOString().slice(0, 10);
+    // Binary search for closest date on or after targetStr
+    let lo = 0, hi = i - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (hist[mid].date >= targetStr) { found = mid; hi = mid - 1; }
+      else lo = mid + 1;
+    }
+    if (found === -1) continue;
+    const prior = hist[found];
+    if (prior.nav > 0 && prior.date !== current.date) {
+      result.push({
+        date: current.date,
+        return: parseFloat(((current.nav / prior.nav - 1) * 100).toFixed(2)),
+      });
+    }
+  }
+  return result;
+};
+
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap');
@@ -1542,9 +1573,13 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Rolling returns chart */}
+                {/* Rolling returns chart — computed from NAV history */}
                 <div className="panel-section-title">1Y Rolling Returns</div>
-                <RollingChart data={peerNavHist?.[String(selected.id)] || rollingMap[String(selected.id)] || []} />
+                <RollingChart data={(() => {
+                  const raw = peerNavHist?.[String(selected.id)];
+                  if (raw && raw.length > 50) return computeRolling1Y(raw);
+                  return rollingMap[String(selected.id)] || [];
+                })()} />
 
                 {/* Peer comparison — plan-matched, AMC-deduped */}
                 {dedupedPeers.length > 1 && (() => {
