@@ -182,7 +182,7 @@ const GROUPS = [
       { code:"A3", name:"SWP Performance", tagline:"What did my withdrawals cost me?",         path:"/swp-performance", live:true  },
       { code:"A4", name:"STP Performance", tagline:"Model your debt-to-equity transfer plan.", path:"/stp-calculator",  live:true  },
       { code:"A5", name:"Actual STP Analyser", tagline:"Real NAV-based STP analysis.",         path:"/stp-actual",      live:true  },
-      { code:"A6", name:"SWP Projection",  tagline:"How long will my corpus last?",            path:"/swp-projection",  live:false },
+      { code: 'A6', label: 'Scheme Basket', path: '/scheme-basket', live: true, tiers: ['advisor','alpha','investor'] }
       { code:"A7", name:"Scheme Basket",   tagline:"How did my portfolio do?",                 path:"/scheme-basket",   live:false },
     ]
   },
