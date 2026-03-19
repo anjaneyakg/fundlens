@@ -1,4 +1,4 @@
-# pipeline_cell2.py — FundLens v4.2
+# pipeline_cell2.py — FundLens v4.3
 # Upload all 5 outputs to Gists
 #
 # Changes from v4.1:
@@ -36,10 +36,11 @@ GIST_NAVHIST  = "6f82d116b7067a8d13aa620e99aa783f"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BATCH_SIZE          = 1
+BATCH_SIZE          = 4
 FILE_SIZE_THRESHOLD = 20 * 1024 * 1024   # 20MB — above this, upload solo
 MAX_RETRIES         = 3
 RETRY_BACKOFF_BASE  = 2                  # seconds: 2s, 4s, 8s
+BATCH_DELAY         = 2                  # seconds between batches — avoids 403 rate limit
 
 # ── Validation Gate ───────────────────────────────────────────────────────────
 
@@ -194,8 +195,9 @@ def upload_nav_history(gist_id):
             else:
                 print(f"❌ {code}")
             failed_batches.append(b_idx)
+            time.sleep(BATCH_DELAY)
 
-    if failed_batches:
+if failed_batches:
         print(f"\n  ❌ {len(failed_batches)} batch(es) failed: {failed_batches}")
         return False
 
