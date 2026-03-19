@@ -11,10 +11,15 @@ try:
 except ImportError:
     GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 
-HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github.v3+json",
-}
+# Always re-read from env at runtime so token updates take effect without re-importing
+def get_headers():
+    token = os.environ.get('GITHUB_TOKEN', GITHUB_TOKEN)
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+HEADERS = get_headers()
 
 # ── Gist IDs ─────────────────────────────────────────────────────────────────
 
@@ -57,7 +62,7 @@ def upload_file(gist_id, filename, local_path, label):
     mb = len(content.encode())/(1024*1024)
     resp = requests.patch(
         f"https://api.github.com/gists/{gist_id}",
-        headers=HEADERS,
+        headers=get_headers(),
         json={"files": {filename: {"content": content}}},
         timeout=120,
     )
@@ -77,7 +82,7 @@ def upload_nav_history(gist_id):
 
     # Delete stale files first
     existing = requests.get(f"https://api.github.com/gists/{gist_id}",
-                            headers=HEADERS, timeout=30)
+                            headers=get_headers(), timeout=30)
     stale_payload = {}
     if existing.status_code == 200:
         existing_files = set(existing.json().get("files", {}).keys())
@@ -87,10 +92,10 @@ def upload_nav_history(gist_id):
             stale_payload[stale] = None
         if stale_payload:
             requests.patch(f"https://api.github.com/gists/{gist_id}",
-                           headers=HEADERS, json={"files": stale_payload}, timeout=60)
+                           headers=get_headers(), json={"files": stale_payload}, timeout=60)
 
-    # Upload in batches of 10 files
-    BATCH_SIZE = 10
+    # Upload in batches of 5 files — keeps each batch under ~25MB to avoid GitHub's content size limit
+    BATCH_SIZE = 5
     batches = [local_files[i:i+BATCH_SIZE] for i in range(0, len(local_files), BATCH_SIZE)]
     failed  = []
 
@@ -103,9 +108,9 @@ def upload_nav_history(gist_id):
             files_payload[fname] = {"content": content}
         resp = requests.patch(
             f"https://api.github.com/gists/{gist_id}",
-            headers=HEADERS,
+            headers=get_headers(),
             json={"files": files_payload},
-            timeout=120,
+            timeout=180,
         )
         if resp.status_code == 200:
             print(f"✅")
@@ -124,7 +129,7 @@ def upload_nav_history(gist_id):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 print("=" * 60)
-print("FundLens Pipeline v4.0 — Cell 2: Upload")
+print("FundLens Pipeline v4.1 — Cell 2: Upload")
 print("=" * 60)
 
 # ── VALIDATION GATE — aborts cell if data quality fails ──────────────────────
