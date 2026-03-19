@@ -43,7 +43,7 @@ HISTORY_MONTHS         = 60   # 5 years — needed for 3Y/5Y return computation
 RISK_FREE_RATE_ANNUAL  = 0.065
 REQUEST_DELAY_SEC      = 1.5
 MAX_RETRIES            = 3
-NAV_HISTORY_DIR        = "nav_history"
+NAV_HISTORY_DIR        = "."          # Write nav_*.json to CWD root (Cell 2 reads from here)
 
 TODAY     = date.today()
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
@@ -178,6 +178,19 @@ def fetch_scheme_master():
                     display_category = "Index - ETF"
                 else:
                     display_category = "Index - Index Fund"
+
+            # Name-based overrides for categories AMFI doesn't expose in master CSV
+            # ETF and FOF schemes have blank SchemeCategory in AMFI download —
+            # classify by scheme name instead (same approach as Index above)
+            if display_category in ("Other", "ETF"):
+                name_lower = (nav_name or scheme_name).lower()
+                if "etf" in name_lower or "exchange traded fund" in name_lower:
+                    display_category = "Index - ETF"
+                elif "fund of fund" in name_lower or " fof" in name_lower:
+                    display_category = "Fund of Funds"
+                elif "gold fund" in name_lower or "silver fund" in name_lower:
+                    # Gold/Silver funds-of-funds (non-ETF) — keep as "Fund of Funds"
+                    display_category = "Fund of Funds"
 
             # Close Ended and Interval get explicit labels
             if structure == "Close Ended":
@@ -509,7 +522,8 @@ def split_nav_history(schemes_out, nav_history):
       - File is browser-cached — second click in same category is instant
     """
     print("\n[Step 7] Splitting NAV history...")
-    os.makedirs(NAV_HISTORY_DIR, exist_ok=True)
+    if NAV_HISTORY_DIR != ".":
+        os.makedirs(NAV_HISTORY_DIR, exist_ok=True)
 
     split = defaultdict(dict)
     for s in schemes_out:
@@ -612,7 +626,7 @@ def assemble_and_save(master, current_navs, nav_history):
         "schemeCount":     len(schemes_out),
         "historyMonths":   HISTORY_MONTHS,
         "source":          "AMFI Direct",
-        "pipelineVersion": "4.1",
+        "pipelineVersion": "4.2",
     }
 
     files = {
