@@ -268,9 +268,9 @@ function GrowthChart({ slots, results, obsDate }) {
     const xS = i => pad.left + (i / (allDates.length - 1)) * cW;
     const yS = v => pad.top + cH - (v / yMax) * cH;
 
-    // Grid + Y labels
-    ctx.strokeStyle = "rgba(99,91,255,0.07)"; ctx.lineWidth = 0.5;
-    ctx.fillStyle = "#8b8fa8"; ctx.font = "10px 'DM Mono',monospace"; ctx.textAlign = "right";
+    // Grid + Y labels — white-toned for dark purple background
+    ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 0.5;
+    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "10px 'DM Mono',monospace"; ctx.textAlign = "right";
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (cH / 4) * i, v = yMax * (1 - i / 4);
       ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cW, y); ctx.stroke();
@@ -279,7 +279,7 @@ function GrowthChart({ slots, results, obsDate }) {
     }
 
     // X labels
-    ctx.textAlign = "center"; ctx.fillStyle = "#8b8fa8";
+    ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,255,255,0.5)";
     const step = Math.ceil(allDates.length / 6);
     allDates.forEach((d, i) => {
       if (i % step === 0 || i === allDates.length - 1) {
@@ -292,10 +292,10 @@ function GrowthChart({ slots, results, obsDate }) {
     if (obsDate) {
       const oi = allDates.findIndex(d => d >= obsDate);
       if (oi >= 0) {
-        ctx.strokeStyle = "rgba(99,91,255,0.45)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
         ctx.beginPath(); ctx.moveTo(xS(oi), pad.top + 8); ctx.lineTo(xS(oi), pad.top + cH); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = "#635bff"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
         ctx.fillText("obs ▼", xS(oi), pad.top + 6);
       }
     }
@@ -303,7 +303,7 @@ function GrowthChart({ slots, results, obsDate }) {
     // Individual scheme lines (when > 1)
     if (active.length > 1) {
       active.forEach(({ curve, color }) => {
-        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([]);
+        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.55; ctx.setLineDash([]);
         ctx.beginPath();
         curve.forEach((p, ii) => {
           const di = allDates.indexOf(p.date); if (di < 0) return;
@@ -313,20 +313,20 @@ function GrowthChart({ slots, results, obsDate }) {
       });
     }
 
-    // Invested (dashed)
-    ctx.setLineDash([4, 3]); ctx.strokeStyle = "rgba(99,91,255,0.28)"; ctx.lineWidth = 1.5;
+    // Invested (dashed white)
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5;
     ctx.beginPath();
     blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.invested)) : ctx.lineTo(xS(i), yS(p.invested)));
     ctx.stroke(); ctx.setLineDash([]);
 
-    // Portfolio value — fill + line
+    // Portfolio value — fill + solid white line
     ctx.beginPath();
     blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.value)) : ctx.lineTo(xS(i), yS(p.value)));
     ctx.lineTo(xS(blended.length - 1), pad.top + cH); ctx.lineTo(xS(0), pad.top + cH); ctx.closePath();
     const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
-    grad.addColorStop(0, "rgba(99,91,255,0.16)"); grad.addColorStop(1, "rgba(99,91,255,0)");
+    grad.addColorStop(0, "rgba(255,255,255,0.2)"); grad.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = grad; ctx.fill();
-    ctx.strokeStyle = "#635bff"; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2.5;
     ctx.beginPath();
     blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.value)) : ctx.lineTo(xS(i), yS(p.value)));
     ctx.stroke();
@@ -334,6 +334,168 @@ function GrowthChart({ slots, results, obsDate }) {
 
   return (
     <div style={{ width: "100%", height: 220 }}>
+      <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block" }} />
+    </div>
+  );
+}
+
+// ─── Breakdown Bar Chart (per-scheme stacked grouped bars) ───────────────────
+// Two bars per scheme: Invested | Value — each stacked SIP (bottom) + Lumpsum (top)
+// XIRR label floats above Value bar. Renders on white background (outside summary card).
+function BreakdownChart({ slots, results }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const canvas = ref.current; if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const active = slots
+      .map((s, i) => {
+        const r = results[i]; if (!s.scheme || !r) return null;
+        // SIP and lumpsum breakdowns
+        const sipInv  = r.sipPart?.totalInvested  ?? (s.mode === "sip"  ? r.totalInvested : 0);
+        const sipVal  = r.sipPart?.currentValue   ?? (s.mode === "sip"  ? r.currentValue  : 0);
+        const lsInv   = r.lsPart?.totalInvested   ?? (s.mode === "lumpsum" ? r.totalInvested : 0);
+        const lsVal   = r.lsPart?.currentValue    ?? (s.mode === "lumpsum" ? r.currentValue  : 0);
+        // For "both" mode where parts may not exist (single-mode fallback)
+        const totalInv = r.totalInvested;
+        const totalVal = r.currentValue;
+        return {
+          label: s.scheme.name.split(" ").slice(0, 3).join(" "),
+          color: SLOT_COLORS[i],
+          sipInv:  s.mode === "both" ? sipInv  : (s.mode === "sip" ? totalInv : 0),
+          lsInv:   s.mode === "both" ? lsInv   : (s.mode === "lumpsum" ? totalInv : 0),
+          sipVal:  s.mode === "both" ? sipVal  : (s.mode === "sip" ? totalVal : 0),
+          lsVal:   s.mode === "both" ? lsVal   : (s.mode === "lumpsum" ? totalVal : 0),
+          xirr:    r.xirr,
+        };
+      })
+      .filter(Boolean);
+
+    if (!active.length) return;
+
+    const pad    = { top: 36, right: 16, bottom: 52, left: 68 };
+    const cW     = W - pad.left - pad.right;
+    const cH     = H - pad.top - pad.bottom;
+    const n      = active.length;
+    const groupW = cW / n;
+    const barW   = Math.min(groupW * 0.28, 36);
+    const gap    = Math.min(groupW * 0.06, 8);
+
+    const yMax = Math.max(...active.map(d => Math.max(d.sipInv + d.lsInv, d.sipVal + d.lsVal))) * 1.15;
+    const yS   = v => pad.top + cH - (v / yMax) * cH;
+
+    // Grid lines + Y labels
+    ctx.strokeStyle = "rgba(99,91,255,0.07)"; ctx.lineWidth = 0.5;
+    ctx.fillStyle = "#8b8fa8"; ctx.font = "10px 'DM Mono',monospace"; ctx.textAlign = "right";
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + (cH / 4) * i, v = yMax * (1 - i / 4);
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cW, y); ctx.stroke();
+      const lbl = v >= 10000000 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 100000 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}k`;
+      ctx.fillText(lbl, pad.left - 5, y + 3);
+    }
+
+    active.forEach((d, gi) => {
+      const gx    = pad.left + gi * groupW + groupW / 2;
+      const invX  = gx - gap / 2 - barW;
+      const valX  = gx + gap / 2;
+
+      // ── Invested bar (SIP bottom + LS top, muted color) ──────────────────
+      const invTotal = d.sipInv + d.lsInv;
+      if (invTotal > 0) {
+        // SIP segment
+        if (d.sipInv > 0) {
+          const bh = (d.sipInv / yMax) * cH;
+          ctx.fillStyle = d.color + "55"; // 33% opacity
+          ctx.fillRect(invX, yS(d.sipInv), barW, bh);
+        }
+        // Lumpsum segment on top
+        if (d.lsInv > 0) {
+          const sipH = (d.sipInv / yMax) * cH;
+          const lsH  = (d.lsInv / yMax) * cH;
+          ctx.fillStyle = d.color + "33"; // lighter
+          ctx.fillRect(invX, yS(invTotal), barW, lsH);
+          // Divider line between SIP and LS on invested bar
+          if (d.sipInv > 0 && d.lsInv > 0) {
+            ctx.strokeStyle = d.color + "60"; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.moveTo(invX, yS(d.sipInv)); ctx.lineTo(invX + barW, yS(d.sipInv)); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+        // "Invested" label below
+        ctx.fillStyle = "#8b8fa8"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
+        ctx.fillText("Inv", invX + barW / 2, pad.top + cH + 14);
+      }
+
+      // ── Value bar (SIP bottom + LS top, full color) ────────────────────
+      const valTotal = d.sipVal + d.lsVal;
+      if (valTotal > 0) {
+        // SIP segment
+        if (d.sipVal > 0) {
+          ctx.fillStyle = d.color + "cc"; // 80% opacity
+          ctx.fillRect(valX, yS(d.sipVal), barW, (d.sipVal / yMax) * cH);
+        }
+        // Lumpsum segment on top
+        if (d.lsVal > 0) {
+          ctx.fillStyle = d.color; // full opacity
+          ctx.fillRect(valX, yS(valTotal), barW, (d.lsVal / yMax) * cH);
+          // Divider
+          if (d.sipVal > 0 && d.lsVal > 0) {
+            ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(valX, yS(d.sipVal)); ctx.lineTo(valX + barW, yS(d.sipVal)); ctx.stroke();
+          }
+        }
+        // "Value" label below
+        ctx.fillStyle = "#8b8fa8"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
+        ctx.fillText("Val", valX + barW / 2, pad.top + cH + 14);
+
+        // XIRR label above value bar
+        if (d.xirr != null) {
+          const xLabel = `${d.xirr >= 0 ? "+" : ""}${(d.xirr * 100).toFixed(1)}%`;
+          ctx.fillStyle = d.color;
+          ctx.font = "bold 10px 'DM Mono',monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(xLabel, valX + barW / 2, yS(valTotal) - 5);
+        }
+      }
+
+      // Scheme label below group
+      ctx.fillStyle = "#1a1a2e"; ctx.font = "10px 'Syne',sans-serif"; ctx.textAlign = "center";
+      // Truncate label to fit group width
+      const maxChars = Math.floor(groupW / 6);
+      const truncLabel = d.label.length > maxChars ? d.label.slice(0, maxChars - 1) + "…" : d.label;
+      ctx.fillText(truncLabel, gx, pad.top + cH + 30);
+    });
+
+    // Legend at top
+    const legendItems = [
+      { label: "SIP invested",  alpha: "55" },
+      { label: "LS invested",   alpha: "33" },
+      { label: "SIP value",     alpha: "cc" },
+      { label: "LS value",      alpha: "ff" },
+    ];
+    // Use first active scheme's color for legend swatches
+    const lc = active[0].color;
+    let lx = pad.left;
+    ctx.font = "9px 'Syne',sans-serif"; ctx.textAlign = "left";
+    legendItems.forEach(({ label, alpha }) => {
+      ctx.fillStyle = lc + alpha;
+      ctx.fillRect(lx, 12, 10, 10);
+      ctx.fillStyle = "#8b8fa8";
+      ctx.fillText(label, lx + 13, 21);
+      lx += ctx.measureText(label).width + 26;
+    });
+    ctx.fillStyle = "#635bff"; ctx.font = "bold 9px 'DM Mono',monospace";
+    ctx.fillText("XIRR above value bar", lx, 21);
+
+  }, [slots, results]);
+
+  return (
+    <div style={{ width: "100%", height: Math.max(200, 160 + slots.filter((s, i) => s.scheme && results[i]).length * 20) }}>
       <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block" }} />
     </div>
   );
@@ -876,6 +1038,9 @@ export default function SchemeBasket() {
                   return <div key={i} style={{ width: `${(r.currentValue / totalValue) * 100}%`, background: SLOT_COLORS[i], transition: "width 0.4s" }} />;
                 })}
               </div>
+
+              {/* Scheme breakdown bar chart */}
+              <BreakdownChart slots={slots} results={results} />
 
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
