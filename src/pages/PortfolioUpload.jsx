@@ -7,6 +7,10 @@ const GITHUB_REPO   = "FundInsight";
 const GITHUB_BRANCH = "main";
 const GITHUB_TOKEN  = import.meta.env.VITE_GITHUB_PAT;
 
+// Raw URL for holdings_latest.csv — used for duplicate check
+const HOLDINGS_CSV_URL =
+  "https://raw.githubusercontent.com/anjaneyakg/FundInsight/main/data/processed/holdings_latest.csv";
+
 async function saveFileToGitHub(path, fileBuffer, commitMessage) {
   const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
   let sha = null;
@@ -21,6 +25,36 @@ async function saveFileToGitHub(path, fileBuffer, commitMessage) {
   });
   if (!res.ok) { const err = await res.json(); throw new Error(err.message || `GitHub error ${res.status}`); }
   return res.json();
+}
+
+// Check holdings_latest.csv for existing rows matching amc + month
+// Returns { exists: bool, rowCount: number }
+async function checkDuplicate(amcName, month) {
+  try {
+    const res = await fetch(`${HOLDINGS_CSV_URL}?t=${Date.now()}`);
+    if (!res.ok) return { exists: false, rowCount: 0 }; // CSV not found yet — first upload
+    const text = await res.text();
+    const lines = text.split("\n").filter(Boolean);
+    if (lines.length < 2) return { exists: false, rowCount: 0 };
+
+    // Parse header to find amc_name and portfolio_date column indices
+    const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+    const amcIdx  = headers.indexOf("amc_name");
+    const dateIdx = headers.indexOf("portfolio_date");
+    if (amcIdx === -1 || dateIdx === -1) return { exists: false, rowCount: 0 };
+
+    // Month is YYYY-MM, portfolio_date is YYYY-MM-DD — match by prefix
+    const matchingRows = lines.slice(1).filter(line => {
+      const cols = line.split(",");
+      const rowAmc  = (cols[amcIdx]  || "").trim().replace(/^"|"$/g, "");
+      const rowDate = (cols[dateIdx] || "").trim().replace(/^"|"$/g, "");
+      return rowAmc === amcName && rowDate.startsWith(month);
+    });
+
+    return { exists: matchingRows.length > 0, rowCount: matchingRows.length };
+  } catch {
+    return { exists: false, rowCount: 0 }; // On any error, allow upload to proceed
+  }
 }
 
 function formatBytes(b) {
@@ -51,22 +85,45 @@ export default function PortfolioUpload() {
   const [result,      setResult]      = useState(null);
   const [errorMsg,    setErrorMsg]    = useState("");
   const [progress,    setProgress]    = useState(0);
+
+  // ── Duplicate guard state
+  const [dupCheck,       setDupCheck]       = useState(null);   // { exists, rowCount } | null
+  const [dupChecking,    setDupChecking]    = useState(false);  // spinner while checking CSV
+  const [dupConfirmed,   setDupConfirmed]   = useState(false);  // user clicked "Yes, overwrite"
+
   const fileInputRef = useRef(null);
 
   const acceptFile = useCallback((f) => {
     const lower = f.name.toLowerCase();
-    if (![".xlsx", ".xls", ".zip"].some((e) => lower.endsWith(e))) {
+    if (![ ".xlsx", ".xls", ".zip" ].some((e) => lower.endsWith(e))) {
       setErrorMsg("Only .xlsx, .xls, and .zip files are accepted."); return;
     }
     setFile(f); setErrorMsg(""); setStatus("idle"); setResult(null);
+    // Reset duplicate state when a new file is selected
+    setDupCheck(null); setDupConfirmed(false);
   }, []);
 
   const effectiveAmc = useCustom ? customAmc.trim() : (selectedAmc?.name || "");
-  const canSubmit    = !!effectiveAmc && !!month && !!file && status !== "uploading";
+  const canSubmit    = !!effectiveAmc && !!month && !!file && status !== "uploading" && !dupChecking;
 
+  // ── Upload handler — with duplicate guard
   async function handleUpload() {
     if (!canSubmit) return;
     if (!GITHUB_TOKEN) { setErrorMsg("VITE_GITHUB_PAT is not set in Vercel environment variables."); return; }
+
+    // Step 1 — if we haven't checked for duplicates yet, check now
+    if (!dupCheck && !dupConfirmed) {
+      setDupChecking(true);
+      const check = await checkDuplicate(effectiveAmc, month);
+      setDupChecking(false);
+      setDupCheck(check);
+
+      // If duplicate found — stop here and show warning. User must confirm.
+      if (check.exists) return;
+      // No duplicate — fall through to upload immediately
+    }
+
+    // Step 2 — proceed with upload
     setStatus("uploading"); setProgress(10); setErrorMsg("");
     const t = setInterval(() => setProgress((p) => Math.min(p + Math.random() * 15, 85)), 200);
     try {
@@ -77,6 +134,7 @@ export default function PortfolioUpload() {
       clearInterval(t); setProgress(100);
       setResult({ amc: effectiveAmc, month, path: rawPath, size: file.size });
       setStatus("success");
+      setDupCheck(null); setDupConfirmed(false);
     } catch (err) {
       clearInterval(t); setProgress(0); setStatus("error");
       setErrorMsg(err.message || "Upload failed. Check your GitHub token.");
@@ -86,6 +144,7 @@ export default function PortfolioUpload() {
   function reset() {
     setFile(null); setStatus("idle"); setResult(null);
     setErrorMsg(""); setProgress(0);
+    setDupCheck(null); setDupConfirmed(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -104,6 +163,8 @@ export default function PortfolioUpload() {
         .pu-btn { width:100%; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:10px; padding:13px; font-size:14px; font-weight:600; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; letter-spacing:0.02em; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(99,102,241,0.3); transition:opacity 0.15s,transform 0.1s; }
         .pu-btn:hover:not(:disabled) { opacity:0.92; transform:translateY(-1px); }
         .pu-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; box-shadow:none; }
+        .pu-btn-warn { width:100%; background:linear-gradient(135deg,#d97706,#b45309); color:#fff; border:none; border-radius:10px; padding:13px; font-size:14px; font-weight:600; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; letter-spacing:0.02em; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(217,119,6,0.3); transition:opacity 0.15s,transform 0.1s; }
+        .pu-btn-warn:hover { opacity:0.92; transform:translateY(-1px); }
         .pu-ghost { background:none; border:1.5px solid #e5e7eb; border-radius:10px; padding:9px 18px; font-size:13px; font-weight:500; color:#6b7280; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; transition:all 0.15s; }
         .pu-ghost:hover { border-color:#6366f1; color:#4f46e5; }
         .pu-link { background:none; border:none; color:#6366f1; font-size:12px; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; padding:4px 0 0; font-weight:500; }
@@ -137,7 +198,10 @@ export default function PortfolioUpload() {
               <div style={{ position: "relative" }}>
                 <select className="pu-select"
                   value={selectedAmc?.id || ""}
-                  onChange={(e) => setSelectedAmc(AMC_LIST.find((a) => a.id === e.target.value) || null)}>
+                  onChange={(e) => {
+                    setSelectedAmc(AMC_LIST.find((a) => a.id === e.target.value) || null);
+                    setDupCheck(null); setDupConfirmed(false);
+                  }}>
                   <option value="">— select AMC —</option>
                   {[4, 1, 3].map((cat) => grouped[cat]?.length ? (
                     <optgroup key={cat} label={CAT_LABELS[cat]}>
@@ -148,9 +212,11 @@ export default function PortfolioUpload() {
                 <span style={s.arrow}>▾</span>
               </div>
             ) : (
-              <input className="pu-input" type="text" placeholder="Type AMC name exactly" value={customAmc} onChange={(e) => setCustomAmc(e.target.value)} autoFocus />
+              <input className="pu-input" type="text" placeholder="Type AMC name exactly" value={customAmc}
+                onChange={(e) => { setCustomAmc(e.target.value); setDupCheck(null); setDupConfirmed(false); }}
+                autoFocus />
             )}
-            <button className="pu-link" onClick={() => { setUseCustom(!useCustom); setSelectedAmc(null); setCustomAmc(""); }}>
+            <button className="pu-link" onClick={() => { setUseCustom(!useCustom); setSelectedAmc(null); setCustomAmc(""); setDupCheck(null); }}>
               {useCustom ? "← Back to list" : "AMC not in list? Type manually →"}
             </button>
             {selectedAmc?.note && (
@@ -164,7 +230,9 @@ export default function PortfolioUpload() {
           {/* Month */}
           <div style={s.field}>
             <label style={s.label}>Portfolio closing month</label>
-            <input className="pu-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ colorScheme: "light" }} />
+            <input className="pu-input" type="month" value={month}
+              onChange={(e) => { setMonth(e.target.value); setDupCheck(null); setDupConfirmed(false); }}
+              style={{ colorScheme: "light" }} />
             {month && <span style={s.monthHint}>{getMonthLabel(month)}</span>}
           </div>
 
@@ -178,7 +246,9 @@ export default function PortfolioUpload() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]); }}
             >
-              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.zip" onChange={(e) => e.target.files?.[0] && acceptFile(e.target.files[0])} style={{ display: "none" }} />
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.zip"
+                onChange={(e) => e.target.files?.[0] && acceptFile(e.target.files[0])}
+                style={{ display: "none" }} />
               {!file ? (
                 <>
                   <div style={s.dropIcon}>☁</div>
@@ -200,11 +270,45 @@ export default function PortfolioUpload() {
 
           {errorMsg && <div style={s.errorBar}><span>⚠</span> {errorMsg}</div>}
 
-          <button className="pu-btn" onClick={handleUpload} disabled={!canSubmit}>
-            {status === "uploading"
-              ? <><span style={s.spinner} /> Uploading to GitHub…</>
-              : "Upload to GitHub →"}
-          </button>
+          {/* ── Duplicate warning banner ── */}
+          {dupCheck?.exists && !dupConfirmed && (
+            <div style={s.dupWarn}>
+              <div style={s.dupWarnIcon}>⚠</div>
+              <div style={{ flex: 1 }}>
+                <div style={s.dupWarnTitle}>
+                  Data already exists for {effectiveAmc} · {getMonthLabel(month)}
+                </div>
+                <div style={s.dupWarnBody}>
+                  <strong>{dupCheck.rowCount.toLocaleString("en-IN")} rows</strong> are currently in{" "}
+                  <code style={s.inlineCode}>holdings_latest.csv</code> for this AMC and month.
+                  Uploading will overwrite them when you run Cell 7M.
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button className="pu-btn-warn"
+                    style={{ flex: 1, padding: "9px", fontSize: 13 }}
+                    onClick={() => { setDupConfirmed(true); setDupCheck(null); }}>
+                    Yes, overwrite →
+                  </button>
+                  <button className="pu-ghost"
+                    style={{ flex: 1, padding: "9px", fontSize: 13 }}
+                    onClick={reset}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Main upload button ── */}
+          {!(dupCheck?.exists && !dupConfirmed) && (
+            <button className="pu-btn" onClick={handleUpload} disabled={!canSubmit}>
+              {dupChecking
+                ? <><span style={s.spinner} /> Checking for existing data…</>
+                : status === "uploading"
+                ? <><span style={s.spinner} /> Uploading to GitHub…</>
+                : "Upload to GitHub →"}
+            </button>
+          )}
 
           {status === "uploading" && (
             <div style={s.progressTrack}>
@@ -334,4 +438,9 @@ const s = {
   nextBody:    { fontSize: 12, color: "#047857", lineHeight: 1.7 },
   errorBadge:  { fontSize: 14, fontWeight: 700, color: "#dc2626", marginBottom: 10 },
   errorDetail: { fontSize: 12, color: "#b91c1c", lineHeight: 1.7 },
+  // Duplicate warning
+  dupWarn:     { display: "flex", gap: 12, alignItems: "flex-start", background: "#fffbeb", border: "1.5px solid #fcd34d", borderRadius: 12, padding: "14px 16px", marginBottom: 16 },
+  dupWarnIcon: { fontSize: 18, flexShrink: 0, marginTop: 1 },
+  dupWarnTitle:{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 6 },
+  dupWarnBody: { fontSize: 12, color: "#78350f", lineHeight: 1.7 },
 };
