@@ -170,11 +170,13 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
   }
 
   // ── Combine ───────────────────────────────────────────────────────────────
-  let primary = null;
   if (!sipRes && !lsRes) return null;
-  if (!sipRes) primary = lsRes;
-  else if (!lsRes) primary = sipRes;
-  else {
+  let primary = null;
+  if (!sipRes) {
+    primary = { ...lsRes, sipPart: null, lsPart: lsRes };
+  } else if (!lsRes) {
+    primary = { ...sipRes, sipPart: sipRes, lsPart: null };
+  } else {
     const totalInvested = sipRes.totalInvested + lsRes.totalInvested;
     const currentValue  = sipRes.currentValue  + lsRes.currentValue;
     const gain          = currentValue - totalInvested;
@@ -196,6 +198,7 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
       xirr, curve,
       startedLate: sipRes.startedLate, adjustedStart: sipRes.adjustedStart,
       lsDateAdj: lsRes.lsDateAdj, adjustedLsDate: lsRes.adjustedLsDate,
+      sipPart: sipRes, lsPart: lsRes,
     };
   }
 
@@ -234,6 +237,8 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
 }
 
 // ─── Growth Chart (Canvas) ────────────────────────────────────────────────────
+// Light background, dark lines. Shows: blended portfolio value + per-scheme value lines.
+// Invested line and obs date removed from chart — obs date shown as vertical marker only.
 function GrowthChart({ slots, results, obsDate }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -242,68 +247,70 @@ function GrowthChart({ slots, results, obsDate }) {
     const W = canvas.clientWidth, H = canvas.clientHeight;
     canvas.width = W * dpr; canvas.height = H * dpr;
     const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, W, H);
+
+    // Light background
+    ctx.fillStyle = "#f5f4ff";
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(0, 0, W, H, 8) : ctx.rect(0, 0, W, H);
+    ctx.fill();
 
     const active = slots
-      .map((s, i) => s.scheme && results[i] ? { curve: results[i].curve, color: SLOT_COLORS[i] } : null)
+      .map((s, i) => s.scheme && results[i] ? { curve: results[i].curve, color: SLOT_COLORS[i], name: s.scheme.name.split(" ").slice(0, 2).join(" ") } : null)
       .filter(Boolean);
     if (!active.length) return;
 
-    const pad = { top: 14, right: 16, bottom: 36, left: 68 };
+    const pad = { top: 16, right: 16, bottom: 36, left: 68 };
     const cW = W - pad.left - pad.right, cH = H - pad.top - pad.bottom;
 
     const allDates = [...new Set(active.flatMap(a => a.curve.map(p => p.date)))].sort();
     if (allDates.length < 2) return;
 
     const blended = allDates.map(date => {
-      let inv = 0, val = 0;
-      active.forEach(({ curve }) => {
-        const p = curve.find(q => q.date === date);
-        if (p) { inv += p.invested; val += p.value; }
-      });
-      return { date, invested: inv, value: val };
+      let val = 0;
+      active.forEach(({ curve }) => { const p = curve.find(q => q.date === date); if (p) val += p.value; });
+      return { date, value: val };
     });
 
-    const yMax = Math.max(...blended.map(p => Math.max(p.value, p.invested))) * 1.06;
+    const yMax = Math.max(...blended.map(p => p.value)) * 1.08;
     const xS = i => pad.left + (i / (allDates.length - 1)) * cW;
     const yS = v => pad.top + cH - (v / yMax) * cH;
 
-    // Grid + Y labels — white-toned for dark purple background
-    ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 0.5;
-    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "10px 'DM Mono',monospace"; ctx.textAlign = "right";
+    // Grid lines + Y labels (dark on light bg)
+    ctx.strokeStyle = "rgba(99,91,255,0.1)"; ctx.lineWidth = 0.5;
+    ctx.fillStyle = "#6b7280"; ctx.font = "10px 'DM Mono',monospace"; ctx.textAlign = "right";
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (cH / 4) * i, v = yMax * (1 - i / 4);
       ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cW, y); ctx.stroke();
-      const lbl = v >= 10000000 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 100000 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}k`;
+      const lbl = v >= 10000000 ? "₹" + (v/1e7).toFixed(1) + "Cr" : v >= 100000 ? "₹" + (v/1e5).toFixed(0) + "L" : "₹" + (v/1000).toFixed(0) + "k";
       ctx.fillText(lbl, pad.left - 5, y + 3);
     }
 
     // X labels
-    ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.textAlign = "center"; ctx.fillStyle = "#6b7280";
     const step = Math.ceil(allDates.length / 6);
     allDates.forEach((d, i) => {
       if (i % step === 0 || i === allDates.length - 1) {
         const dt = new Date(d);
-        ctx.fillText(`${dt.toLocaleString("en-IN", { month: "short" })} ${dt.getFullYear()}`, xS(i), pad.top + cH + 18);
+        ctx.fillText(dt.toLocaleString("en-IN", { month: "short" }) + " " + dt.getFullYear(), xS(i), pad.top + cH + 18);
       }
     });
 
-    // Observation date marker
+    // Observation date vertical marker (just a line, NOT a legend item)
     if (obsDate) {
       const oi = allDates.findIndex(d => d >= obsDate);
       if (oi >= 0) {
-        ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-        ctx.beginPath(); ctx.moveTo(xS(oi), pad.top + 8); ctx.lineTo(xS(oi), pad.top + cH); ctx.stroke();
+        ctx.strokeStyle = "rgba(99,91,255,0.4)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(xS(oi), pad.top); ctx.lineTo(xS(oi), pad.top + cH); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
-        ctx.fillText("obs ▼", xS(oi), pad.top + 6);
+        ctx.fillStyle = "#635bff"; ctx.font = "9px 'DM Mono',monospace"; ctx.textAlign = "center";
+        ctx.fillText(fmtD(obsDate), xS(oi), pad.top + cH + 30);
       }
     }
 
-    // Individual scheme lines (when > 1)
+    // Per-scheme value lines (when > 1 scheme, draw each individually)
     if (active.length > 1) {
       active.forEach(({ curve, color }) => {
-        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.55; ctx.setLineDash([]);
+        ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7; ctx.setLineDash([]);
         ctx.beginPath();
         curve.forEach((p, ii) => {
           const di = allDates.indexOf(p.date); if (di < 0) return;
@@ -313,20 +320,15 @@ function GrowthChart({ slots, results, obsDate }) {
       });
     }
 
-    // Invested (dashed white)
-    ctx.setLineDash([4, 3]); ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.invested)) : ctx.lineTo(xS(i), yS(p.invested)));
-    ctx.stroke(); ctx.setLineDash([]);
-
-    // Portfolio value — fill + solid white line
+    // Blended portfolio value — fill + bold dark line
+    ctx.setLineDash([]);
     ctx.beginPath();
     blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.value)) : ctx.lineTo(xS(i), yS(p.value)));
     ctx.lineTo(xS(blended.length - 1), pad.top + cH); ctx.lineTo(xS(0), pad.top + cH); ctx.closePath();
     const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
-    grad.addColorStop(0, "rgba(255,255,255,0.2)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+    grad.addColorStop(0, "rgba(99,91,255,0.18)"); grad.addColorStop(1, "rgba(99,91,255,0.02)");
     ctx.fillStyle = grad; ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#4338ca"; ctx.lineWidth = 2.5;
     ctx.beginPath();
     blended.forEach((p, i) => i === 0 ? ctx.moveTo(xS(i), yS(p.value)) : ctx.lineTo(xS(i), yS(p.value)));
     ctx.stroke();
@@ -334,7 +336,7 @@ function GrowthChart({ slots, results, obsDate }) {
 
   return (
     <div style={{ width: "100%", height: 220 }}>
-      <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block" }} />
+      <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block", borderRadius: 8 }} />
     </div>
   );
 }
@@ -992,29 +994,25 @@ export default function SchemeBasket() {
                 ))}
               </div>
 
-              {/* Chart */}
-              <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 10, padding: "14px 16px" }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 10, fontSize: 11, opacity: 0.75 }}>
+              {/* Chart 1 — portfolio value over time */}
+              <div style={{ borderRadius: 10, overflow: "hidden", padding: "14px 0 0" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 10, fontSize: 11, opacity: 0.85 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ width: 16, height: 2, background: "rgba(255,255,255,0.9)", display: "inline-block" }} />
+                    <span style={{ width: 20, height: 3, background: "#4338ca", display: "inline-block", borderRadius: 2 }} />
                     Portfolio value
                   </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ width: 16, borderTop: "2px dashed rgba(255,255,255,0.4)", display: "inline-block" }} />
-                    Invested
-                  </span>
-                  {obsDate && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ width: 16, borderTop: "2px dashed rgba(255,255,255,0.7)", display: "inline-block" }} />
-                      Obs date
-                    </span>
-                  )}
-                  {slots.length > 1 && slots.map((s, i) => s.scheme && results[i] ? (
+                  {slots.map((s, i) => s.scheme && results[i] ? (
                     <span key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ width: 16, height: 2, background: SLOT_COLORS[i], opacity: 0.8, display: "inline-block" }} />
+                      <span style={{ width: 16, height: 2, background: SLOT_COLORS[i], display: "inline-block", borderRadius: 1, opacity: 0.85 }} />
                       <span>{s.scheme.name.split(" ").slice(0, 2).join(" ")}</span>
                     </span>
                   ) : null)}
+                  {obsDate && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, opacity: 0.7 }}>
+                      <span style={{ width: 1, height: 12, background: "rgba(255,255,255,0.7)", display: "inline-block" }} />
+                      <span style={{ fontSize: 10 }}>obs {fmtD(obsDate)}</span>
+                    </span>
+                  )}
                 </div>
                 <GrowthChart slots={slots} results={results} obsDate={obsDate} />
               </div>
