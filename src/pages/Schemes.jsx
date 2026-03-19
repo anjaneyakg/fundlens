@@ -6,6 +6,7 @@ import { useLocation } from "react-router-dom";
 const DATA_URL      = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 const CATINDEX_URL  = "https://gist.githubusercontent.com/anjaneyakg/377985ac0904a27a0a328c0834faffda/raw/fundlens_category_index.json";
 const NAVHIST_BASE  = "https://gist.githubusercontent.com/anjaneyakg/6f82d116b7067a8d13aa620e99aa783f/raw";
+const RATIOS_URL    = "https://gist.githubusercontent.com/anjaneyakg/90d783d7de0ba4a67b53138dd922a552/raw/fundlens_ratios.json";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n >= 1000 ? `₹${(n/1000).toFixed(1)}K Cr` : `₹${n} Cr`;
@@ -804,6 +805,11 @@ export default function App() {
   const [peerNavHist,    setPeerNavHist]    = useState(null);      // NAV history for selected scheme's category
   const [peerNavLoading, setPeerNavLoading] = useState(false);
   const [peerYearReturns,setPeerYearReturns]= useState({});        // {schemeId: {2024:12.4,...}}
+  // Ratios state — fetched once on first scheme click, cached for session
+  const [ratiosMap,      setRatiosMap]      = useState({});        // {schemeId: {stdDev,sharpe,sortino,maxDrawdown}}
+  const [ratiosLoaded,   setRatiosLoaded]   = useState(false);
+  const [ratiosLoading,  setRatiosLoading]  = useState(false);
+  const [selectedRatios, setSelectedRatios] = useState(null);      // ratios for currently selected scheme
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
 
   useEffect(() => {
@@ -900,6 +906,35 @@ export default function App() {
       .catch(() => { setPeerNavHist(null); setPeerYearReturns({}); })
       .finally(() => setPeerNavLoading(false));
   }, [selected?.id]);
+
+  // Fetch ratios Gist once on first scheme click — cache for the session
+  const loadRatios = useCallback(async () => {
+    if (ratiosLoaded || ratiosLoading) return;
+    setRatiosLoading(true);
+    try {
+      const resp = await fetch(RATIOS_URL);
+      if (!resp.ok) throw new Error(`Ratios HTTP ${resp.status}`);
+      const json = await resp.json();
+      setRatiosMap(json.ratios || {});
+      setRatiosLoaded(true);
+    } catch (e) {
+      console.warn("Ratios fetch failed:", e.message);
+    } finally {
+      setRatiosLoading(false);
+    }
+  }, [ratiosLoaded, ratiosLoading]);
+
+  // When scheme selected: trigger ratios load (first time only)
+  useEffect(() => {
+    if (!selected) { setSelectedRatios(null); return; }
+    loadRatios();
+  }, [selected?.id]);
+
+  // When ratiosMap populates, update selectedRatios
+  useEffect(() => {
+    if (!selected) return;
+    setSelectedRatios(ratiosMap[String(selected.id)] || null);
+  }, [ratiosMap, selected?.id]);
 
   // Auto-select scheme when navigated from Z8 Category Leaderboard
   const location = useLocation();
@@ -1474,28 +1509,35 @@ export default function App() {
                 </div>
 
                 {/* Risk metrics */}
-                <div className="panel-section-title">Risk Metrics (252-day)</div>
+                <div className="panel-section-title">Risk Metrics (252-day)
+                  {ratiosLoading && (
+                    <span style={{marginLeft:"8px",fontFamily:"'DM Mono'",fontSize:"9px",
+                      color:"var(--muted)",verticalAlign:"middle"}}>
+                      ⟳ loading…
+                    </span>
+                  )}
+                </div>
                 <div className="info-grid">
                   <div className="info-tile">
                     <div className="info-label">Sharpe Ratio</div>
-                    <div className="info-val" style={{color: (selected.risk?.sharpe??0)>1?"var(--violet)":"var(--text)"}}>
-                      {selected.risk?.sharpe ?? "—"}
+                    <div className="info-val" style={{color: (selectedRatios?.sharpe??0)>1?"var(--violet)":"var(--text)"}}>
+                      {selectedRatios?.sharpe != null ? selectedRatios.sharpe.toFixed(2) : "—"}
                     </div>
                   </div>
                   <div className="info-tile">
                     <div className="info-label">Std Dev (Ann.)</div>
-                    <div className="info-val">{selected.risk?.stdDev != null ? `${selected.risk.stdDev}%` : "—"}</div>
+                    <div className="info-val">{selectedRatios?.stdDev != null ? `${selectedRatios.stdDev.toFixed(2)}%` : "—"}</div>
                   </div>
                   <div className="info-tile">
                     <div className="info-label">Max Drawdown</div>
                     <div className="info-val" style={{color:"var(--red)"}}>
-                      {selected.risk?.maxDD != null ? `${selected.risk.maxDD}%` : "—"}
+                      {selectedRatios?.maxDrawdown != null ? `${selectedRatios.maxDrawdown.toFixed(2)}%` : "—"}
                     </div>
                   </div>
                   <div className="info-tile">
-                    <div className="info-label">Risk Grade</div>
-                    <div className="info-val" style={{color:riskColor(selected.risk?.grade)}}>
-                      {selected.risk?.grade ?? "—"}
+                    <div className="info-label">Sortino Ratio</div>
+                    <div className="info-val" style={{color:(selectedRatios?.sortino??0)>1?"var(--emerald)":"var(--text)"}}>
+                      {selectedRatios?.sortino != null ? selectedRatios.sortino.toFixed(2) : "—"}
                     </div>
                   </div>
                 </div>
@@ -1522,10 +1564,12 @@ export default function App() {
                       if (peerReturnMode === "p2p") return p.returns?.[peerPeriod] ?? null;
                       return peerYearReturns[p.id]?.[peerYear] ?? null;
                     }
-                    if (peerMetric === "sharpe")  return p.risk?.sharpe   ?? null;
-                    if (peerMetric === "stddev")  return p.risk?.stdDev   ?? null;
-                    if (peerMetric === "maxdd")   return p.risk?.maxDrawdown ?? null;
-                    if (peerMetric === "sortino") return p.risk?.sortino  ?? null;
+                    // Ratios: prefer ratiosMap (from dedicated Gist), fall back to p.risk
+                    const r = ratiosMap[String(p.id)];
+                    if (peerMetric === "sharpe")  return r?.sharpe      ?? p.risk?.sharpe   ?? null;
+                    if (peerMetric === "stddev")  return r?.stdDev      ?? p.risk?.stdDev   ?? null;
+                    if (peerMetric === "maxdd")   return r?.maxDrawdown ?? p.risk?.maxDrawdown ?? null;
+                    if (peerMetric === "sortino") return r?.sortino     ?? p.risk?.sortino  ?? null;
                     return null;
                   };
 
