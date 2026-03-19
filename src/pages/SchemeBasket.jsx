@@ -61,9 +61,14 @@ function fmtD(d) {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function todayStr()      { return new Date().toISOString().slice(0, 10); }
-function monthsAgo(n)    { const d = new Date(); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 7); }
-function yearsAgoDate(n) { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); }
+// Always format dates in local time — never toISOString() which converts to UTC
+// and causes off-by-one day errors in UTC+ timezones (IST = UTC+5:30)
+function pad2(n) { return String(n).padStart(2, "0"); }
+function localDateStr(d) { return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()); }
+function localMonthStr(d) { return d.getFullYear() + "-" + pad2(d.getMonth()+1); }
+function todayStr()      { return localDateStr(new Date()); }
+function monthsAgo(n)    { const d = new Date(); d.setMonth(d.getMonth() - n); return localMonthStr(d); }
+function yearsAgoDate(n) { const d = new Date(); d.setFullYear(d.getFullYear() - n); return localDateStr(d); }
 
 // ─── XIRR (Newton-Raphson) ────────────────────────────────────────────────────
 function calcXIRR(cfs, dates) {
@@ -104,27 +109,33 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
   const firstEntry  = sorted[0];
   const lastEntry   = sorted[sorted.length - 1];
   const endEntry    = obsDateStr ? (navOnOrBefore(sorted, obsDateStr) || lastEntry) : lastEntry;
-  const endDate     = new Date(endEntry.date);
+  // Parse dates as LOCAL to avoid UTC-shift in IST and other UTC+ zones
+  const parseLocalDate = s => new Date(parseInt(s.slice(0,4)), parseInt(s.slice(5,7))-1, parseInt(s.slice(8,10)));
+  const endDate     = parseLocalDate(endEntry.date);
   const endNav      = endEntry.nav;
 
   let sipRes = null, lsRes = null;
 
   // ── SIP ──────────────────────────────────────────────────────────────────
   if (slot.mode === "sip" || slot.mode === "both") {
-    const rawStart     = sipStartStr ? new Date(sipStartStr + "-01") : new Date(firstEntry.date);
-    const clampedStart = rawStart < new Date(firstEntry.date) ? new Date(firstEntry.date) : rawStart;
+    // Parse sipStartStr as LOCAL date to avoid UTC-shift (new Date("YYYY-MM-01") = UTC midnight)
+    const rawStart = sipStartStr
+      ? new Date(parseInt(sipStartStr.slice(0,4)), parseInt(sipStartStr.slice(5,7)) - 1, 1)
+      : new Date(parseInt(firstEntry.date.slice(0,4)), parseInt(firstEntry.date.slice(5,7)) - 1, 1);
+    const firstEntryLocal = new Date(parseInt(firstEntry.date.slice(0,4)), parseInt(firstEntry.date.slice(5,7)) - 1, parseInt(firstEntry.date.slice(8,10)));
+    const clampedStart = rawStart < firstEntryLocal ? firstEntryLocal : rawStart;
     const startedLate  = rawStart < new Date(firstEntry.date);
     const cfs = [], cfDates = [], curve = [];
     let units = 0, invested = 0;
 
     const cur = new Date(clampedStart.getFullYear(), clampedStart.getMonth(), 1);
     while (cur <= endDate) {
-      const e = navOnOrBefore(sorted, cur.toISOString().slice(0, 10));
-      if (e && new Date(e.date) <= endDate) {
+      const e = navOnOrBefore(sorted, localDateStr(cur));
+      if (e && parseLocalDate(e.date) <= endDate) {
         const u = slot.sipAmount / e.nav;
         units += u; invested += slot.sipAmount;
         cfs.push(-slot.sipAmount);
-        cfDates.push(new Date(e.date));
+        cfDates.push(parseLocalDate(e.date));
         curve.push({ date: e.date, invested, value: units * endNav });
       }
       cur.setMonth(cur.getMonth() + 1);
@@ -136,7 +147,7 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
         gain: value - invested, pctRet: ((value - invested) / invested) * 100,
         xirr: calcXIRR([...cfs, value], [...cfDates, endDate]),
         months: cfs.length, curve,
-        startedLate, adjustedStart: clampedStart.toISOString().slice(0, 7),
+        startedLate, adjustedStart: localMonthStr(clampedStart),
       };
     }
   }
@@ -146,16 +157,16 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
     const rawLsDate  = lsDateStr || firstEntry.date;
     const lsEntry    = navOnOrBefore(sorted, rawLsDate) || firstEntry;
     const lsDateAdj  = lsEntry.date !== rawLsDate;
-    if (new Date(lsEntry.date) <= endDate) {
+    if (parseLocalDate(lsEntry.date) <= endDate) {
       const u = slot.lsAmount / lsEntry.nav;
       const value = u * endNav;
       const gain  = value - slot.lsAmount;
-      const lsDt  = new Date(lsEntry.date);
+      const lsDt  = parseLocalDate(lsEntry.date);
       const curve = [];
       const cur2  = new Date(lsDt.getFullYear(), lsDt.getMonth(), 1);
       while (cur2 <= endDate) {
-        const e = navOnOrBefore(sorted, cur2.toISOString().slice(0, 10));
-        if (e && new Date(e.date) <= endDate)
+        const e = navOnOrBefore(sorted, localDateStr(cur2));
+        if (e && parseLocalDate(e.date) <= endDate)
           curve.push({ date: e.date, invested: slot.lsAmount, value: u * e.nav });
         cur2.setMonth(cur2.getMonth() + 1);
       }
@@ -210,13 +221,13 @@ function computeSlot(navHistory, slot, sipStartStr, lsDateStr, obsDateStr) {
     if (sipRes) {
       // Recompute units held as of endDate, mark to lastEntry.nav
       let units = 0;
-      const cur = new Date(
-        (sipRes.adjustedStart || sipStartStr || firstEntry.date.slice(0, 7)) + "-01"
-      );
-      while (cur <= endDate) {
-        const e = navOnOrBefore(sorted, cur.toISOString().slice(0, 10));
+      const ftStartStr = sipRes.adjustedStart || sipStartStr || firstEntry.date.slice(0, 7);
+      const ftStart = new Date(parseInt(ftStartStr.slice(0,4)), parseInt(ftStartStr.slice(5,7)) - 1, 1);
+      const ftCur = new Date(ftStart);
+      while (ftCur <= endDate) {
+        const e = navOnOrBefore(sorted, localDateStr(ftCur));
         if (e && new Date(e.date) <= endDate) units += slot.sipAmount / e.nav;
-        cur.setMonth(cur.getMonth() + 1);
+        ftCur.setMonth(ftCur.getMonth() + 1);
       }
       latestValue += units * lastEntry.nav;
     }
