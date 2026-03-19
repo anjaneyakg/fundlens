@@ -1898,8 +1898,6 @@ export default function App() {
                             </div>
                           );
                         })}
-                      </div>
-
                       </div>{/* end bar-chart */}
                       </div>{/* end peer-col-left */}
                       <div className="peer-col-right">
@@ -2013,7 +2011,6 @@ export default function App() {
                           {peerMetric==="returns" && peerReturnMode==="year" && `* YTD · `}
                           AUM: data source pending · Returns: AMFI India
                         </div>
-                      </div>
                       </div>{/* end peer-col-right */}
                       </div>{/* end peer-two-col */}
                     </div>
