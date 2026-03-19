@@ -36,7 +36,7 @@ GIST_NAVHIST  = "6f82d116b7067a8d13aa620e99aa783f"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BATCH_SIZE          = 5
+BATCH_SIZE          = 1
 FILE_SIZE_THRESHOLD = 20 * 1024 * 1024   # 20MB — above this, upload solo
 MAX_RETRIES         = 3
 RETRY_BACKOFF_BASE  = 2                  # seconds: 2s, 4s, 8s
