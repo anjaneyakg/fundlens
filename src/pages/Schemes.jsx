@@ -2017,9 +2017,7 @@ export default function App() {
                       </div>{/* end peer-col-right */}
                       </div>{/* end peer-two-col */}
                     </div>
-                  );
-                })()}
-
+   
                     {/* Fullscreen overlay */}
                     {peerFullscreen && (
                       <div className="peer-overlay"
