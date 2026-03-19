@@ -3,8 +3,26 @@ import { useNavigate } from "react-router-dom";
 
 const CATINDEX_URL = "https://gist.githubusercontent.com/anjaneyakg/377985ac0904a27a0a328c0834faffda/raw/fundlens_category_index.json";
 const DATA_URL     = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
+const RATIOS_URL   = "https://gist.githubusercontent.com/anjaneyakg/90d783d7de0ba4a67b53138dd922a552/raw/fundlens_ratios.json";
 
 const returnColor = (v) => v > 0 ? "#059669" : v < 0 ? "#e11d48" : "#6b72a0";
+
+// SEBI category → type mapping for Type filter
+const CAT_TYPE = {
+  "Large Cap":"Equity","Mid Cap":"Equity","Small Cap":"Equity","Multi Cap":"Equity",
+  "Flexi Cap":"Equity","Large & Mid Cap":"Equity","Focused":"Equity","ELSS":"Equity",
+  "Contra":"Equity","Dividend Yield":"Equity","Value":"Equity","Thematic":"Equity",
+  "Sectoral":"Equity","Equity":"Equity",
+  "Liquid":"Debt","Overnight":"Debt","Money Market":"Debt","Ultra Short Duration":"Debt",
+  "Low Duration":"Debt","Short Duration":"Debt","Medium Duration":"Debt",
+  "Medium to Long Duration":"Debt","Long Duration":"Debt","Dynamic Bond":"Debt",
+  "Corporate Bond":"Debt","Credit Risk":"Debt","Banking & PSU":"Debt",
+  "Gilt":"Debt","Floater":"Debt","Debt":"Debt",
+  "Aggressive Hybrid":"Hybrid","Conservative Hybrid":"Hybrid","Balanced Hybrid":"Hybrid",
+  "Dynamic AA":"Hybrid","Equity Savings":"Hybrid","Multi Asset":"Hybrid",
+  "Arbitrage":"Hybrid","Hybrid":"Hybrid",
+  "Index":"Passive","ETF":"Passive","Fund of Funds":"Passive",
+};
 
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
@@ -139,10 +157,50 @@ const style = `
   }
   .z8-footer a { color: #635bff; text-decoration: none; }
 
+  /* FILTER BAR */
+  .z8-filters {
+    padding: 1rem 2rem;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid rgba(99,91,255,0.12);
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(16px);
+    position: sticky; top: 60px; z-index: 90;
+    box-shadow: 0 2px 12px rgba(99,91,255,0.05);
+  }
+  .z8-filter-label {
+    font-family: 'DM Mono'; font-size: 10px; color: #6b72a0;
+    letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
+  }
+  .z8-toggle-group {
+    display: flex; background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(99,91,255,0.12); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(99,91,255,0.06);
+  }
+  .z8-toggle-btn {
+    padding: 7px 13px; border: none; cursor: pointer;
+    font-family: 'DM Mono'; font-size: 11px; letter-spacing: 0.5px;
+    background: transparent; color: #6b72a0; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .z8-toggle-btn.active {
+    background: linear-gradient(135deg, #635bff, #f43f8e);
+    color: #fff; font-weight: 500;
+  }
+  .z8-filter-sep {
+    width: 1px; background: rgba(99,91,255,0.12); flex-shrink: 0;
+  }
+  .z8-results-count {
+    margin-left: auto; font-family: 'DM Mono'; font-size: 11px;
+    color: #6b72a0; white-space: nowrap;
+  }
+  .z8-results-count span { color: #635bff; font-weight: 600; }
+
   @media (max-width: 768px) {
     .z8-hero { padding: 2rem 1rem 1.5rem; }
     .z8-body { padding: 1rem; }
     .z8-grid { grid-template-columns: 1fr; }
+    .z8-filters { padding: 0.75rem 1rem; gap: 8px; top: 56px; }
+    .z8-toggle-btn { padding: 6px 10px; font-size: 10px; }
   }
 `;
 
@@ -167,7 +225,21 @@ export default function CategoryLeaderboard() {
   const [loading,  setLoading]  = useState(true);
   const [loadMsg,  setLoadMsg]  = useState("Loading category index...");
 
+  // Filters
+  const [typeFilter,   setTypeFilter]   = useState("All");   // All|Equity|Debt|Hybrid|Passive
+  const [metricMode,   setMetricMode]   = useState("returns"); // returns|sharpe|stddev|maxdd|sortino
+  const [period,       setPeriod]       = useState("1Y");    // 1M|3M|6M|1Y|3Y
+
+  // Ratios
+  const [ratiosMap,    setRatiosMap]    = useState({});
+  const [ratiosLoaded, setRatiosLoaded] = useState(false);
+  const [ratiosLoading,setRatiosLoading]= useState(false);
+
+  // Raw index — stored separately so filters can re-apply without re-fetching
+  const [rawIndex, setRawIndex] = useState({});
+
   const buildLeaderboard = useCallback((index, plan) => {
+    setRawIndex(index);
     const filtered = {};
     for (const [key, funds] of Object.entries(index)) {
       const [category, p] = key.split("|");
@@ -215,15 +287,74 @@ export default function CategoryLeaderboard() {
     return () => window.removeEventListener("fundlens_plan_change", handler);
   }, [buildLeaderboard]);
 
+  // Fetch ratios once
+  useEffect(() => {
+    if (ratiosLoaded || ratiosLoading) return;
+    setRatiosLoading(true);
+    fetch(RATIOS_URL)
+      .then(r => r.json())
+      .then(json => { setRatiosMap(json.ratios || {}); setRatiosLoaded(true); })
+      .catch(e => console.warn("Z8 ratios fetch failed:", e.message))
+      .finally(() => setRatiosLoading(false));
+  }, []);
+
+  // Build schemeMap for quick lookup by id
+  const schemeMap = Object.fromEntries(allSchemes.map(s => [String(s.id), s]));
+
   const handleSchemeClick = (f) => {
-    // Navigate to /schemes with state so Z1 can pick it up
     navigate("/schemes", {
       state: { selectId: f.id, category: f.plan === planUniverse ? undefined : null }
     });
   };
 
-  const categories = Object.keys(leaderboard).sort();
-  const totalFunds = Object.values(leaderboard).reduce((s, v) => s + v.length, 0);
+  // Get display value for a fund given current metricMode + period
+  const getMetricVal = (f) => {
+    const s = schemeMap[String(f.id)];
+    if (metricMode === "returns") {
+      if (period === "1Y") return f.return1Y ?? f["1Y"] ?? null;
+      return s?.returns?.[period] ?? null;
+    }
+    const r = ratiosMap[String(f.id)];
+    if (metricMode === "sharpe")  return r?.sharpe      ?? null;
+    if (metricMode === "stddev")  return r?.stdDev      ?? null;
+    if (metricMode === "maxdd")   return r?.maxDrawdown ?? null;
+    if (metricMode === "sortino") return r?.sortino     ?? null;
+    return null;
+  };
+
+  const fmtMetricVal = (v) => {
+    if (v == null) return "—";
+    if (metricMode === "returns") return `${v > 0 ? "+" : ""}${typeof v === "number" ? v.toFixed(2) : v}%`;
+    if (metricMode === "stddev" || metricMode === "maxdd") return `${v.toFixed(2)}%`;
+    return v.toFixed(2);
+  };
+
+  const metricColor = (v) => {
+    if (v == null) return "#6b72a0";
+    if (metricMode === "returns") return returnColor(v);
+    if (metricMode === "sharpe" || metricMode === "sortino")
+      return v > 1 ? "#059669" : v > 0 ? "#0f0c2e" : "#e11d48";
+    return "#0f0c2e";
+  };
+
+  const LOWER_IS_BETTER = new Set(["stddev", "maxdd"]);
+
+  // Apply type filter + re-sort by active metric
+  const filteredLeaderboard = Object.fromEntries(
+    Object.entries(leaderboard)
+      .filter(([cat]) => typeFilter === "All" || CAT_TYPE[cat] === typeFilter)
+      .map(([cat, funds]) => {
+        const sorted = [...funds].sort((a, b) => {
+          const av = getMetricVal(a) ?? (LOWER_IS_BETTER.has(metricMode) ? Infinity : -Infinity);
+          const bv = getMetricVal(b) ?? (LOWER_IS_BETTER.has(metricMode) ? Infinity : -Infinity);
+          return LOWER_IS_BETTER.has(metricMode) ? av - bv : bv - av;
+        });
+        return [cat, sorted];
+      })
+  );
+
+  const categories = Object.keys(filteredLeaderboard).sort();
+  const totalFunds = Object.values(filteredLeaderboard).reduce((s, v) => s + v.length, 0);
 
   return (
     <div className="z8-page">
@@ -239,7 +370,8 @@ export default function CategoryLeaderboard() {
         </div>
         <div className="z8-meta-row">
           <div className="z8-pill">
-            {planUniverse} · Growth only · 1Y ranked
+            {planUniverse} · Growth only ·{" "}
+            {metricMode === "returns" ? `${period} return` : metricMode.toUpperCase()}
           </div>
           {!loading && (
             <>
@@ -255,6 +387,61 @@ export default function CategoryLeaderboard() {
           )}
         </div>
       </div>
+
+      {/* FILTER BAR */}
+      {!loading && (
+        <div className="z8-filters">
+          {/* Type filter */}
+          <span className="z8-filter-label">Type</span>
+          <div className="z8-toggle-group">
+            {["All","Equity","Debt","Hybrid","Passive"].map(t => (
+              <button key={t}
+                className={`z8-toggle-btn${typeFilter===t?" active":""}`}
+                onClick={() => setTypeFilter(t)}>{t}</button>
+            ))}
+          </div>
+
+          <div className="z8-filter-sep"/>
+
+          {/* Metric mode */}
+          <span className="z8-filter-label">Sort by</span>
+          <div className="z8-toggle-group">
+            {[
+              {k:"returns", l:"Returns"},
+              {k:"sharpe",  l:"Sharpe"},
+              {k:"stddev",  l:"Std Dev"},
+              {k:"maxdd",   l:"Max DD"},
+              {k:"sortino", l:"Sortino"},
+            ].map(({k,l}) => (
+              <button key={k}
+                className={`z8-toggle-btn${metricMode===k?" active":""}`}
+                onClick={() => setMetricMode(k)}>{l}</button>
+            ))}
+          </div>
+
+          {/* Period pills — only when Returns selected */}
+          {metricMode === "returns" && (
+            <>
+              <div className="z8-filter-sep"/>
+              <div className="z8-toggle-group">
+                {["1M","3M","6M","1Y","3Y"].map(p => (
+                  <button key={p}
+                    className={`z8-toggle-btn${period===p?" active":""}`}
+                    onClick={() => setPeriod(p)}>{p}</button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {ratiosLoading && metricMode !== "returns" && (
+            <span style={{fontFamily:"'DM Mono'",fontSize:10,color:"#6b72a0"}}>⟳ loading ratios…</span>
+          )}
+
+          <div className="z8-results-count">
+            <span>{categories.length}</span> categories · <span>{totalFunds}</span> funds
+          </div>
+        </div>
+      )}
 
       {/* BODY */}
       <div className="z8-body">
@@ -273,24 +460,25 @@ export default function CategoryLeaderboard() {
             {categories.map(cat => (
               <div className="z8-card" key={cat}>
                 <div className="z8-cat-label">{cat}</div>
-                {(leaderboard[cat] || []).map((f, i) => (
-                  <div className="z8-row" key={f.id}
-                    title={f.name}
-                    onClick={() => handleSchemeClick(f)}>
-                    <div className="z8-row-left">
-                      <div className={`z8-rank${i === 0 ? " z8-rank-1" : ""}`}>{i + 1}</div>
-                      <div className="z8-scheme-block">
-                        <div className="z8-scheme-name">{f.name || f.amc}</div>
-                        <div className="z8-scheme-amc">{f.amc}</div>
+                {(filteredLeaderboard[cat] || []).map((f, i) => {
+                  const val = getMetricVal(f);
+                  return (
+                    <div className="z8-row" key={f.id}
+                      title={f.name}
+                      onClick={() => handleSchemeClick(f)}>
+                      <div className="z8-row-left">
+                        <div className={`z8-rank${i === 0 ? " z8-rank-1" : ""}`}>{i + 1}</div>
+                        <div className="z8-scheme-block">
+                          <div className="z8-scheme-name">{f.name || f.amc}</div>
+                          <div className="z8-scheme-amc">{f.amc}</div>
+                        </div>
+                      </div>
+                      <div className="z8-ret" style={{color: metricColor(val)}}>
+                        {fmtMetricVal(val)}
                       </div>
                     </div>
-                    <div className="z8-ret" style={{color: returnColor(f["1Y"] ?? f.return1Y)}}>
-                      {(f["1Y"] ?? f.return1Y) != null
-                        ? `${(f["1Y"] ?? f.return1Y) > 0 ? "+" : ""}${f["1Y"] ?? f.return1Y}%`
-                        : "—"}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
           </div>
