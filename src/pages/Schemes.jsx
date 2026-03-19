@@ -876,6 +876,7 @@ export default function App() {
   const [ratiosLoaded,   setRatiosLoaded]   = useState(false);
   const [ratiosLoading,  setRatiosLoading]  = useState(false);
   const [selectedRatios, setSelectedRatios] = useState(null);
+  const [ratioPeriod,    setRatioPeriod]    = useState("1Y"); // 1Y|3Y|5Y
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
 
   useEffect(() => {
@@ -1569,32 +1570,56 @@ export default function App() {
                 </div>
 
                 {/* Risk metrics */}
-                <div className="panel-section-title">Risk Metrics (252-day)
-                  {ratiosLoading && <span style={{marginLeft:8,fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)"}}>⟳ loading…</span>}
+                <div className="panel-section-title" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span>Risk Metrics
+                    {ratiosLoading && <span style={{marginLeft:8,fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)"}}>⟳ loading…</span>}
+                  </span>
+                  <div style={{display:"flex",gap:3}}>
+                    {["1Y","3Y","5Y"].map(p => {
+                      const hasData = selectedRatios?.[p] != null;
+                      return (
+                        <button key={p} onClick={() => hasData && setRatioPeriod(p)} style={{
+                          padding:"2px 8px", borderRadius:4, border:"1px solid",
+                          fontFamily:"'DM Mono'", fontSize:"9px", cursor: hasData ? "pointer" : "default",
+                          background: ratioPeriod===p ? "var(--violet)" : "transparent",
+                          color: ratioPeriod===p ? "#fff" : hasData ? "var(--muted)" : "rgba(107,114,160,0.3)",
+                          borderColor: ratioPeriod===p ? "var(--violet)" : hasData ? "var(--border)" : "rgba(99,91,255,0.06)",
+                        }}>{p}</button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="info-grid">
-                  <div className="info-tile">
-                    <div className="info-label">Sharpe Ratio</div>
-                    <div className="info-val" style={{color:(selectedRatios?.sharpe??0)>1?"var(--violet)":"var(--text)"}}>
-                      {selectedRatios?.sharpe != null ? selectedRatios.sharpe.toFixed(2) : "—"}
-                    </div>
-                  </div>
-                  <div className="info-tile">
-                    <div className="info-label">Std Dev (Ann.)</div>
-                    <div className="info-val">{selectedRatios?.stdDev != null ? `${selectedRatios.stdDev.toFixed(2)}%` : "—"}</div>
-                  </div>
-                  <div className="info-tile">
-                    <div className="info-label">Max Drawdown</div>
-                    <div className="info-val" style={{color:"var(--red)"}}>
-                      {selectedRatios?.maxDrawdown != null ? `${selectedRatios.maxDrawdown.toFixed(2)}%` : "—"}
-                    </div>
-                  </div>
-                  <div className="info-tile">
-                    <div className="info-label">Sortino Ratio</div>
-                    <div className="info-val" style={{color:(selectedRatios?.sortino??0)>1?"var(--emerald)":"var(--text)"}}>
-                      {selectedRatios?.sortino != null ? selectedRatios.sortino.toFixed(2) : "—"}
-                    </div>
-                  </div>
+                  {(() => {
+                    // Read from nested period structure if available, fall back to flat 1Y fields
+                    const r = selectedRatios?.[ratioPeriod] ?? (ratioPeriod === "1Y" ? selectedRatios : null);
+                    return (
+                      <>
+                        <div className="info-tile">
+                          <div className="info-label">Sharpe Ratio</div>
+                          <div className="info-val" style={{color:(r?.sharpe??0)>1?"var(--violet)":"var(--text)"}}>
+                            {r?.sharpe != null ? r.sharpe.toFixed(2) : "—"}
+                          </div>
+                        </div>
+                        <div className="info-tile">
+                          <div className="info-label">Std Dev (Ann.)</div>
+                          <div className="info-val">{r?.stdDev != null ? `${r.stdDev.toFixed(2)}%` : "—"}</div>
+                        </div>
+                        <div className="info-tile">
+                          <div className="info-label">Max Drawdown</div>
+                          <div className="info-val" style={{color:"var(--red)"}}>
+                            {r?.maxDrawdown != null ? `${r.maxDrawdown.toFixed(2)}%` : "—"}
+                          </div>
+                        </div>
+                        <div className="info-tile">
+                          <div className="info-label">Sortino Ratio</div>
+                          <div className="info-val" style={{color:(r?.sortino??0)>1?"var(--emerald)":"var(--text)"}}>
+                            {r?.sortino != null ? r.sortino.toFixed(2) : "—"}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Rolling returns chart */}
@@ -1677,6 +1702,7 @@ export default function App() {
                   const yearCols = availYears;
 
                   return (
+                    <>
                     <div className="peer-panel">
                       {/* Metric tabs + P2P|Year toggle + Fullscreen button */}
                       <div className="peer-tabs">
@@ -1990,6 +2016,7 @@ export default function App() {
                         </div>
                       </div>
                     )}
+                    </>
                   );
                 })()}
               </div>
