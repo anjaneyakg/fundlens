@@ -2011,9 +2011,10 @@ export default function App() {
                           {peerMetric==="returns" && peerReturnMode==="year" && `* YTD · `}
                           AUM: data source pending · Returns: AMFI India
                         </div>
+                      </div>{/* end overflowX */}
                       </div>{/* end peer-col-right */}
                       </div>{/* end peer-two-col */}
-                    </div>
+                    </div>{/* end peer-panel */}
 
                     {/* Fullscreen overlay */}
                     {peerFullscreen && (
