@@ -265,11 +265,22 @@ function GrowthChart({ slots, results, obsDate }) {
     const allDates = [...new Set(active.flatMap(a => a.curve.map(p => p.date)))].sort();
     if (allDates.length < 2) return;
 
-    const blended = allDates.map(date => {
-      let val = 0;
-      active.forEach(({ curve }) => { const p = curve.find(q => q.date === date); if (p) val += p.value; });
-      return { date, value: val };
+    // Forward-fill each scheme's value so every date has a value for every scheme.
+    // Without this, dates unique to one scheme give a partial sum — causing jagged spikes.
+    const filledCurves = active.map(({ curve }) => {
+      const dateToVal = {};
+      curve.forEach(p => { dateToVal[p.date] = p.value; });
+      let last = 0;
+      return allDates.map(date => {
+        if (dateToVal[date] != null) last = dateToVal[date];
+        return last;
+      });
     });
+
+    const blended = allDates.map((date, i) => ({
+      date,
+      value: filledCurves.reduce((sum, fc) => sum + fc[i], 0),
+    }));
 
     const yMax = Math.max(...blended.map(p => p.value)) * 1.08;
     const xS = i => pad.left + (i / (allDates.length - 1)) * cW;
@@ -307,14 +318,13 @@ function GrowthChart({ slots, results, obsDate }) {
       }
     }
 
-    // Per-scheme value lines (when > 1 scheme, draw each individually)
+    // Per-scheme value lines — use filledCurves (forward-filled) so lines are smooth
     if (active.length > 1) {
-      active.forEach(({ curve, color }) => {
+      active.forEach(({ color }, ci) => {
         ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7; ctx.setLineDash([]);
         ctx.beginPath();
-        curve.forEach((p, ii) => {
-          const di = allDates.indexOf(p.date); if (di < 0) return;
-          ii === 0 ? ctx.moveTo(xS(di), yS(p.value)) : ctx.lineTo(xS(di), yS(p.value));
+        filledCurves[ci].forEach((val, i) => {
+          i === 0 ? ctx.moveTo(xS(i), yS(val)) : ctx.lineTo(xS(i), yS(val));
         });
         ctx.stroke(); ctx.globalAlpha = 1;
       });
