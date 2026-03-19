@@ -167,6 +167,17 @@ CATEGORY_MAP = {
     "Fund of Funds":                    "Fund of Funds",
     "Retirement Fund":                  "Retirement",
     "Children's Fund":                  "Children's",
+
+    # ── AMFI uses shortened/variant strings not in the original map ──────────
+    # AMFI sends "Debt Scheme - Dynamic Bond" without the "Fund" suffix
+    "Dynamic Bond":                     "Dynamic Bond",
+    # AMFI CSV strips the apostrophe from "Children's" → "Children s Fund"
+    "Children s Fund":                  "Children's",
+    # Bal Bhavishya Yojna is ABSL's children's fund product name
+    "Bal Bhavishya Yojna":              "Children's",
+    # Strategic Bond Fund → Dynamic Bond (closest SEBI category)
+    "Strategic Bond Fund":              "Dynamic Bond",
+    "Strategic Bond":                   "Dynamic Bond",
 }
 
 
