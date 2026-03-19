@@ -39,7 +39,7 @@ AMFI_SCHEME_MASTER_URL = "https://portal.amfiindia.com/DownloadSchemeData_Po.asp
 AMFI_NAV_ALL_URL       = "https://www.amfiindia.com/spages/NAVAll.txt"
 AMFI_NAV_HISTORY_URL   = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 
-HISTORY_MONTHS         = 24
+HISTORY_MONTHS         = 60   # 5 years — needed for 3Y/5Y return computation
 RISK_FREE_RATE_ANNUAL  = 0.065
 REQUEST_DELAY_SEC      = 1.5
 MAX_RETRIES            = 3
@@ -334,7 +334,7 @@ def compute_returns(nav_history, current_nav, nav_date):
         if nav_then:
             r[key] = absolute_return(nav_then, current_nav)
 
-    for days, years, key in [(365, 1.0, "1Y"), (1095, 3.0, "3Y")]:
+    for days, years, key in [(365, 1.0, "1Y"), (1095, 3.0, "3Y"), (1825, 5.0, "5Y")]:
         nav_then = nav_on_or_before(anchor - timedelta(days=days))
         if nav_then:
             r[key] = cagr(nav_then, current_nav, years)
@@ -578,7 +578,7 @@ def assemble_and_save(master, current_navs, nav_history):
         "schemeCount":     len(schemes_out),
         "historyMonths":   HISTORY_MONTHS,
         "source":          "AMFI Direct",
-        "pipelineVersion": "4.0",
+        "pipelineVersion": "4.1",
     }
 
     files = {
@@ -616,7 +616,7 @@ def assemble_and_save(master, current_navs, nav_history):
 
 def run_pipeline():
     print("=" * 60)
-    print("FundLens Pipeline v4.0")
+    print("FundLens Pipeline v4.1")
     print(f"Run date: {TODAY_STR}")
     print("=" * 60)
 
