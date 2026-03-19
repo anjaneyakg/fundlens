@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DATA_URL     = "https://gist.githubusercontent.com/anjaneyakg/64368e3f1dfef3f82da8fa9f0f164211/raw/fundlens_schemes.json";
 const NAVHIST_BASE = "https://gist.githubusercontent.com/anjaneyakg/6f82d116b7067a8d13aa620e99aa783f/raw";
+const RATIOS_URL   = "https://gist.githubusercontent.com/anjaneyakg/90d783d7de0ba4a67b53138dd922a552/raw/fundlens_ratios.json";
 const MAX_SCHEMES  = 3;
 const COLORS       = ["#635bff", "#f43f8e", "#ff6b35"];
 const COLOR_LABELS = ["violet", "pink", "orange"];
@@ -190,6 +191,33 @@ const fmtRet  = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`
 const fmtRisk = (v, decimals=2) => v == null ? "—" : v.toFixed(decimals);
 const returnColor = (v) => v == null ? "#6b72a0" : v > 0 ? "#059669" : v < 0 ? "#e11d48" : "#6b72a0";
 
+// Compute 1Y rolling returns from raw NAV history [{date,nav}]
+const computeRolling1Y = (hist) => {
+  if (!hist || hist.length < 50) return [];
+  const result = [];
+  for (let i = 0; i < hist.length; i++) {
+    const current = hist[i];
+    const targetDate = new Date(current.date);
+    targetDate.setFullYear(targetDate.getFullYear() - 1);
+    const targetStr = targetDate.toISOString().slice(0, 10);
+    let lo = 0, hi = i - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (hist[mid].date >= targetStr) { found = mid; hi = mid - 1; }
+      else lo = mid + 1;
+    }
+    if (found === -1) continue;
+    const prior = hist[found];
+    if (prior.nav > 0 && prior.date !== current.date) {
+      result.push({
+        date: current.date,
+        return: parseFloat(((current.nav / prior.nav - 1) * 100).toFixed(2)),
+      });
+    }
+  }
+  return result;
+};
+
 const calcYearReturns = (hist) => {
   if (!hist || hist.length < 2) return {};
   const byYear = {};
@@ -345,28 +373,24 @@ function IndexedChart({ navHistories, schemes, startDate }) {
 }
 
 // ─── Rolling Returns Chart (per scheme) ──────────────────────────────────────
-function RollingSparkline({ navHist, color, label, yearReturns }) {
-  if (!navHist || navHist.length < 252) return (
+function RollingSparkline({ navHist, color, label }) {
+  if (!navHist || navHist.length < 50) return (
     <div>
       <div className="z2-rolling-label">{label}</div>
       <div style={{fontFamily:"'DM Mono'",fontSize:10,color:"#6b72a0",padding:"8px 0"}}>
-        Insufficient history (&lt;252 days)
+        Insufficient history for rolling returns
       </div>
     </div>
   );
 
-  const rolling = [];
-  for (let i = 252; i < navHist.length; i++) {
-    const ret = ((navHist[i].nav - navHist[i-252].nav) / navHist[i-252].nav) * 100;
-    rolling.push({ date: navHist[i].date, ret });
-  }
+  const rolling = computeRolling1Y(navHist);
   if (rolling.length < 2) return null;
 
-  const vals   = rolling.map(d => d.ret);
+  const vals   = rolling.map(d => d.return);
   const minVal = Math.min(...vals);
   const maxVal = Math.max(...vals);
   const range  = (maxVal - minVal) || 1;
-  const latest = rolling[rolling.length-1].ret;
+  const latest = rolling[rolling.length-1].return;
 
   // Chart dimensions with left padding for Y axis
   const W = 300, H = 80, PL = 32, PR = 8, PT = 4, PB = 4;
@@ -375,7 +399,7 @@ function RollingSparkline({ navHist, color, label, yearReturns }) {
   const xS = (i) => PL + (i / (rolling.length-1)) * IW;
   const yS = (v) => PT + IH - ((v - minVal) / range) * IH;
 
-  const pts = rolling.map((d,i) => `${xS(i).toFixed(1)},${yS(d.ret).toFixed(1)}`).join(" ");
+  const pts = rolling.map((d,i) => `${xS(i).toFixed(1)},${yS(d.return).toFixed(1)}`).join(" ");
   const zeroY = yS(0);
 
   // Y axis ticks — 3 values: min, mid, max (rounded nicely)
@@ -452,6 +476,11 @@ export default function CompareSchemes() {
   const [navLoading,   setNavLoading]   = useState(false);
   const [overlapInfo,  setOverlapInfo]  = useState(null);
 
+  // Ratios — fetched once, cached for session
+  const [ratiosMap,     setRatiosMap]     = useState({});
+  const [ratiosLoaded,  setRatiosLoaded]  = useState(false);
+  const [ratiosLoading, setRatiosLoading] = useState(false);
+
   // Returns table controls
   const [returnPeriod, setReturnPeriod] = useState("1Y");
   const [returnMode,   setReturnMode]   = useState("p2p"); // p2p | year
@@ -474,6 +503,17 @@ export default function CompareSchemes() {
       setDataLoaded(true);
     }).catch(e => console.error("Z2 scheme load failed", e));
   }, [dataLoaded]);
+
+  // Fetch ratios once on first comparison
+  useEffect(() => {
+    if (ratiosLoaded || ratiosLoading || activeSchemes.length < 2) return;
+    setRatiosLoading(true);
+    fetch(RATIOS_URL)
+      .then(r => r.json())
+      .then(json => { setRatiosMap(json.ratios || {}); setRatiosLoaded(true); })
+      .catch(e => console.warn("Z2 ratios fetch failed:", e.message))
+      .finally(() => setRatiosLoading(false));
+  }, [activeSchemes.length]);
 
   // Search handler
   const handleSearch = useCallback((idx, q) => {
@@ -840,7 +880,13 @@ export default function CompareSchemes() {
 
               {/* Risk metrics table */}
               <div className="z2-card">
-                <div className="z2-section-title">Risk Metrics (252-day)</div>
+                <div className="z2-section-title">
+                  Risk Metrics (252-day)
+                  {ratiosLoading && (
+                    <span style={{marginLeft:8,fontFamily:"'DM Mono'",fontSize:9,
+                      color:"var(--muted)",verticalAlign:"middle"}}>⟳ loading…</span>
+                  )}
+                </div>
                 <table className="z2-table">
                   <thead>
                     <tr>
@@ -854,13 +900,18 @@ export default function CompareSchemes() {
                   </thead>
                   <tbody>
                     {RISK_METRICS.map(({key,label,higherBetter,fmt}) => {
-                      const vals  = activeSlots.map(({scheme}) => scheme.risk?.[key] ?? null);
+                      // Prefer ratiosMap (dedicated Gist), fall back to scheme.risk
+                      const vals = activeSlots.map(({scheme}) => {
+                        const r = ratiosMap[String(scheme.id)];
+                        return r?.[key] ?? scheme.risk?.[key] ?? null;
+                      });
                       const ranks = getRanks(vals, higherBetter);
                       return (
                         <tr key={key}>
                           <td>{label}</td>
                           {activeSlots.map(({scheme,color},i) => {
-                            const v = scheme.risk?.[key] ?? null;
+                            const r = ratiosMap[String(scheme.id)];
+                            const v = r?.[key] ?? scheme.risk?.[key] ?? null;
                             const c = key==="sharpe"||key==="sortino"
                               ? (v==null?"#6b72a0":v>1?"#635bff":v>0?"#059669":"#e11d48")
                               : "#0f0c2e";
