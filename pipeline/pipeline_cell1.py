@@ -348,15 +348,19 @@ def compute_returns(nav_history, current_nav, nav_date):
 
 # ─── Step 5: Compute Risk Ratios ─────────────────────────────────────────────
 
-def compute_risk_ratios(nav_history):
-    """Annualised risk metrics from daily NAV series (252 trading days)."""
-    if len(nav_history) < 60:
-        return {}
+def _ratios_for_window(navs, window_days):
+    """
+    Compute annualised risk metrics for the last `window_days` entries.
+    Returns dict of {stdDev, sharpe, sortino, maxDrawdown} or None if
+    insufficient data.
+    """
+    sliced = navs[-window_days:] if len(navs) >= window_days else navs
+    if len(sliced) < 60:
+        return None
 
-    navs = [e["nav"] for e in nav_history]
-    dr   = [(navs[i] - navs[i-1]) / navs[i-1] for i in range(1, len(navs))]
+    dr = [(sliced[i] - sliced[i-1]) / sliced[i-1] for i in range(1, len(sliced))]
     if len(dr) < 30:
-        return {}
+        return None
 
     n      = len(dr)
     mean_r = sum(dr) / n
@@ -366,16 +370,16 @@ def compute_risk_ratios(nav_history):
     rf_d   = RISK_FREE_RATE_ANNUAL / 252
     sharpe = ((mean_r - rf_d) * 252) / std_a if std_a > 0 else None
 
-    down   = [r for r in dr if r < rf_d]
+    down = [r for r in dr if r < rf_d]
     if down:
         dstd    = math.sqrt(sum((r - rf_d)**2 for r in down) / len(down)) * math.sqrt(252)
         sortino = ((mean_r - rf_d) * 252) / dstd if dstd > 0 else None
     else:
         sortino = None
 
-    peak   = navs[0]
+    peak   = sliced[0]
     max_dd = 0.0
-    for nav in navs:
+    for nav in sliced:
         if nav > peak:
             peak = nav
         dd = (peak - nav) / peak
@@ -391,6 +395,36 @@ def compute_risk_ratios(nav_history):
         "sortino":     r4(sortino),
         "maxDrawdown": r4(max_dd * 100),
     }
+
+
+def compute_risk_ratios(nav_history):
+    """
+    Annualised risk metrics for 1Y (252), 3Y (756), 5Y (1260) windows.
+    Output: { "1Y": {...}, "3Y": {...}, "5Y": {...} }
+    Only periods with sufficient data are included.
+    Also includes a flat top-level copy of 1Y metrics for backward
+    compatibility with any consumers reading the old flat structure.
+    """
+    if len(nav_history) < 60:
+        return {}
+
+    navs = [e["nav"] for e in nav_history]
+
+    result = {}
+    for label, days in [("1Y", 252), ("3Y", 756), ("5Y", 1260)]:
+        w = _ratios_for_window(navs, days)
+        if w:
+            result[label] = w
+
+    if not result:
+        return {}
+
+    # Flat 1Y fields at top level — keeps existing frontend reads working
+    # during transition before frontend is updated to use nested structure
+    if "1Y" in result:
+        result.update(result["1Y"])
+
+    return result
 
 
 # ─── Step 6: Build Category Index ────────────────────────────────────────────
