@@ -85,7 +85,7 @@ const style = `
     --card-hover: rgba(255,255,255,0.92);
   }
 
-  html, body, #root { height: 100%; color: var(--text); font-family: 'Syne', sans-serif; }
+  html, body, #root { height: 100%; color: var(--text); font-family: 'Syne', sans-serif; overflow-x: hidden; }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -399,13 +399,21 @@ const style = `
     .filters-bar .filter-select,
     .filters-bar .aum-filter { display: none !important; }
 
-    /* Show mobile bar */
+    /* Fix: search bar sticky at top of viewport on mobile */
+    .filters-bar {
+      top: 0; z-index: 95;
+      padding: 0.75rem 1rem;
+    }
+    .filters-bar .search-wrap { max-width: 100%; flex: 1; }
+    .filters-bar .results-count { display: none; }
+
+    /* Show mobile filter bar below search */
     .mobile-filter-bar {
       display: flex; align-items: center; gap: 8px;
-      padding: 0.75rem 1rem;
+      padding: 0.6rem 1rem;
       background: rgba(255,255,255,0.6);
       border-bottom: 1px solid var(--border);
-      position: sticky; top: 60px; z-index: 90;
+      position: sticky; top: 52px; z-index: 90;
       backdrop-filter: blur(16px);
     }
     .mobile-filter-btn {
@@ -483,12 +491,24 @@ const style = `
     /* Hide static detail panel on mobile — bottom sheet replaces it */
     .detail-panel { display: none; }
 
-    /* Scheme card columns collapse */
-    .sort-bar, .scheme-card { grid-template-columns: 1fr auto auto; }
-    .col-hide { display: none; }
+    /* Scheme card — block display, no overflow, no translateX */
+    .scheme-card {
+      display: block; padding: 12px;
+      transform: none !important;
+      width: 100%; box-sizing: border-box;
+      margin-left: 0; margin-right: 0;
+    }
+    .scheme-list { padding: 0.75rem 1rem; overflow-x: hidden; }
 
-    /* MOBILE CARD — Option A */
-    .scheme-card { display: block; padding: 12px; }
+    /* MOBILE SORT BAR */
+    .sort-bar {
+      display: flex; gap: 0; overflow-x: auto;
+      padding: 8px 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.7);
+      position: sticky; top: 100px; z-index: 80;
+      border-bottom: 1px solid var(--border);
+      -webkit-overflow-scrolling: touch;
+    }
     .mobile-card-top {
       display: flex; justify-content: space-between; align-items: flex-start;
       margin-bottom: 8px;
@@ -521,19 +541,7 @@ const style = `
       font-family: 'DM Mono'; font-size: 9px; color: var(--muted);
       text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;
     }
-    .mobile-card-sec-val {
-      font-family: 'DM Mono'; font-size: 11px; font-weight: 500;
-    }
-
-    /* MOBILE SORT BAR — 4 cols, scrollable */
-    .sort-bar {
-      display: flex; gap: 0; overflow-x: auto;
-      padding: 8px 12px; margin-bottom: 8px;
-      background: rgba(255,255,255,0.7);
-      position: sticky; top: 60px; z-index: 80;
-      border-bottom: 1px solid var(--border);
-      -webkit-overflow-scrolling: touch;
-    }
+    .mobile-card-sec-val { font-family: 'DM Mono'; font-size: 11px; font-weight: 500; }
     .sort-bar::-webkit-scrollbar { display: none; }
     .sort-btn {
       padding: 6px 14px; border-radius: 20px; white-space: nowrap;
@@ -544,10 +552,6 @@ const style = `
       background: linear-gradient(135deg, var(--violet), var(--pink));
       color: #fff; border-color: transparent;
     }
-
-    /* Search full width */
-    .filters-bar .search-wrap { max-width: 100%; flex: 1; }
-    .filters-bar .results-count { display: none; }
   }
 
   /* ── DETAIL OVERLAY — fullscreen on desktop, bottom sheet on mobile ── */
@@ -676,6 +680,7 @@ const style = `
     .detail-panel { position: static; height: auto; border-top: 1px solid var(--border); }
   }
   @media (max-width: 768px) {
+    .detail-panel { display: none; }
     .sort-bar, .scheme-card { grid-template-columns: 1fr auto auto auto; }
     .col-hide { display: none; }
   }
