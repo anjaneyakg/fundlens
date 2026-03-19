@@ -633,6 +633,28 @@ const style = `
     .scheme-expand-btn { display: none !important; }
   }
 
+  /* PEER TWO-COLUMN LAYOUT */
+  .peer-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+  .peer-col-left {
+    padding: 10px 12px 10px 0;
+    border-right: 1px solid var(--border);
+  }
+  .peer-col-right {
+    padding: 10px 0 10px 12px;
+    overflow-x: auto;
+  }
+  @media (max-width: 500px) {
+    .peer-two-col { grid-template-columns: 1fr; }
+    .peer-col-left { border-right: none; border-bottom: 1px solid var(--border); padding: 10px 0; }
+    .peer-col-right { padding: 10px 0; }
+  }
+
   /* PEER FULLSCREEN OVERLAY */
   .peer-overlay {
     position: fixed; inset: 0; z-index: 500;
@@ -1849,6 +1871,9 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* Two-column: bar chart left, peer table right */}
+                      <div className="peer-two-col">
+                      <div className="peer-col-left">
                       {/* Bar chart */}
                       <div className="bar-chart" style={{marginTop:"4px"}}>
                         {barPeers.map(p => {
@@ -1875,8 +1900,11 @@ export default function App() {
                         })}
                       </div>
 
+                      </div>{/* end bar-chart */}
+                      </div>{/* end peer-col-left */}
+                      <div className="peer-col-right">
                       {/* Peer table */}
-                      <div style={{borderTop:"1px solid var(--border)",marginTop:"8px",overflowX:"auto"}}>
+                      <div style={{overflowX:"auto"}}>
                         {peerMetric === "returns" && peerReturnMode === "year" ? (
                           /* YEAR TABLE — all years as columns */
                           <table className="peer-tbl" style={{minWidth: `${200 + yearCols.length * 52}px`}}>
@@ -1986,6 +2014,8 @@ export default function App() {
                           AUM: data source pending · Returns: AMFI India
                         </div>
                       </div>
+                      </div>{/* end peer-col-right */}
+                      </div>{/* end peer-two-col */}
                     </div>
 
                     {/* Fullscreen overlay */}
