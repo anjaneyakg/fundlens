@@ -14,11 +14,13 @@ const MODES       = { sip: "SIP", lumpsum: "Lumpsum", both: "Both" };
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getStoredPlan = () => localStorage.getItem(PLAN_KEY) || "Direct";
 
-// Growth detection via navName suffix — matches pipeline getOption() / Z1
+// Growth detection — mirrors pipeline is_growth() exclusion logic.
+// Excludes IDCW/dividend/bonus keywords from the full name.
+// "Bare dividend" allowed (preserves Dividend Yield Growth schemes).
+const IDCW_KEYWORDS = ["idcw", "dividend payout", "dividend reinvestment", "payout", "reinvestment", "bonus"];
 function isGrowth(s) {
-  const raw = s.navName || s.name || "";
-  const suffix = raw.split("-").pop().trim().toLowerCase();
-  return suffix === "growth";
+  const raw = (s.navName || s.name || "").toLowerCase();
+  return !IDCW_KEYWORDS.some(kw => raw.includes(kw));
 }
 
 function isActive(s) { return s.nav > 0; }
