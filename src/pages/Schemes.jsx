@@ -480,7 +480,8 @@ const style = `
 
     /* Main layout stacks on mobile */
     .main { grid-template-columns: 1fr; }
-    .detail-panel { position: static; height: auto; border-top: 1px solid var(--border); }
+    /* Hide static detail panel on mobile — bottom sheet replaces it */
+    .detail-panel { display: none; }
 
     /* Scheme card columns collapse */
     .sort-bar, .scheme-card { grid-template-columns: 1fr auto auto; }
@@ -549,6 +550,85 @@ const style = `
     .filters-bar .results-count { display: none; }
   }
 
+  /* ── DETAIL OVERLAY — fullscreen on desktop, bottom sheet on mobile ── */
+  .detail-overlay {
+    position: fixed; inset: 0; z-index: 600;
+    background: rgba(15,12,46,0.5); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1.5rem;
+    animation: overlayIn 0.2s ease;
+  }
+  .detail-overlay-panel {
+    background: rgba(255,255,255,0.98);
+    border: 1px solid rgba(99,91,255,0.15);
+    border-radius: 16px;
+    width: 100%; max-width: 780px;
+    max-height: 92vh; overflow-y: auto;
+    padding: 1.75rem;
+    box-shadow: 0 32px 80px rgba(99,91,255,0.2);
+    position: relative;
+  }
+  .detail-overlay-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 1.25rem; padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(99,91,255,0.1);
+  }
+  .detail-overlay-close {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    border: 1px solid rgba(99,91,255,0.2); background: rgba(255,255,255,0.9);
+    cursor: pointer; font-size: 15px; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; margin-left: 12px;
+  }
+  .detail-overlay-close:hover { background: var(--violet); color: #fff; border-color: transparent; }
+
+  /* Expand button on selected scheme card */
+  .scheme-expand-btn {
+    position: absolute; top: 10px; right: 10px;
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid rgba(99,91,255,0.2);
+    background: rgba(99,91,255,0.06);
+    font-family: 'DM Mono'; font-size: 9px; letter-spacing: 0.5px;
+    color: var(--violet); cursor: pointer; transition: all 0.15s;
+    display: none; /* shown only on selected card via JS */
+  }
+  .scheme-card.selected { position: relative; }
+  .scheme-card.selected .scheme-expand-btn { display: block; }
+  .scheme-expand-btn:hover { background: var(--violet); color: #fff; }
+
+  @media (max-width: 768px) {
+    /* On mobile: bottom sheet style */
+    .detail-overlay {
+      align-items: flex-end; padding: 0;
+      background: rgba(15,12,46,0.45);
+    }
+    .detail-overlay-panel {
+      border-radius: 20px 20px 0 0; max-width: 100%;
+      max-height: 91vh; padding: 0;
+      border: none; border-top: 1px solid rgba(99,91,255,0.15);
+      animation: sheetUp 0.28s cubic-bezier(0.32,0.72,0,1);
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    .detail-overlay-header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(255,255,255,0.98);
+      border-radius: 20px 20px 0 0;
+      padding: 12px 1.25rem 10px;
+      margin-bottom: 0;
+    }
+    .detail-overlay-body { padding: 1rem 1.25rem 2rem; }
+    /* Drag handle */
+    .detail-overlay-handle {
+      width: 40px; height: 4px; border-radius: 2px;
+      background: rgba(99,91,255,0.2); margin: 0 auto 12px;
+    }
+    /* Hide expand button on mobile cards — tap opens sheet directly */
+    .scheme-expand-btn { display: none !important; }
+  }
+
   /* PEER FULLSCREEN OVERLAY */
   .peer-overlay {
     position: fixed; inset: 0; z-index: 500;
@@ -584,11 +664,12 @@ const style = `
   }
   .peer-overlay-close:hover { background: var(--violet); color: #fff; border-color: transparent; }
   .peer-fs-btn {
-    background: none; border: 1px solid var(--border); border-radius: 5px;
-    cursor: pointer; font-size: 12px; color: var(--muted);
-    padding: 3px 7px; transition: all 0.15s; line-height: 1; margin-left: 4px;
+    background: rgba(99,91,255,0.06); border: 1px solid rgba(99,91,255,0.2); border-radius: 5px;
+    cursor: pointer; font-size: 10px; color: var(--violet);
+    padding: 3px 8px; transition: all 0.15s; line-height: 1; margin-left: 6px;
+    font-family: 'DM Mono'; letter-spacing: 1px;
   }
-  .peer-fs-btn:hover { color: var(--violet); border-color: var(--violet); background: rgba(99,91,255,0.06); }
+  .peer-fs-btn:hover { background: var(--violet); color: #fff; border-color: transparent; }
 
   @media (max-width: 1024px) {
     .main { grid-template-columns: 1fr; }
@@ -861,6 +942,7 @@ export default function App() {
   const [selected,      setSelected]     = useState(null);
   const [peerExpanded,   setPeerExpanded]   = useState(false);
   const [peerFullscreen, setPeerFullscreen] = useState(false);
+  const [showDetailOverlay, setShowDetailOverlay] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   // Peer panel state
   const [peerMetric,     setPeerMetric]     = useState("returns");
@@ -1449,7 +1531,14 @@ export default function App() {
                 <div key={s.id}
                   className={`scheme-card ${selected?.id === s.id ? "selected" : ""}`}
                   style={{animationDelay:`${Math.min(i,20)*0.02}s`}}
-                  onClick={() => { setSelected(s); setPeerExpanded(false); setPeerMetric("returns"); setPeerReturnMode("p2p"); setPeerPeriod("1Y"); }}
+                  onClick={() => {
+                    setSelected(s);
+                    setPeerExpanded(false);
+                    setPeerMetric("returns");
+                    setPeerReturnMode("p2p");
+                    setPeerPeriod("1Y");
+                    if (isMobile) setShowDetailOverlay(true);
+                  }}
                 >
                   {isMobile ? (
                     /* ── MOBILE CARD — Option A ── */
@@ -1498,6 +1587,11 @@ export default function App() {
                           </span>
                         </div>
                       </div>
+                      {selected?.id === s.id && (
+                        <button className="scheme-expand-btn"
+                          onClick={e => { e.stopPropagation(); setShowDetailOverlay(true); }}
+                          title="Expand full detail">⤢ Expand</button>
+                      )}
                       <ReturnCell value={s.returns?.["1M"]} />
                       <ReturnCell value={s.returns?.["3M"]} />
                       <ReturnCell value={s.returns?.["6M"]} />
@@ -1725,7 +1819,7 @@ export default function App() {
                             </div>
                           )}
                           <button className="peer-fs-btn" title="Expand to fullscreen"
-                            onClick={() => setPeerFullscreen(true)}>⛶</button>
+                            onClick={() => setPeerFullscreen(true)}>[ ]</button>
                         </div>
                       </div>
 
@@ -2024,6 +2118,209 @@ export default function App() {
           </div>
         </div>
       </>}
+
+      {/* DETAIL OVERLAY — desktop fullscreen + mobile bottom sheet */}
+      {showDetailOverlay && selected && (
+        <div className="detail-overlay"
+          onClick={e => { if (e.target.classList.contains("detail-overlay")) setShowDetailOverlay(false); }}>
+          <div className="detail-overlay-panel">
+            {/* Mobile drag handle */}
+            <div className="detail-overlay-handle"/>
+            <div className="detail-overlay-header">
+              <div style={{flex:1}}>
+                <div className="panel-amc">{selected.amc}</div>
+                <div className="panel-name" style={{fontSize:"1.2rem"}}>
+                  {selected.name.replace(selected.amc,"").trim()}
+                </div>
+                <div className="panel-tags" style={{marginTop:6}}>
+                  <span className="tag tag-cat">{selected.category}</span>
+                  <span className={`tag ${selected.plan==="Direct"?"tag-plan-d":"tag-plan-r"}`}>{selected.plan}</span>
+                  <span className="tag" style={{background:"rgba(244,63,142,0.1)",color:"var(--pink)",border:"1px solid rgba(244,63,142,0.2)"}}>{selected.type}</span>
+                </div>
+              </div>
+              <button className="detail-overlay-close" onClick={() => setShowDetailOverlay(false)}>✕</button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="detail-overlay-body">
+              {/* NAV row */}
+              <div className="panel-nav-row" style={{marginBottom:"1.5rem",paddingBottom:"1rem",borderBottom:"1px solid var(--border)"}}>
+                <div>
+                  <div className="panel-nav-label">NAV ({selected.navDate})</div>
+                  <div className="panel-nav-val">₹{selected.nav}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div className="panel-nav-label">NAV since</div>
+                  <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
+                    {selected.navDate ? new Date(selected.navDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Trailing Returns */}
+              <div className="panel-section-title">Trailing Returns (%)</div>
+              <div className="returns-grid" style={{marginBottom:"1.5rem"}}>
+                {["1W","1M","3M","6M","1Y","3Y","5Y"].map(p => (
+                  <div className="ret-tile" key={p}>
+                    <div className="ret-tile-period">{p}</div>
+                    <div className="ret-tile-val" style={{color:returnColor(selected.returns?.[p])}}>
+                      {selected.returns?.[p] != null ? `${selected.returns[p]>0?"+":""}${selected.returns[p]}%` : "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Risk Metrics */}
+              <div className="panel-section-title" style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:6,borderBottom:"1px solid var(--border)"}}>
+                <span>Risk Metrics{ratiosLoading && <span style={{marginLeft:8,fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)"}}>⟳</span>}</span>
+                <div style={{display:"flex",gap:3}}>
+                  {["1Y","3Y","5Y"].map(p => {
+                    const hasData = selectedRatios?.[p] != null;
+                    return (
+                      <button key={p} onClick={() => hasData && setRatioPeriod(p)} style={{
+                        padding:"2px 8px",borderRadius:4,border:"1px solid",
+                        fontFamily:"'DM Mono'",fontSize:"9px",cursor:hasData?"pointer":"default",
+                        background:ratioPeriod===p?"var(--violet)":"transparent",
+                        color:ratioPeriod===p?"#fff":hasData?"var(--muted)":"rgba(107,114,160,0.3)",
+                        borderColor:ratioPeriod===p?"var(--violet)":hasData?"var(--border)":"rgba(99,91,255,0.06)",
+                      }}>{p}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="info-grid" style={{marginBottom:"1.5rem"}}>
+                {(() => {
+                  const r = selectedRatios?.[ratioPeriod] ?? (ratioPeriod==="1Y" ? selectedRatios : null);
+                  return (<>
+                    <div className="info-tile"><div className="info-label">Sharpe Ratio</div>
+                      <div className="info-val" style={{color:(r?.sharpe??0)>1?"var(--violet)":"var(--text)"}}>{r?.sharpe!=null?r.sharpe.toFixed(2):"—"}</div></div>
+                    <div className="info-tile"><div className="info-label">Std Dev (Ann.)</div>
+                      <div className="info-val">{r?.stdDev!=null?`${r.stdDev.toFixed(2)}%`:"—"}</div></div>
+                    <div className="info-tile"><div className="info-label">Max Drawdown</div>
+                      <div className="info-val" style={{color:"var(--red)"}}>{r?.maxDrawdown!=null?`${r.maxDrawdown.toFixed(2)}%`:"—"}</div></div>
+                    <div className="info-tile"><div className="info-label">Sortino Ratio</div>
+                      <div className="info-val" style={{color:(r?.sortino??0)>1?"var(--emerald)":"var(--text)"}}>{r?.sortino!=null?r.sortino.toFixed(2):"—"}</div></div>
+                  </>);
+                })()}
+              </div>
+
+              {/* Rolling chart */}
+              <div className="panel-section-title">1Y Rolling Returns</div>
+              <RollingChart data={(() => {
+                const raw = peerNavHist?.[String(selected.id)];
+                if (raw && raw.length > 50) return computeRolling1Y(raw);
+                return [];
+              })()} />
+
+              {/* Peer comparison — same dedupedPeers + state as sidebar */}
+              {dedupedPeers.length > 1 && (() => {
+                const METRIC_TABS = [
+                  {key:"returns",label:"Returns"},{key:"sharpe",label:"Sharpe"},
+                  {key:"stddev",label:"Std Dev"},{key:"maxdd",label:"Max DD"},{key:"sortino",label:"Sortino"},
+                ];
+                const P2P_PERIODS = ["1M","3M","6M","1Y","3Y"];
+                const getMetricVal = (p) => {
+                  if (peerMetric==="returns") {
+                    if (peerReturnMode==="p2p") return p.returns?.[peerPeriod]??null;
+                    return peerYearReturns[p.id]?.[peerYear]??null;
+                  }
+                  const r = ratiosMap[String(p.id)];
+                  if (peerMetric==="sharpe")  return r?.sharpe??null;
+                  if (peerMetric==="stddev")  return r?.stdDev??null;
+                  if (peerMetric==="maxdd")   return r?.maxDrawdown??null;
+                  if (peerMetric==="sortino") return r?.sortino??null;
+                  return null;
+                };
+                const fmtMetric = (v) => {
+                  if (v==null) return "—";
+                  if (peerMetric==="returns") return `${v>0?"+":""}${v}%`;
+                  return v.toFixed(2);
+                };
+                const sortedPeers = [...dedupedPeers].sort((a,b) => {
+                  const lowerBetter = peerMetric==="stddev"||peerMetric==="maxdd";
+                  const av = getMetricVal(a)??-9999, bv = getMetricVal(b)??-9999;
+                  return lowerBetter ? av-bv : bv-av;
+                });
+                const availYears = Object.keys(peerYearReturns[selected.id]||{}).sort().reverse();
+                return (
+                  <div className="peer-panel" style={{marginTop:"1rem"}}>
+                    <div className="peer-tabs">
+                      <div className="peer-tab-group">
+                        {METRIC_TABS.map(t => (
+                          <button key={t.key} className={`peer-tab${peerMetric===t.key?" active":""}`}
+                            onClick={() => {setPeerMetric(t.key);if(t.key!=="returns")setPeerReturnMode("p2p");}}>
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                      {peerMetric==="returns" && (
+                        <div className="peer-toggle">
+                          <button className={`peer-toggle-btn${peerReturnMode==="p2p"?" active":""}`} onClick={()=>setPeerReturnMode("p2p")}>P2P</button>
+                          <button className={`peer-toggle-btn${peerReturnMode==="year"?" active":""}`} onClick={()=>setPeerReturnMode("year")}>Year</button>
+                        </div>
+                      )}
+                    </div>
+                    {peerMetric==="returns" && (
+                      <div className="peer-pills">
+                        {peerReturnMode==="p2p" ? P2P_PERIODS.map(p=>(
+                          <button key={p} className={`peer-pill${peerPeriod===p?" active":""}`} onClick={()=>setPeerPeriod(p)}>{p}</button>
+                        )) : peerNavLoading ? (
+                          <span style={{fontFamily:"'DM Mono'",fontSize:10,color:"var(--muted)"}}>Loading...</span>
+                        ) : availYears.map(y=>(
+                          <button key={y} className={`peer-pill${peerYear===y?" active":""}`} onClick={()=>setPeerYear(y)}>
+                            {y===new Date().getFullYear().toString()?`${y} YTD`:y}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{borderTop:"1px solid var(--border)",marginTop:8,overflowX:"auto"}}>
+                      <table className="peer-tbl">
+                        <thead><tr>
+                          <th>#</th><th>Scheme</th><th>AUM</th>
+                          <th style={{color:"var(--violet)"}}>
+                            {peerMetric==="returns"?peerPeriod:peerMetric==="sharpe"?"Sharpe":peerMetric==="stddev"?"StdDev":peerMetric==="maxdd"?"MaxDD":"Sortino"} ↓
+                          </th>
+                        </tr></thead>
+                        <tbody>
+                          {sortedPeers.map((p,i) => {
+                            const v = getMetricVal(p);
+                            const metricColor = (v,p) => {
+                              if (v==null) return "var(--muted)";
+                              if (p.id===selected.id) return "var(--violet)";
+                              if (peerMetric==="returns") return returnColor(v);
+                              if (peerMetric==="sharpe"||peerMetric==="sortino") return v>1?"#059669":v>0?"var(--text)":"#e11d48";
+                              return "var(--text)";
+                            };
+                            const shortName = (p) => {
+                              const n=p.name||"", amc=(p.amc||"").split(" ")[0];
+                              const stripped=n.startsWith(amc)?n.slice(amc.length).trim():n;
+                              return stripped.length>28?stripped.slice(0,27)+"…":stripped;
+                            };
+                            return (
+                              <tr key={p.id} className={p.id===selected.id?"peer-selected":""}>
+                                <td><span className="peer-rank-badge">{i+1}</span></td>
+                                <td>
+                                  <div className="peer-scheme-name" title={p.name} style={{color:p.id===selected.id?"var(--violet)":undefined,maxWidth:180}}>{shortName(p)}</div>
+                                  <div className="peer-scheme-amc">{p.amc}{p.id===selected.id&&<span style={{color:"var(--violet)",marginLeft:4}}>· selected</span>}</div>
+                                </td>
+                                <td style={{color:"var(--muted)"}}>—</td>
+                                <td style={{color:metricColor(v,p),fontWeight:p.id===selected.id?500:400}}>{fmtMetric(v)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{padding:"5px 8px",fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)"}}>
+                        AUM: data source pending · Returns: AMFI India
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SOURCE ATTRIBUTION */}
       <footer style={{
