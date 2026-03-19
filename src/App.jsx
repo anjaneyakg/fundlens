@@ -19,6 +19,7 @@ import STPCalculator from './pages/STPCalculator'
 import AdminLayout from './pages/AdminLayout.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
+import SchemeBasket from './pages/SchemeBasket'
 
 export default function App() {
   const location = useLocation()
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/loan-calculator"      element={<LoanCalc />} />
         <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"       element={<STPCalculator />} />
+        <Route path="/scheme-basket" element={<SchemeBasket />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
