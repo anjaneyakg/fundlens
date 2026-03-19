@@ -506,14 +506,14 @@ export default function CompareSchemes() {
 
   // Fetch ratios once on first comparison
   useEffect(() => {
-    if (ratiosLoaded || ratiosLoading || activeSchemes.length < 2) return;
+    if (ratiosLoaded || ratiosLoading || slots.filter(Boolean).length < 2) return;
     setRatiosLoading(true);
     fetch(RATIOS_URL)
       .then(r => r.json())
       .then(json => { setRatiosMap(json.ratios || {}); setRatiosLoaded(true); })
       .catch(e => console.warn("Z2 ratios fetch failed:", e.message))
       .finally(() => setRatiosLoading(false));
-  }, [activeSchemes.length]);
+  }, [slots.filter(Boolean).length, ratiosLoaded, ratiosLoading]);
 
   // Search handler
   const handleSearch = useCallback((idx, q) => {
