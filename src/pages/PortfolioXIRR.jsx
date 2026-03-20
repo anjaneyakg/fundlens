@@ -348,15 +348,15 @@ export default function PortfolioXIRR() {
               </div>
             ) : (
               // Desktop: table
-              <div style={{ minWidth: 680 }}>
+              <div style={{ overflowX: "auto" }}>
                 {/* Header */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 120px 130px 110px 80px 28px", gap: 8, padding: "7px 8px", background: "#f9fafb", borderRadius: "8px 8px 0 0", border: "1px solid #e5e7eb", fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.7 }}>
-                  <span>Name</span><span>Buy date</span><span>Invested</span><span>Current / maturity value</span><span>Value date</span><span>XIRR</span><span></span>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 105px 110px 110px 105px 70px 28px", gap: 6, padding: "7px 8px", background: "#f9fafb", borderRadius: "8px 8px 0 0", border: "1px solid #e5e7eb", fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.7, minWidth: 620 }}>
+                  <span>Name</span><span>Buy date</span><span>Invested</span><span>Value</span><span>Value date</span><span>XIRR</span><span></span>
                 </div>
                 {investments.map((inv, idx) => {
                   const res = multiResults.items.find(i => i.id === inv.id);
                   return (
-                    <div key={inv.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 120px 130px 110px 80px 28px", gap: 8, padding: "8px", border: "1px solid #f3f4f6", borderTop: "none", alignItems: "center", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    <div key={inv.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 105px 110px 110px 105px 70px 28px", gap: 6, padding: "8px", border: "1px solid #f3f4f6", borderTop: "none", alignItems: "center", background: idx % 2 === 0 ? "#fff" : "#fafafa", minWidth: 620 }}>
                       <input value={inv.name} onChange={e => updateInvestment(inv.id, { name: e.target.value })}
                         placeholder={`Investment ${idx + 1}`}
                         style={{ border: "1.5px solid #d1d5db", borderRadius: 7, padding: "5px 8px", fontSize: 12, color: "#111827", outline: "none", background: "#f9fafb", width: "100%" }} />
@@ -392,27 +392,30 @@ export default function PortfolioXIRR() {
             <SectionHead title="Investment tranches" />
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
               {tranches.map((t, idx) => (
-                <div key={t.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr 28px" : "120px 1fr 28px", gap: 8, alignItems: "center", padding: "8px 10px", background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: 8 }}>Investment</span>
-                    {!isMobile && <span style={{ fontSize: 10, color: "#9ca3af" }}>#{idx + 1}</span>}
+                <div key={t.id} style={{ padding: "8px 10px", background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: 8 }}>Investment</span>
+                      <span style={{ fontSize: 10, color: "#9ca3af" }}>#{idx + 1}</span>
+                    </div>
+                    <DelBtn onClick={() => removeTranche(t.id)} />
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
                     <DateInput value={t.date} onChange={v => updateTranche(t.id, { date: v })} />
                     <AmtInput value={t.amount} onChange={v => updateTranche(t.id, { amount: v })} />
                   </div>
-                  <DelBtn onClick={() => removeTranche(t.id)} />
                 </div>
               ))}
 
               {/* Maturity row */}
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr 28px" : "120px 1fr 28px", gap: 8, alignItems: "center", padding: "8px 10px", background: "#f0fdf4", borderRadius: 8, border: "1.5px solid #bbf7d0" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, background: "#dcfce7", color: "#059669", padding: "2px 8px", borderRadius: 8, display: "inline-block" }}>Maturity / Current</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ padding: "8px 10px", background: "#f0fdf4", borderRadius: 8, border: "1.5px solid #bbf7d0" }}>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, background: "#dcfce7", color: "#059669", padding: "2px 8px", borderRadius: 8, display: "inline-block" }}>Maturity / Current value</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
                   <DateInput value={maturityDate} onChange={setMaturityDate} style={{ border: "1.5px solid #bbf7d0" }} />
                   <AmtInput value={maturityValue} onChange={setMaturityValue} style={{ border: "1.5px solid #bbf7d0", background: "#f0fdf4" }} />
                 </div>
-                <div style={{ width: 28 }} />
               </div>
             </div>
 
