@@ -101,8 +101,8 @@ function LineChart({ series, color, label, zeroLine }) {
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
       <defs>
         <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.01" />
+          <stop offset="0%" stopColor={color === "#1d4ed8" ? "#dbeafe" : "#dcfce7"} stopOpacity="1" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
         </linearGradient>
       </defs>
       {/* Grid */}
