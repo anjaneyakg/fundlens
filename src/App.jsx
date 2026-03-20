@@ -20,6 +20,7 @@ import AdminLayout from './pages/AdminLayout.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
+import PreRetirementPlanner from "./tools/PreRetirementPlanner";
 
 export default function App() {
   const location = useLocation()
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"       element={<STPCalculator />} />
         <Route path="/scheme-basket" element={<SchemeBasket />} />
+        <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
