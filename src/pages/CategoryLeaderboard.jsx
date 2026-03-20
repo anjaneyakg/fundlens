@@ -365,7 +365,7 @@ export default function CategoryLeaderboard() {
         <div className="z8-eyebrow">◆ Z8 · MF Explorer</div>
         <div className="z8-title">CATEGORY<br />LEADERBOARD</div>
         <div className="z8-subtitle">
-          Top performers by SEBI category · Growth option · ranked by 1Y return.
+          Top performers by Scheme category · Growth option · Direct|Regular - by selection · Ranked by return / Ratio selection
           Click any scheme to open its full detail in Scheme Explorer.
         </div>
         <div className="z8-meta-row">
