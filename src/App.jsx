@@ -24,6 +24,7 @@ import PreRetirementPlanner from "./pages/PreRetirementPlanner";
 import RDCalculator from "./pages/RDCalculator";
 import CapitalGains from "./pages/CapitalGains";
 import PostTaxComparator from "./pages/PostTaxComparator";
+import InflationAdjustedReturn from "./pages/InflationAdjustedReturn";
 
 export default function App() {
   const location = useLocation()
@@ -54,7 +55,8 @@ export default function App() {
         <Route path="/rd-calculator" element={<RDCalculator />} />
         <Route path="/capital-gains" element={<CapitalGains />} />
         <Route path="/post-tax" element={<PostTaxComparator />} />
-
+        <Route path="/real-return" element={<InflationAdjustedReturn />} />
+        
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
           <Route path="coverage"         element={<CoverageDashboard />} />
