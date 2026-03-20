@@ -198,7 +198,7 @@ const GROUPS = [
     items: [
       { code:"C1", name:"Risk Profiler",   tagline:"What kind of investor am I?",   path:"/risk-profiler",   live:false },
       { code:"C2", name:"Basket Builder",  tagline:"Build my portfolio",            path:"/basket-builder",  live:false },
-      { code:"C3", name:"Pre-Retirement",  tagline:"Am I on track to retire?",      path:"/pre-retirement",  live:false },
+      { code:"C3", name:"Pre-Retirement",  tagline:"Am I on track to retire?",      path:"/pre-retirement-planner",  live:true },
       { code:"C4", name:"Post-Retirement", tagline:"Will my money outlast me?",     path:"/post-retirement", live:false },
       { code:"C5", name:"Goal-Based SIP",  tagline:"How much do I need to invest?", path:"/goal-sip",        live:true  },
       { code:"C6", name:"Goal Calculator", tagline:"One goal. One clear number.",   path:"/goal-calculator", live:true  },
