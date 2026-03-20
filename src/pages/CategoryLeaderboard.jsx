@@ -365,7 +365,7 @@ export default function CategoryLeaderboard() {
         <div className="z8-eyebrow">◆ Z8 · MF Explorer</div>
         <div className="z8-title">CATEGORY<br />LEADERBOARD</div>
         <div className="z8-subtitle">
-          Top performers by Scheme category · Growth option
+          Top performers by Scheme category · Growth option<br />
           Click any scheme to open its full detail in Scheme Explorer.
         </div>
         <div className="z8-meta-row">
