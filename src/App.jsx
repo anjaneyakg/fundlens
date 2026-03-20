@@ -23,6 +23,7 @@ import SchemeBasket from './pages/SchemeBasket'
 import PreRetirementPlanner from "./pages/PreRetirementPlanner";
 import RDCalculator from "./pages/RDCalculator";
 import CapitalGains from "./pages/CapitalGains";
+import PostTaxComparator from "./pages/PostTaxComparator";
 
 export default function App() {
   const location = useLocation()
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
         <Route path="/rd-calculator" element={<RDCalculator />} />
         <Route path="/capital-gains" element={<CapitalGains />} />
+        <Route path="/post-tax" element={<PostTaxComparator />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
