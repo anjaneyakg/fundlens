@@ -20,7 +20,7 @@ import AdminLayout from './pages/AdminLayout.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
-import PreRetirementPlanner from "./tools/PreRetirementPlanner";
+import PreRetirementPlanner from "./pages/PreRetirementPlanner";
 
 export default function App() {
   const location = useLocation()
