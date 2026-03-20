@@ -195,7 +195,7 @@ def upload_nav_history(gist_id):
             else:
                 print(f"❌ {code}")
             failed_batches.append(b_idx)
-            time.sleep(BATCH_DELAY)
+        time.sleep(BATCH_DELAY)
 
     if failed_batches:
         print(f"\n  ❌ {len(failed_batches)} batch(es) failed: {failed_batches}")
