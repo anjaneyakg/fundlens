@@ -215,7 +215,7 @@ const GROUPS = [
   {
     id: "E", label: "Tax & Returns",
     items: [
-      { code:"E1", name:"Capital Gains",         tagline:"What is my tax liability?",             path:"/capital-gains", live:false },
+      { code:"E1", name:"Capital Gains",         tagline:"What is my tax liability?",             path:"/capital-gains", live:true },
       { code:"E2", name:"Post-Tax Comparator",   tagline:"Which investment is better after tax?", path:"/post-tax",      live:false },
       { code:"E3", name:"Inflation-Adj. Return", tagline:"What is my real return?",               path:"/real-return",   live:false },
       { code:"E4", name:"XIRR Calculator",       tagline:"What is my actual return?",             path:"/xirr-calc",     live:false },
