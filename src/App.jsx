@@ -25,6 +25,7 @@ import RDCalculator from "./pages/RDCalculator";
 import CapitalGains from "./pages/CapitalGains";
 import PostTaxComparator from "./pages/PostTaxComparator";
 import InflationAdjustedReturn from "./pages/InflationAdjustedReturn";
+import PortfolioXIRR from "./pages/PortfolioXIRR";
 
 export default function App() {
   const location = useLocation()
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/capital-gains" element={<CapitalGains />} />
         <Route path="/post-tax" element={<PostTaxComparator />} />
         <Route path="/real-return" element={<InflationAdjustedReturn />} />
+        <Route path="/xirr-calc" element={<PortfolioXIRR />} />
         
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
