@@ -97,14 +97,18 @@ function LineChart({ series, color, label, zeroLine }) {
   // Zero line y
   const zeroY = zeroLine ? PT + iH - ((0 - minV) / range) * iH : null;
 
+  const gradId = `grad${color.replace("#", "")}`;
+  const fillColor = color === "#1d4ed8" ? "#dbeafe" : "#dcfce7";
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", background: "#fff", borderRadius: 8 }}>
       <defs>
-        <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color === "#1d4ed8" ? "#dbeafe" : "#dcfce7"} stopOpacity="1" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={fillColor} />
+          <stop offset="100%" stopColor="#ffffff" />
         </linearGradient>
       </defs>
+      <rect x="0" y="0" width={W} height={H} fill="#ffffff" />
       {/* Grid */}
       {ticks.map((t, i) => (
         <g key={i}>
@@ -119,7 +123,7 @@ function LineChart({ series, color, label, zeroLine }) {
         <line x1={PL} x2={W - PR} y1={zeroY} y2={zeroY} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4,2" />
       )}
       {/* Area */}
-      <path d={area} fill={`url(#grad-${label})`} />
+      <path d={area} fill={`url(#${gradId})`} />
       {/* Line */}
       <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
       {/* X labels */}
