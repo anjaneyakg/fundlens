@@ -1,6 +1,17 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 const TIER = "investor";
+
+// ─── Responsive hook ───────────────────────────────────────────────────────
+function useWindowWidth() {
+  const [width, setWidth] = useState(() => typeof window !== "undefined" ? window.innerWidth : 900);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return width;
+}
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 const fmt = (n) =>
@@ -309,6 +320,11 @@ export default function CapitalGains() {
     };
   }, [asset, buyPrice, sellPrice, holdingMonths, holdingYears, ltcgExemption, slabRate]);
 
+  // ── Responsive ──────────────────────────────────────────────────────────
+  const winWidth = useWindowWidth();
+  const isMobile = winWidth <= 768;
+  const isSmall = winWidth <= 480;
+
   // ── Styles ──────────────────────────────────────────────────────────────
   const isLT = results?.isLT;
   const classColor = results
@@ -360,7 +376,7 @@ export default function CapitalGains() {
 
           {/* Asset selector */}
           <SectionHead title="Asset Type" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isSmall ? "repeat(2, 1fr)" : isMobile ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 8, marginBottom: 18 }}>
             {ASSETS.map(a => (
               <button key={a.key} onClick={() => setAssetKey(a.key)}
                 style={{
@@ -399,7 +415,7 @@ export default function CapitalGains() {
           </div>
 
           {/* Two col inputs */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20 }}>
 
             {/* Left: Transaction + Holding */}
             <div>
@@ -479,10 +495,10 @@ export default function CapitalGains() {
 
               {asset.hasExemption && (
                 <AmtInput
-                  label="LTCG annual exemption (editable)"
+                  label="LTCG annual exemption"
                   value={ltcgExemption}
                   onChange={setLtcgExemption}
-                  hint="Default ₹1,25,000 — applicable for equity MF / stocks / Gold ETF"
+                  hint="Default ₹1.25L · equity MF, stocks, Gold ETF/SGB"
                 />
               )}
 
@@ -530,7 +546,7 @@ export default function CapitalGains() {
             </div>
 
             {/* Stat cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isSmall ? "1fr" : isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
               <StatCard label="Total gain" value={`${results.gain >= 0 ? "+" : "−"}${fmt(results.gain)}`}
                 color={results.gain >= 0 ? "#059669" : "#dc2626"}
                 bg={results.gain >= 0 ? "#f0fdf4" : "#fef2f2"}
@@ -610,18 +626,6 @@ export default function CapitalGains() {
         )}
       </div>
 
-      {/* Responsive styles */}
-      <style>{`
-        @media (max-width: 768px) {
-          .e1-two-col { grid-template-columns: 1fr !important; }
-          .e1-three-col { grid-template-columns: 1fr 1fr !important; }
-          .e1-asset-grid { grid-template-columns: repeat(3, 1fr) !important; }
-        }
-        @media (max-width: 480px) {
-          .e1-three-col { grid-template-columns: 1fr !important; }
-          .e1-asset-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-      `}</style>
     </div>
   );
 }
