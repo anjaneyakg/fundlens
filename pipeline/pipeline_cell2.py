@@ -197,13 +197,12 @@ def upload_nav_history(gist_id):
             failed_batches.append(b_idx)
             time.sleep(BATCH_DELAY)
 
-if failed_batches:
+    if failed_batches:
         print(f"\n  ❌ {len(failed_batches)} batch(es) failed: {failed_batches}")
         return False
 
     print(f"\n  ✅ All {len(batches)} batches uploaded ({total_files} files)")
     return True
-
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
