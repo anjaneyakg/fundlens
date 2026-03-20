@@ -342,10 +342,17 @@ export default function PreRetirementPlanner() {
           </div>
 
           {sectionHead("Finances")}
-          <NumInput label="Current Savings / Corpus" value={currentCorpus} onChange={setCurrentCorpus} />
+          {mode === "accumulate" && (
+            <NumInput label="Current Savings / Corpus" value={currentCorpus} onChange={setCurrentCorpus} />
+          )}
           <NumInput label="Monthly Expenses Today" value={monthlyExpense} onChange={setMonthlyExpense} suffix="/mo" />
           {mode === "sustain" && (
-            <NumInput label="Corpus at Retirement" value={corpusAtRetirement} onChange={setCorpusAtRetirement} />
+            <>
+              <NumInput label="Your Corpus at Retirement" value={corpusAtRetirement} onChange={setCorpusAtRetirement} />
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: -10, marginBottom: 12 }}>
+                How much will you have saved by retirement?
+              </div>
+            </>
           )}
 
           {sectionHead("Return & Inflation Rates")}
