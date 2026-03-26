@@ -13,6 +13,17 @@ const fmt = (n) => n >= 1000 ? `₹${(n/1000).toFixed(1)}K Cr` : `₹${n} Cr`;
 const returnColor = (v) => v > 0 ? "#059669" : v < 0 ? "#e11d48" : "#6b72a0";
 const riskColor = (r) => ({ "Low":"#059669","Moderate":"#d97706","High":"#ea580c","Very High":"#e11d48" }[r] || "#6b72a0");
 
+// ─── DATE FORMAT — single source of truth across all tools ───────────────────
+// Standard: DD-MMM-YY  e.g. 25-Mar-26
+// Use fmtDate() everywhere a date string is displayed to the user.
+// Never use toISOString() — always parse via new Date(str) which treats YYYY-MM-DD as local.
+const fmtDate = (dateStr) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr; // fallback: show raw if unparseable
+  return d.toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"2-digit" });
+};
+
 const categorySlug = (category, plan) => {
   const slug = (category||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
   return `nav_${slug}_${(plan||"").toLowerCase()}.json`;
@@ -228,6 +239,14 @@ const style = `
   .tag-cat { background: rgba(255,107,53,0.1); color: var(--orange); border: 1px solid rgba(255,107,53,0.2); }
   .tag-plan-d { background: rgba(99,91,255,0.1); color: var(--violet); border: 1px solid rgba(99,91,255,0.2); }
   .tag-plan-r { background: rgba(107,114,160,0.08); color: var(--muted); border: 1px solid var(--border); }
+  /* NAV date disclosure chip — shown on scheme cards and detail panels */
+  /* Design standard: all date displays use DD-MMM-YY format (fmtDate helper) */
+  .tag-nav-date {
+    background: transparent; color: var(--muted);
+    border: none; padding: 0; letter-spacing: 0.3px; font-size: 9px;
+    font-family: 'DM Mono'; display: inline-flex; align-items: center; gap: 3px;
+  }
+  .tag-nav-date-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: 0.4; flex-shrink: 0; }
 
   .ret-cell { text-align: right; font-family: 'DM Mono'; font-size: 12px; font-weight: 500; }
   .aum-cell { text-align: right; font-family: 'DM Mono'; font-size: 11px; color: var(--muted); }
@@ -1557,6 +1576,12 @@ export default function App() {
                           <div className="scheme-meta">
                             <span className="tag tag-cat">{s.category}</span>
                             <span className={`tag ${s.plan === "Direct" ? "tag-plan-d" : "tag-plan-r"}`}>{s.plan}</span>
+                            {s.navDate && (
+                              <span className="tag-nav-date">
+                                <span className="tag-nav-date-dot"/>
+                                {fmtDate(s.navDate)}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="mobile-card-metric">
@@ -1593,6 +1618,12 @@ export default function App() {
                           <span className="tag" style={{background:"rgba(99,91,255,0.07)",color:"var(--muted)",border:"1px solid var(--border)"}}>
                             {getOption(s)}
                           </span>
+                          {s.navDate && (
+                            <span className="tag-nav-date" title={`Latest NAV: ${fmtDate(s.navDate)}`}>
+                              <span className="tag-nav-date-dot"/>
+                              {fmtDate(s.navDate)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       {selected?.id === s.id && (
@@ -1651,30 +1682,25 @@ export default function App() {
                   </div>
                   <div className="panel-nav-row">
                     <div>
-                      <div className="panel-nav-label">NAV ({(() => {
-                        if (!selected.navDate) return "—";
-                        const d = new Date(selected.navDate);
-                        return isNaN(d) ? selected.navDate : d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
-                      })()})</div>
+                      <div className="panel-nav-label">NAV ({fmtDate(selected.navDate)})</div>
                       <div className="panel-nav-val">₹{selected.nav}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div className="panel-nav-label">NAV Since</div>
                       <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
-                        {selected.inceptionDate
-                          ? (() => {
-                              const d = new Date(selected.inceptionDate);
-                              return isNaN(d) ? selected.inceptionDate
-                                : d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
-                            })()
-                          : "—"}
+                        {fmtDate(selected.inceptionDate)}
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Returns grid */}
-                <div className="panel-section-title">Trailing Returns (%)</div>
+                <div className="panel-section-title" style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <span>Trailing Returns (%)</span>
+                  <span style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",letterSpacing:"0.5px"}}>
+                    as of {fmtDate(selected.navDate)}
+                  </span>
+                </div>
                 <div className="returns-grid">
                   {["1W","1M","3M","6M","1Y","3Y","5Y"].map(p => (
                     <div className="ret-tile" key={p}>
@@ -2174,19 +2200,24 @@ export default function App() {
               {/* NAV row */}
               <div className="panel-nav-row" style={{marginBottom:"1.5rem",paddingBottom:"1rem",borderBottom:"1px solid var(--border)"}}>
                 <div>
-                  <div className="panel-nav-label">NAV ({selected.navDate})</div>
+                  <div className="panel-nav-label">NAV ({fmtDate(selected.navDate)})</div>
                   <div className="panel-nav-val">₹{selected.nav}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div className="panel-nav-label">NAV since</div>
+                  <div className="panel-nav-label">NAV Since</div>
                   <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
-                    {selected.navDate ? new Date(selected.navDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—"}
+                    {fmtDate(selected.inceptionDate)}
                   </div>
                 </div>
               </div>
 
               {/* Trailing Returns */}
-              <div className="panel-section-title">Trailing Returns (%)</div>
+              <div className="panel-section-title" style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                <span>Trailing Returns (%)</span>
+                <span style={{fontFamily:"'DM Mono'",fontSize:"9px",color:"var(--muted)",letterSpacing:"0.5px"}}>
+                  as of {fmtDate(selected.navDate)}
+                </span>
+              </div>
               <div className="returns-grid" style={{marginBottom:"1.5rem"}}>
                 {["1W","1M","3M","6M","1Y","3Y","5Y"].map(p => (
                   <div className="ret-tile" key={p}>
