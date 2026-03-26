@@ -268,7 +268,7 @@ export default function Home() {
       </div>
 
       <div className="home-footer">
-        FUNDLENS · DATA FROM MFAPI.IN · FOR INFORMATIONAL PURPOSES ONLY
+        FUNDLENS · DATA FROM AMFIINDIA.COM · FOR INFORMATIONAL PURPOSES ONLY
       </div>
     </div>
   )
