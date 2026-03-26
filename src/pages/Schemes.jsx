@@ -1183,11 +1183,10 @@ export default function App() {
                   !s.amc.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   }).sort((a, b) => {
-    const aVal = sortKey === "SHARPE" ? (a.risk?.sharpe ?? -999)
-               : sortKey === "DD"     ? (a.risk?.maxDD  ?? -999)
+    const getSharpe = (s) => { const r = ratiosMap[String(s.id)]; return r?.sharpe ?? r?.["1Y"]?.sharpe ?? -999; };
+    const aVal = sortKey === "SHARPE" ? getSharpe(a)
                : (a.returns?.[sortKey] ?? -999);
-    const bVal = sortKey === "SHARPE" ? (b.risk?.sharpe ?? -999)
-               : sortKey === "DD"     ? (b.risk?.maxDD  ?? -999)
+    const bVal = sortKey === "SHARPE" ? getSharpe(b)
                : (b.returns?.[sortKey] ?? -999);
     return sortDir * (aVal - bVal);
   });
@@ -1518,7 +1517,11 @@ export default function App() {
               const allPeriods = ["1M","3M","6M","1Y","3Y","SHARPE"];
               const secPeriods = allPeriods.filter(p => p !== sortKey).slice(0, 3);
               const getVal = (scheme, key) => {
-                if (key === "SHARPE") return scheme.risk?.sharpe != null ? scheme.risk.sharpe.toFixed(2) : null;
+                if (key === "SHARPE") {
+                  const r = ratiosMap[String(scheme.id)];
+                  const v = r?.sharpe ?? r?.["1Y"]?.sharpe ?? null;
+                  return v != null ? v.toFixed(2) : null;
+                }
                 return scheme.returns?.[key] != null ? scheme.returns[key] : null;
               };
               const fmtVal = (val, key) => {
@@ -1529,7 +1532,7 @@ export default function App() {
               const primaryVal = getVal(s, sortKey);
               const primaryFmt = fmtVal(primaryVal, sortKey);
               const primaryColor = sortKey === "SHARPE"
-                ? ((s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
+                ? (parseFloat(primaryVal ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
                 : returnColor(primaryVal);
 
               return (
@@ -1570,7 +1573,7 @@ export default function App() {
                             <div className="mobile-card-sec-item" key={p}>
                               <div className="mobile-card-sec-label">{p}</div>
                               <div className="mobile-card-sec-val" style={{color: p === "SHARPE"
-                                ? ((s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
+                                ? (parseFloat(v ?? 0) > 1 ? "var(--violet)" : "var(--muted)")
                                 : returnColor(v)}}>
                                 {fmtVal(v, p)}
                               </div>
@@ -1602,8 +1605,17 @@ export default function App() {
                       <ReturnCell value={s.returns?.["6M"]} />
                       <ReturnCell value={s.returns?.["1Y"]} />
                       <ReturnCell value={s.returns?.["3Y"]} />
-                      <div className="ret-cell" style={{color: (s.risk?.sharpe ?? 0) > 1 ? "var(--violet)" : "var(--muted)"}}>
-                        {s.risk?.sharpe != null ? s.risk.sharpe.toFixed(2) : "—"}
+                      <div className="ret-cell" style={{color: "var(--muted)"}}>
+                        {s.returns?.["1Y"] != null
+                          ? (() => {
+                              const r = ratiosMap[String(s.id)];
+                              if (!ratiosLoaded) return "—";
+                              const sharpe = r?.sharpe ?? r?.["1Y"]?.sharpe ?? null;
+                              return sharpe != null
+                                ? <span style={{color: sharpe > 1 ? "var(--violet)" : "var(--muted)"}}>{sharpe.toFixed(2)}</span>
+                                : "—";
+                            })()
+                          : "—"}
                       </div>
                     </>
                   )}
@@ -1639,14 +1651,22 @@ export default function App() {
                   </div>
                   <div className="panel-nav-row">
                     <div>
-                      <div className="panel-nav-label">NAV ({selected.navDate})</div>
+                      <div className="panel-nav-label">NAV ({(() => {
+                        if (!selected.navDate) return "—";
+                        const d = new Date(selected.navDate);
+                        return isNaN(d) ? selected.navDate : d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+                      })()})</div>
                       <div className="panel-nav-val">₹{selected.nav}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div className="panel-nav-label">NAV since</div>
+                      <div className="panel-nav-label">NAV Since</div>
                       <div style={{fontFamily:"'DM Mono'",fontSize:"12px",color:"var(--muted)"}}>
-                        {selected.navDate
-                          ? new Date(selected.navDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})
+                        {selected.inceptionDate
+                          ? (() => {
+                              const d = new Date(selected.inceptionDate);
+                              return isNaN(d) ? selected.inceptionDate
+                                : d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+                            })()
                           : "—"}
                       </div>
                     </div>
@@ -1748,10 +1768,13 @@ export default function App() {
                       return peerYearReturns[p.id]?.[peerYear] ?? null;
                     }
                     const r = ratiosMap[String(p.id)];
-                    if (peerMetric === "sharpe")  return r?.sharpe      ?? p.risk?.sharpe   ?? null;
-                    if (peerMetric === "stddev")  return r?.stdDev      ?? p.risk?.stdDev   ?? null;
-                    if (peerMetric === "maxdd")   return r?.maxDrawdown ?? p.risk?.maxDrawdown ?? null;
-                    if (peerMetric === "sortino") return r?.sortino     ?? p.risk?.sortino  ?? null;
+                    if (!r) return null;
+                    // v4.1 schema: nested by period {1Y:{sharpe,...}, 3Y:{...}} + flat 1Y fallback at top level
+                    const rp = r?.[ratioPeriod] ?? (ratioPeriod === "1Y" ? r : null);
+                    if (peerMetric === "sharpe")  return rp?.sharpe      ?? null;
+                    if (peerMetric === "stddev")  return rp?.stdDev      ?? null;
+                    if (peerMetric === "maxdd")   return rp?.maxDrawdown ?? null;
+                    if (peerMetric === "sortino") return rp?.sortino     ?? null;
                     return null;
                   };
 
