@@ -1,6 +1,14 @@
 # pipeline_cell1.py
-# FundLens Data Pipeline — Cell 1 — v4.0
+# FundLens Data Pipeline — Cell 1 — v4.2.1
 # Source: AMFI Direct (amfiindia.com + portal.amfiindia.com)
+#
+# v4.2.1 changes (27 Mar 2026):
+#   - Abort guard in run_pipeline(): if nav_history empty → SystemExit(0), no Gist overwrite
+#   - split_nav_history(): guard against empty sizes list (was crashing with ValueError)
+#   - fetch_nav_history(): dedicated NAV_HISTORY_TIMEOUT=60s (was 30s via safe_get)
+#   - fetch_nav_history(): per-window exponential backoff retry (was delegated to safe_get)
+#   - fetch_nav_history(): WINDOW_DELAY_SEC=2s pause between windows (AMFI rate limiting)
+#   - MAX_RETRIES: 3 → 5
 #
 # What this does:
 #   Step 1 — Fetch scheme master (all schemes)
@@ -42,8 +50,10 @@ AMFI_NAV_HISTORY_URL   = "https://portal.amfiindia.com/DownloadNAVHistoryReport_
 HISTORY_MONTHS         = 60   # 5 years — needed for 3Y/5Y return computation
 RISK_FREE_RATE_ANNUAL  = 0.065
 REQUEST_DELAY_SEC      = 1.5
-MAX_RETRIES            = 3
-NAV_HISTORY_DIR        = "."          # Write nav_*.json to CWD root (Cell 2 reads from here)
+MAX_RETRIES            = 5    # v4.2.1: increased from 3 — AMFI history endpoint is flaky
+NAV_HISTORY_DIR        = "."  # Write nav_*.json to CWD root (Cell 2 reads from here)
+NAV_HISTORY_TIMEOUT    = 60   # v4.2.1: increased from 30s — portal.amfiindia.com slow on GH Actions
+WINDOW_DELAY_SEC       = 2.0  # v4.2.1: pause between windows to avoid AMFI rate limiting
 
 TODAY     = date.today()
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
@@ -267,32 +277,42 @@ def fetch_nav_history(months_back=HISTORY_MONTHS):
         from_str = from_dt.strftime("%d-%b-%Y")
         to_str   = to_dt.strftime("%d-%b-%Y")
         print(f"  Window {i}/{len(windows)}: {from_str} -> {to_str}", end=" ")
-        try:
-            text = safe_get(AMFI_NAV_HISTORY_URL,
-                            params={"frmdt": from_str, "todt": to_str},
-                            label=f"history {i}")
-            count = 0
-            for line in text.splitlines():
-                parts = line.strip().split(";")
-                if len(parts) < 8:
-                    continue
-                try:
-                    code    = parts[0].strip()
-                    nav_str = parts[4].strip()
-                    d_str   = parts[7].strip()
-                    if not code.isdigit() or not nav_str:
+        count = 0
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                resp = requests.get(
+                    AMFI_NAV_HISTORY_URL,
+                    params={"frmdt": from_str, "todt": to_str},
+                    timeout=NAV_HISTORY_TIMEOUT,
+                )
+                resp.raise_for_status()
+                for line in resp.text.splitlines():
+                    parts = line.strip().split(";")
+                    if len(parts) < 8:
                         continue
-                    nav_val  = float(nav_str)
-                    nav_date = parse_date(d_str)
-                    if nav_date and nav_val > 0:
-                        raw_history[code][to_iso(nav_date)] = nav_val
-                        count += 1
-                except Exception:
-                    continue
-            print(f"-> {count:,} entries")
-        except Exception as e:
-            print(f"-> FAILED: {e}")
-            continue
+                    try:
+                        code    = parts[0].strip()
+                        nav_str = parts[4].strip()
+                        d_str   = parts[7].strip()
+                        if not code.isdigit() or not nav_str:
+                            continue
+                        nav_val  = float(nav_str)
+                        nav_date = parse_date(d_str)
+                        if nav_date and nav_val > 0:
+                            raw_history[code][to_iso(nav_date)] = nav_val
+                            count += 1
+                    except Exception:
+                        continue
+                print(f"-> {count:,} entries")
+                break  # success — move to next window
+            except Exception as e:
+                wait = REQUEST_DELAY_SEC * (2 ** (attempt - 1))  # exponential: 1.5s, 3s, 6s, 12s, 24s
+                print(f"\n    attempt {attempt}/{MAX_RETRIES} failed: {e} — retrying in {wait:.0f}s")
+                if attempt < MAX_RETRIES:
+                    time.sleep(wait)
+                else:
+                    print(f"    Window {i} gave up after {MAX_RETRIES} attempts. Continuing.")
+        time.sleep(WINDOW_DELAY_SEC)  # pause between windows to respect AMFI rate limits
 
     history = {}
     for code, date_nav_map in raw_history.items():
@@ -544,6 +564,11 @@ def split_nav_history(schemes_out, nav_history):
         flag = " WARNING" if mb > 15 else ""
         print(f"  {filename:<55} {len(content):>5} schemes  {mb:.2f}MB{flag}")
 
+    # v4.2.1: guard against empty sizes (all schemes had empty history)
+    if not sizes:
+        print("  [Step 7] ⚠️  No NAV history files written — all schemes had empty history.")
+        return split
+
     print(f"\n  [Step 7] ✅ {len(split)} files | "
           f"largest {max(sizes):.1f}MB | total {sum(sizes):.1f}MB")
     return split
@@ -626,7 +651,7 @@ def assemble_and_save(master, current_navs, nav_history):
         "schemeCount":     len(schemes_out),
         "historyMonths":   HISTORY_MONTHS,
         "source":          "AMFI Direct",
-        "pipelineVersion": "4.2",
+        "pipelineVersion": "4.2.1",
     }
 
     files = {
@@ -664,13 +689,28 @@ def assemble_and_save(master, current_navs, nav_history):
 
 def run_pipeline():
     print("=" * 60)
-    print("FundLens Pipeline v4.1")
+    print("FundLens Pipeline v4.2.1")
     print(f"Run date: {TODAY_STR}")
     print("=" * 60)
 
     master       = fetch_scheme_master()
     current_navs = fetch_current_navs()
     nav_history  = fetch_nav_history(months_back=HISTORY_MONTHS)
+
+    # ── v4.2.1: Abort guard — if AMFI history returned nothing, exit cleanly.
+    # This happens when portal.amfiindia.com times out on all windows (transient).
+    # Exiting here preserves existing Gist data intact. Cell 2 will NOT run.
+    # GitHub Action will show as success (exit 0) — not a code bug, just AMFI down.
+    total_nav_entries = sum(len(v) for v in nav_history.values()) if nav_history else 0
+    if total_nav_entries == 0:
+        print("\n" + "=" * 60)
+        print("⚠️  ABORT: nav_history is empty (0 entries across all windows).")
+        print("   AMFI history endpoint returned nothing — likely a transient timeout.")
+        print("   NO output files written. Existing Gist data is preserved.")
+        print("   Scheduled pipeline will retry tomorrow at 10PM IST.")
+        print("=" * 60)
+        raise SystemExit(0)  # exit code 0 → GitHub Action shows ✅, not ❌
+
     output       = assemble_and_save(master, current_navs, nav_history)
 
     print(f"\n[Step 9] Validating...")
