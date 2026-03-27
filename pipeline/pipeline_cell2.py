@@ -1,5 +1,10 @@
-# pipeline_cell2.py — FundLens v4.3
+# pipeline_cell2.py — FundLens v4.3.1
 # Upload all 5 outputs to Gists
+#
+# Changes from v4.3:
+# - run_validation_gate(): removed 'today' arg to validate_main_gist().
+#   Date freshness check now computed internally in IST — no UTC/IST boundary
+#   false warnings when pipeline runs at 10PM IST (16:30 UTC).
 #
 # Changes from v4.1:
 # - NAV file location: looks in CWD root (where Cell 1 writes nav_*.json),
@@ -45,14 +50,13 @@ BATCH_DELAY         = 2                  # seconds between batches — avoids 40
 # ── Validation Gate ───────────────────────────────────────────────────────────
 
 def run_validation_gate():
-    from datetime import date
-    today = date.today().isoformat()
     print("\n  Running validation gate...")
     if not os.path.exists("fundlens_schemes.json"):
         raise ValidationError("fundlens_schemes.json not found — cannot validate. Aborting.")
     with open("fundlens_schemes.json", encoding="utf-8") as f:
         data = json.load(f)
-    warnings = validate_main_gist(data, today)
+    # today parameter removed — validate_main_gist() now computes IST date internally
+    warnings = validate_main_gist(data)
     print_validation_summary(warnings, label="Main Gist")
 
 # ── Core upload with retry ────────────────────────────────────────────────────
@@ -207,7 +211,7 @@ def upload_nav_history(gist_id):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 print("=" * 60)
-print("FundLens Pipeline v4.2 — Cell 2: Upload")
+print("FundLens Pipeline v4.3.1 — Cell 2: Upload")
 print("=" * 60)
 
 try:
