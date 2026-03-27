@@ -3,18 +3,33 @@
 # If ANY check fails → upload is aborted → old Gist preserved → website stays live.
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 class ValidationError(Exception):
     """Raised when data fails a critical quality check."""
     pass
 
 
-def validate_main_gist(data: dict, today: str) -> list[str]:
+def _today_ist() -> str:
+    """Return today's date in IST (UTC+5:30) as YYYY-MM-DD string.
+    
+    The pipeline runs at 10PM IST (16:30 UTC). Using UTC date here caused
+    a false freshness warning on days where IST and UTC fall on different
+    calendar dates (i.e. every day before 00:30 IST = 18:30 UTC previous day).
+    Always use IST for date comparisons — that's where AMFI operates.
+    """
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%Y-%m-%d")
+
+
+def validate_main_gist(data: dict) -> list[str]:
     """
     Validate the main fundlens_schemes.json payload before upload.
     Returns list of warning strings (non-fatal).
     Raises ValidationError on fatal failures.
+
+    Note: 'today' parameter removed in v4.1 — date is now computed
+    internally in IST to avoid UTC/IST boundary false warnings.
     """
     warnings = []
     errors = []
@@ -68,21 +83,26 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     # missing_history_count check removed in v4 — see navHistory note above
 
     # Threshold relaxed in v4: 47/200 failures were acceptable (schemes < 24 months old)
-    # Error threshold raised from 40 → 80, warning from 15 → 30
+    # Error threshold: 80. Warning threshold raised from 30 → 50 in v4.1
+    # (first 200 schemes alphabetically skew toward newer AMCs with shorter histories)
     if missing_returns_count > 80:
         errors.append(f"{missing_returns_count}/200 sampled schemes missing 1Y return.")
-    elif missing_returns_count > 30:
+    elif missing_returns_count > 50:
         warnings.append(f"{missing_returns_count}/200 sampled schemes missing 1Y return.")
 
     if missing_amc_count > 10:
         warnings.append(f"{missing_amc_count}/200 sampled schemes missing AMC name.")
 
-    # ── 4. Meta freshness ─────────────────────────────────────────────────────
+    # ── 4. Meta freshness (IST-aware) ─────────────────────────────────────────
+    # Compares against IST date, not UTC. Pipeline runs at 10PM IST (16:30 UTC).
+    # UTC date comparison caused false warnings whenever IST and UTC were on
+    # different calendar dates — i.e. every day before 00:30 IST next day.
+    today_ist = _today_ist()
     meta = data.get("meta", {})
     last_updated = meta.get("lastUpdated", "")
-    if last_updated != today:
+    if last_updated != today_ist:
         warnings.append(
-            f"meta.lastUpdated is '{last_updated}', expected today '{today}'. "
+            f"meta.lastUpdated is '{last_updated}', expected IST date '{today_ist}'. "
             f"Pipeline may be using cached data."
         )
 
@@ -117,10 +137,16 @@ def validate_main_gist(data: dict, today: str) -> list[str]:
     return warnings
 
 
-def validate_archive_gist(data: dict) -> list[str]:
+def validate_archive_gist(data: dict, prev_size_mb: float = 0.0) -> list[str]:
     """
     Lighter validation for the archive Gist (fundlens_nav_archive.json).
     Returns warnings, raises ValidationError on fatal issues.
+
+    Args:
+        data:          The archive Gist payload to validate.
+        prev_size_mb:  Size of the archive at the previous pipeline run (MB).
+                       Pass 0.0 if unknown — no false trigger since the archive
+                       is already well above 5MB. Used to detect runaway growth.
     """
     warnings = []
     errors = []
@@ -140,8 +166,25 @@ def validate_archive_gist(data: dict) -> list[str]:
     json_str = json.dumps(data, separators=(",", ":"))
     size_mb = len(json_str.encode("utf-8")) / (1024 * 1024)
     print(f"  [validate_archive] JSON size: {size_mb:.2f}MB")
+
+    # ── Size ceiling ──────────────────────────────────────────────────────────
     if size_mb > 90:
-        warnings.append(f"Archive Gist approaching GitHub's 100MB limit: {size_mb:.1f}MB. Plan split soon.")
+        warnings.append(
+            f"Archive Gist approaching GitHub's 100MB limit: {size_mb:.1f}MB. Plan split soon."
+        )
+
+    # ── Size trend: flag runaway growth ──────────────────────────────────────
+    # prev_size_mb=0.0 means unknown — skip trend check to avoid false positives.
+    # Normal daily backfill adds ~0.1–0.5MB. A >5MB single-run jump is abnormal
+    # and likely means duplicate entries or an accidental history re-append.
+    if prev_size_mb > 0.0:
+        growth_mb = size_mb - prev_size_mb
+        if growth_mb > 5.0:
+            warnings.append(
+                f"Archive grew by {growth_mb:.1f}MB in one run "
+                f"({prev_size_mb:.1f}MB → {size_mb:.1f}MB). "
+                f"Expected ≤ 0.5MB/day. Check for duplicate entries."
+            )
 
     if errors:
         raise ValidationError("\n".join(errors))
