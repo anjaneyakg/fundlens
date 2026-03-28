@@ -715,7 +715,7 @@ def run_pipeline():
 
     print(f"\n[Step 9] Validating...")
     try:
-        warnings = validate_main_gist(output, TODAY_STR)
+        warnings = validate_main_gist(output)
         print_validation_summary(warnings)
     except ValidationError as e:
         print(str(e))
