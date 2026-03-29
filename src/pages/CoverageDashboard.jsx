@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 
-const HOLDINGS_URL = "https://raw.githubusercontent.com/anjaneyakg/FundInsight/main/data/processed/holdings_latest.csv";
+const HOLDINGS_URL = "/api/holdings-csv";
 
 function parseCsv(text) {
   const lines = text.trim().split("\n");
