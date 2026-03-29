@@ -196,7 +196,7 @@ const GROUPS = [
   {
     id: "C", label: "Risk & Goals",
     items: [
-      { code:"C1", name:"Risk Profiler",   tagline:"What kind of investor am I?",   path:"/risk-profiler",   live:false },
+      { code:"C1", name:"Risk Profiler",   tagline:"What kind of investor am I?",   path:"/risk-profiler",   live:true },
       { code:"C2", name:"Basket Builder",  tagline:"Build my portfolio",            path:"/basket-builder",  live:false },
       { code:"C3", name:"Pre-Retirement",  tagline:"Am I on track to retire?",      path:"/pre-retirement-planner",  live:true },
       { code:"C4", name:"Post-Retirement", tagline:"Will my money outlast me?",     path:"/post-retirement", live:false },
