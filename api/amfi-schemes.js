@@ -111,30 +111,27 @@ function isDirectGrowth(navName) {
   return isDirect && isGrowth;
 }
 
-// Returns true if scheme is still active (no past closure date).
-// AMFI master column layout (0-indexed):
-//   0: AMC Code/Name  1: Scheme Code  2: ISIN Div Payout  3: ISIN Div Reinvestment
-//   4: Scheme Name    5: NAV Name     6: Dividend         7: Growth
-//   8: Bonus          9: Launch Date  10: Closure Date
-function isActive(parts) {
-  const closureRaw = (parts[10] || "").trim();
-  if (!closureRaw || closureRaw === "-" || closureRaw === "N.A.") return true;
-  const d = new Date(closureRaw);
-  if (isNaN(d.getTime())) return true; // unparseable → assume active
-  return d > new Date();               // future date = still active
+// Actual AMFI CSV columns confirmed via debug:
+//   0: AMC Name   1: Scheme Code   2: Base Scheme Name (no plan/option suffix)
+//   3: Structure ("Open Ended" / "Close Ended" / "Interval Fund")
+//   4: Category   5: NAV Name (full)   6: Min Investment
+//   7: Launch Date   8: Launch Date (dup)   9: ISIN   10: (empty)
+// NOTE: AMFI master does NOT publish closure/maturity date.
+// We use parts[3] to exclude Close Ended schemes (matured FMPs etc.)
+
+function isOpenEnded(parts) {
+  // Keep Open Ended and Interval Fund; exclude Close Ended (FMPs, wound-up)
+  const structure = (parts[3] || '').trim().toLowerCase();
+  return !structure.startsWith('close');
 }
 
-// Strips plan/option suffixes to get the base portfolio-level scheme name.
-// Mirrors dedupeSchemes() logic in Scheme Explorer / Category Leaderboard.
-// e.g. "Kotak Flexi Cap Fund - Direct Plan - Growth" → "Kotak Flexi Cap Fund"
-function basePortfolioName(navName) {
-  return navName
-    .replace(/\s*[-\u2013]\s*(direct|regular)\s*(plan)?\s*/gi, "")
-    .replace(/\s*[-\u2013]\s*(growth|idcw|dividend|bonus|payout|reinvestment)\s*/gi, "")
-    .replace(/\s*[-\u2013]\s*option\s*/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+// parts[2] is already the base portfolio name — no regex stripping needed
+// e.g. parts[2] = "Kotak Flexi Cap Fund" (AMFI strips plan/option for us)
+function basePortfolioName(parts) {
+  return (parts[2] || '').trim();
 }
+
+
 
 // ── Parse AMFI scheme master CSV ──────────────────────────────────────────────
 // Returns { amcCounts, debugSample }
@@ -169,15 +166,15 @@ function parseAMFIMaster(text, { debug = false } = {}) {
           parsed: {
             "0_amc":              parts[0],
             "1_scheme_code":      parts[1],
-            "2_isin_div_payout":  parts[2],
-            "3_isin_div_reinvest":parts[3],
-            "4_scheme_name":      parts[4],
-            "5_nav_name":         parts[5],
-            "6_dividend":         parts[6],
-            "7_growth":           parts[7],
-            "8_bonus":            parts[8],
-            "9_launch_date":      parts[9],
-            "10_closure_date":    parts[10] || "(empty)",
+            "2_base_scheme_name": parts[2],
+            "3_structure":         parts[3],
+            "4_category":          parts[4],
+            "5_nav_name":          parts[5],
+            "6_min_investment":    parts[6],
+            "7_launch_date":       parts[7],
+            "8_launch_date_dup":   parts[8],
+            "9_isin":              parts[9],
+            "10_other":            parts[10] || "(empty)",
             "11+":                parts.slice(11).join(" | ") || "(none)",
           }
         });
@@ -189,14 +186,14 @@ function parseAMFIMaster(text, { debug = false } = {}) {
       // Filter 1: Direct Growth only
       if (!isDirectGrowth(navName)) continue;
 
-      // Filter 2: Active schemes only
-      if (!isActive(parts)) continue;
+      // Filter 2: Open Ended only (excludes matured FMPs)
+      if (!isOpenEnded(parts)) continue;
 
       const amcRaw  = parts[0] || currentAmcFull;
       const amc     = normaliseAmc(amcRaw);
 
-      // Filter 3: Deduplicate by base portfolio name
-      const baseName = basePortfolioName(navName);
+      // Filter 3: Deduplicate by base portfolio name (parts[2] = clean base name)
+      const baseName = basePortfolioName(parts);
       if (!seenNames[amc]) seenNames[amc] = new Set();
       if (seenNames[amc].has(baseName)) continue;
       seenNames[amc].add(baseName);
