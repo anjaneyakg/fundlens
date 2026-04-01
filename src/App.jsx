@@ -62,6 +62,8 @@ export default function App() {
         <Route path="/real-return" element={<InflationAdjustedReturn />} />
         <Route path="/xirr-calc" element={<PortfolioXIRR />} />
         <Route path="/risk-profiler" element={<RiskProfiler />} />
+        <Route path="/tools/market-gauge" element={<MarketGauge />} />
+        <Route path="/embed/market-gauge" element={<MarketGaugeEmbed />} />
         
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
