@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import MarketGaugeHero from '../components/MarketGaugeHero'
 
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
@@ -77,6 +78,20 @@ const style = `
     text-transform: uppercase; color: #6b72a0; margin-top: 2px;
   }
 
+  /* MARKET GAUGE SECTION */
+  .home-gauge-section {
+    max-width: 1100px; margin: 0 auto;
+    padding: 3rem 2rem 0;
+  }
+  .home-gauge-label {
+    font-family: 'DM Mono'; font-size: 10px; letter-spacing: 3px;
+    text-transform: uppercase; color: #6b72a0; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .home-gauge-label::after {
+    content: ''; flex: 1; height: 1px; background: rgba(99,91,255,0.12);
+  }
+
   /* TOOLS SECTION */
   .home-section {
     max-width: 1100px; margin: 0 auto;
@@ -143,6 +158,13 @@ const style = `
 `;
 
 const TOOLS = [
+  {
+    icon: "📊",
+    name: "Market Valuation Gauge",
+    desc: "Is the market cheap or expensive? Percentile-based valuation score across 35 years of BSE history — PE, PB and Dividend Yield composite.",
+    tag: "live",
+    path: "/tools/market-gauge",
+  },
   {
     icon: "📊",
     name: "Scheme Explorer",
@@ -246,6 +268,12 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Market Valuation Gauge — hero widget */}
+      <div className="home-gauge-section">
+        <div className="home-gauge-label">◈ Live Market Pulse</div>
+        <MarketGaugeHero />
+      </div>
+
       {/* Tools */}
       <div className="home-section">
         <div className="section-heading">◈ All Tools</div>
@@ -268,7 +296,7 @@ export default function Home() {
       </div>
 
       <div className="home-footer">
-        FUNDLENS · DATA FROM AMFIINDIA.COM · FOR INFORMATIONAL PURPOSES ONLY
+        FUNDLENS · DATA FROM AMFIINDIA.COM · BSE INDIA · FOR INFORMATIONAL PURPOSES ONLY
       </div>
     </div>
   )
