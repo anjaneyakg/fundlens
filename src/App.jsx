@@ -1,3 +1,5 @@
+import MarketGauge      from './MarketGauge';
+import MarketGaugeEmbed from './MarketGaugeEmbed';
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
