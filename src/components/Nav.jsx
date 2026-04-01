@@ -231,6 +231,12 @@ const GROUPS = [
       { code:"F5", name:"Lumpsum vs SIP",   tagline:"When is lumpsum better than SIP?",      path:"/lumpsum-vs-sip",   live:false },
     ]
   },
+{
+    id: "G", label: "Market Intelligence",
+    items: [
+      { code: 'G1', name: 'Market Valuation Gauge', path: '/tools/market-gauge', group: 'G — Market Intelligence', icon: '📊' }
+    ]
+  },
 ]
 
 function GroupDropdown({ group, currentPath }) {
