@@ -7,6 +7,7 @@ const NAV_ITEMS = [
     items: [
       { to: "/admin/portfolio-upload", label: "Portfolio Upload", icon: "⬆", live: true  },
       { to: "/admin/coverage",    label: "Coverage",    icon: "◈", live: true  },
+      { to: "/admin/scheme-mapping",    label: "Scheme Mapping",    icon: "◈", live: true  },
       { to: "/admin/amc-directory",    label: "AMC Directory",    icon: "◎", live: false },
     ],
   },
