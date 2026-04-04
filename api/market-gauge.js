@@ -336,30 +336,42 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `${SUPABASE_URL}/rest/v1/bse_index_data` +
-      `?select=date,index_name,close,pe,pb,div_yield` +
-      `&index_name=in.(${encodeURIComponent(CURATED_INDICES.join(','))})` +
-      `&order=date.asc` +
-      `&limit=500000`;
+// Fetch all rows in batches — Supabase REST caps per request
+    const BATCH = 50000;
+    let rows = [];
+    let offset = 0;
+    let keepFetching = true;
 
-const response = await fetch(url, {
-  headers: {
-    apikey:         SUPABASE_ANON_KEY,
-    Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
-    'Content-Type': 'application/json',
-    'Range-Unit':   'items',
-    'Range':        '0-499999',
-  },
-});
+    while (keepFetching) {
+      const batchUrl = `${SUPABASE_URL}/rest/v1/bse_index_data` +
+        `?select=date,index_name,close,pe,pb,div_yield` +
+        `&index_name=in.(${encodeURIComponent(CURATED_INDICES.join(','))})` +
+        `&order=date.asc,index_name.asc` +
+        `&limit=${BATCH}` +
+        `&offset=${offset}`;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      res.status(502).json({ error: 'Supabase query failed', detail: errText });
-      return;
+      const response = await fetch(batchUrl, {
+        headers: {
+          apikey:         SUPABASE_ANON_KEY,
+          Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Range-Unit':   'items',
+          'Range':        `${offset}-${offset + BATCH - 1}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        res.status(502).json({ error: 'Supabase query failed', detail: errText });
+        return;
+      }
+
+      const batch = await response.json();
+      if (!batch.length) { keepFetching = false; break; }
+      rows = rows.concat(batch);
+      offset += BATCH;
+      if (batch.length < BATCH) keepFetching = false;
     }
-
-    const rows = await response.json();
-
     // Group by index_name
     const grouped = {};
     for (const row of rows) {
