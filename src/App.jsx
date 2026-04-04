@@ -30,6 +30,7 @@ import InflationAdjustedReturn from "./pages/InflationAdjustedReturn";
 import PortfolioXIRR from "./pages/PortfolioXIRR";
 import RiskProfiler from "./pages/RiskProfiler";
 import SchemeMapping from './pages/SchemeMapping.jsx'
+import AmfiMarketCapUpload from './pages/admin/AmfiMarketCapUpload.jsx'
 
 export default function App() {
   const location = useLocation()
@@ -55,21 +56,22 @@ export default function App() {
         <Route path="/loan-calculator"      element={<LoanCalc />} />
         <Route path="/prepay-vs-invest"     element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"       element={<STPCalculator />} />
-        <Route path="/scheme-basket" element={<SchemeBasket />} />
+        <Route path="/scheme-basket"        element={<SchemeBasket />} />
         <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
-        <Route path="/rd-calculator" element={<RDCalculator />} />
-        <Route path="/capital-gains" element={<CapitalGains />} />
-        <Route path="/post-tax" element={<PostTaxComparator />} />
-        <Route path="/real-return" element={<InflationAdjustedReturn />} />
-        <Route path="/xirr-calc" element={<PortfolioXIRR />} />
-        <Route path="/risk-profiler" element={<RiskProfiler />} />
-        <Route path="/tools/market-gauge" element={<MarketGauge />} />
-        <Route path="/embed/market-gauge" element={<MarketGaugeEmbed />} />
-        
+        <Route path="/rd-calculator"        element={<RDCalculator />} />
+        <Route path="/capital-gains"        element={<CapitalGains />} />
+        <Route path="/post-tax"             element={<PostTaxComparator />} />
+        <Route path="/real-return"          element={<InflationAdjustedReturn />} />
+        <Route path="/xirr-calc"            element={<PortfolioXIRR />} />
+        <Route path="/risk-profiler"        element={<RiskProfiler />} />
+        <Route path="/tools/market-gauge"   element={<MarketGauge />} />
+        <Route path="/embed/market-gauge"   element={<MarketGaugeEmbed />} />
+
         <Route path="/admin" element={<AdminLayout />}>
-          <Route path="portfolio-upload" element={<PortfolioUpload />} />
-          <Route path="coverage"         element={<CoverageDashboard />} />
-          <Route path="scheme-mapping" element={<SchemeMapping />} />
+          <Route path="portfolio-upload"    element={<PortfolioUpload />} />
+          <Route path="coverage"            element={<CoverageDashboard />} />
+          <Route path="scheme-mapping"      element={<SchemeMapping />} />
+          <Route path="amfi-marketcap"      element={<AmfiMarketCapUpload />} />
         </Route>
       </Routes>
     </>
