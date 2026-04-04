@@ -112,7 +112,7 @@ async function sbFetch(path, method = 'GET', body = null) {
       'apikey':        SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
       'Content-Type':  'application/json',
-      'Prefer':        method === 'POST' ? 'resolution=merge-duplicates' : '',
+      'Prefer':        method === 'POST' ? 'resolution=merge-duplicates' : 'count=none',
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -174,7 +174,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const all = await sbFetch(
-        'scrip_master?select=effective_from,effective_to,uploaded_at,is_active,sebi_cap_category&order=effective_from.desc'
+        'scrip_master?select=effective_from,effective_to,uploaded_at,is_active,sebi_cap_category&order=effective_from.desc&limit=20000'
       );
 
       const seen = new Set();
