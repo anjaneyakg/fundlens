@@ -46,7 +46,10 @@ async function sbFetch(path, method = 'GET', body = null) {
     const text = await res.text();
     throw new Error(`Supabase ${method} ${path} → ${res.status}: ${text}`);
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text || !text.trim()) return null;
+  return JSON.parse(text);
 }
 
 // ── Batch upsert — 500 rows per call to stay under PostgREST limits ──────────
