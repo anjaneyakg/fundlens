@@ -1,28 +1,45 @@
-// api/market-gauge.js — Market Valuation Gauge (G1)
-// Fetches each index independently in parallel — avoids PostgREST row limits
-// Cache: 1hr CDN, 4hr stale-while-revalidate
+// api/market-gauge.js — Market Valuation Gauge (G1) v5.0
+// 27 curated BSE indices · parallel fetch · 1hr CDN cache
+// Forward returns use calendar-date lookup (not array index)
 
 const CURATED_INDICES = [
-  'BSE 500',
+  // Broad
   'BSE SENSEX',
-  'BSE MID CAP',
-  'BSE SMALL CAP',
-  'BSE IT',
+  'BSE 500',
+  'BSE 100',
+  'BSE MidCap',
+  'BSE SmallCap',
+  'BSE DOLLEX 30',
+  'BSE 200 EQUAL WEIGHT INDEX',
+  // Sectors
   'BSE BANKEX',
-  'BSE HEALTHCARE',
+  'BSE Information Technology',
+  'BSE Healthcare',
   'BSE AUTO',
-  'BSE FMCG',
+  'BSE Fast Moving Consumer Goods',
   'BSE METAL',
   'BSE REALTY',
-  'BSE ENERGY',
+  'BSE Energy',
   'BSE CONSUMER DURABLES',
-  'BSE MIDCAP 150',
-  'BSE LARGECAP',
+  'BSE Financial Services',
+  'BSE Commodities',
+  'BSE Consumer Discretionary',
+  'BSE OIL & GAS',
+  'BSE POWER',
+  'BSE Telecommunication',
+  // Theme / PSU
+  'BSE PSU',
+  'BSE PSU BANK',
+  'BSE Private Banks Index',
+  'BSE India Infrastructure Index',
+  'BSE India Manufacturing Index',
 ];
 
 const BROAD_MARKET_INDICES = ['BSE 500', 'BSE SENSEX'];
-const DEFAULT_WEIGHTS      = { pe: 0.30, pb: 0.40, dy: 0.30 };
-const ZONE_THRESHOLDS      = [
+
+const DEFAULT_WEIGHTS = { pe: 0.30, pb: 0.40, dy: 0.30 };
+
+const ZONE_THRESHOLDS = [
   { min: 80, max: 100, label: 'Deep Value',  color: '#16a34a' },
   { min: 60, max: 80,  label: 'Attractive',  color: '#65a30d' },
   { min: 40, max: 60,  label: 'Fair Value',  color: '#d97706' },
@@ -31,7 +48,8 @@ const ZONE_THRESHOLDS      = [
 ];
 
 function getZone(score) {
-  return ZONE_THRESHOLDS.find(z => score >= z.min && score <= z.max) || ZONE_THRESHOLDS[ZONE_THRESHOLDS.length - 1];
+  return ZONE_THRESHOLDS.find(z => score >= z.min && score <= z.max)
+    || ZONE_THRESHOLDS[ZONE_THRESHOLDS.length - 1];
 }
 
 function percentileRank(value, arr, lowerIsBetter = true) {
@@ -72,25 +90,77 @@ function sampleMonthly(rows) {
   return Object.values(byMonth).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Add target months to a YYYY-MM string
+function addMonths(yyyymm, n) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Find closest available series point at or after target month
+function findClosestPoint(series, targetMonth) {
+  // series is sorted ascending by date (YYYY-MM-DD)
+  for (const p of series) {
+    if (p.date.slice(0, 7) >= targetMonth) return p;
+  }
+  return null;
+}
+
+// Detect zone entry events and compute forward returns using calendar dates
 function detectZoneEvents(series, entryZoneMin, direction = 'bottom') {
   const events = [];
   let inZone = false, entryIdx = null;
+
+  // Build a date-keyed map for fast lookup
+  const byMonth = {};
+  for (const p of series) {
+    const key = p.date.slice(0, 7);
+    if (!byMonth[key] || p.date > byMonth[key].date) byMonth[key] = p;
+  }
+  const sortedMonths = Object.keys(byMonth).sort();
+
   for (let i = 0; i < series.length; i++) {
-    const inNow = direction === 'bottom' ? series[i].score >= entryZoneMin : series[i].score <= (100 - entryZoneMin);
+    const inNow = direction === 'bottom'
+      ? series[i].score >= entryZoneMin
+      : series[i].score <= (100 - entryZoneMin);
+
     if (!inZone && inNow) { inZone = true; entryIdx = i; }
     else if (inZone && !inNow) {
       inZone = false;
       const entry = series[entryIdx];
+      const entryMonth = entry.date.slice(0, 7);
       const fwdReturns = {};
-      for (const [label, months] of Object.entries({ '1M':1,'3M':3,'6M':6,'1Y':12,'2Y':24,'3Y':36 })) {
-        const ti = entryIdx + months;
-        if (ti < series.length) fwdReturns[label] = parseFloat((((series[ti].close - entry.close) / entry.close) * 100).toFixed(2));
+      const fwdStats = {};
+
+      const periods = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 };
+      for (const [label, months] of Object.entries(periods)) {
+        const targetMonth = addMonths(entryMonth, months);
+        const fwdPoint = findClosestPoint(series, targetMonth);
+        if (fwdPoint && fwdPoint.date.slice(0, 7) <= addMonths(targetMonth, 1)) {
+          fwdReturns[label] = parseFloat((((fwdPoint.close - entry.close) / entry.close) * 100).toFixed(2));
+        }
       }
-      if (Object.keys(fwdReturns).length >= 3) events.push({ date:entry.date, score:entry.score, close:entry.close, pe:entry.pe, pb:entry.pb, dy:entry.dy, returns:fwdReturns });
+
+      if (Object.keys(fwdReturns).length >= 3) {
+        events.push({
+          date: entry.date,
+          score: entry.score,
+          close: entry.close,
+          pe: entry.pe,
+          pb: entry.pb,
+          dy: entry.dy,
+          returns: fwdReturns,
+        });
+      }
       entryIdx = null;
     }
   }
   return events;
+}
+
+function mean(arr) {
+  if (!arr.length) return null;
+  return parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2));
 }
 
 function median(arr) {
@@ -101,10 +171,17 @@ function median(arr) {
 }
 
 function summariseEvents(events) {
-  const periods = ['1M','3M','6M','1Y','2Y','3Y'];
-  const medians = {};
-  for (const p of periods) medians[p] = median(events.map(e => e.returns[p]).filter(v => v != null));
-  return { count: events.length, median_returns: medians, events };
+  const periods = ['1M', '3M', '6M', '1Y', '2Y', '3Y'];
+  const median_returns = {}, mean_returns = {}, min_returns = {}, max_returns = {}, counts = {};
+  for (const p of periods) {
+    const vals = events.map(e => e.returns[p]).filter(v => v != null);
+    median_returns[p] = median(vals);
+    mean_returns[p]   = mean(vals);
+    min_returns[p]    = vals.length ? parseFloat(Math.min(...vals).toFixed(2)) : null;
+    max_returns[p]    = vals.length ? parseFloat(Math.max(...vals).toFixed(2)) : null;
+    counts[p]         = vals.length;
+  }
+  return { count: events.length, median_returns, mean_returns, min_returns, max_returns, counts, events };
 }
 
 function processIndex(rows, weights = DEFAULT_WEIGHTS) {
@@ -114,8 +191,9 @@ function processIndex(rows, weights = DEFAULT_WEIGHTS) {
   const hDY = rows.map(r => r.div_yield).filter(v => v != null && v > 0);
 
   const mapRow = r => {
-    const score = (r.pe == null || r.pb == null || r.div_yield == null) ? null : computeScore(r, hPE, hPB, hDY, weights);
-    return { date:r.date, score, zone: score!=null?getZone(score).label:null, close:r.close, pe:r.pe, pb:r.pb, dy:r.div_yield };
+    const score = (r.pe == null || r.pb == null || r.div_yield == null) ? null
+      : computeScore(r, hPE, hPB, hDY, weights);
+    return { date: r.date, score, zone: score != null ? getZone(score).label : null, close: r.close, pe: r.pe, pb: r.pb, dy: r.div_yield };
   };
 
   const series         = sampleWeekly(rows).map(mapRow).filter(r => r.score != null);
@@ -184,9 +262,9 @@ function generateCommentary(indexName, data) {
   const medRet3Y  = returns_from_bottoms?.median_returns?.['3Y'];
   const retNote   = medRet3Y != null ? ` Median 3-year return from similar levels historically: ${medRet3Y>0?'+':''}${medRet3Y}%.` : '';
   const metrics   = [
-    latest_pe  != null ? `P/E of ${latest_pe.toFixed(1)}x`           : '',
-    latest_pb  != null ? `P/B of ${latest_pb.toFixed(1)}x`           : '',
-    latest_dy  != null ? `Dividend Yield of ${latest_dy.toFixed(2)}%` : '',
+    latest_pe != null ? `P/E of ${latest_pe.toFixed(1)}x` : '',
+    latest_pb != null ? `P/B of ${latest_pb.toFixed(1)}x` : '',
+    latest_dy != null ? `Dividend Yield of ${latest_dy.toFixed(2)}%` : '',
   ].filter(Boolean).join(', ');
   const scoreDesc = current_score>=80?'cheapest':current_score>=60?'below-average (attractive)':current_score>=40?'average':current_score>=20?'above-average (expensive)':'most expensive';
   return `${indexName} is trading at ${metrics}. Based on full history since ${fromYear}, current valuations rank at the ${current_score}th percentile — among the ${scoreDesc} seen historically. This places the market in the ${current_zone.label} zone.${retNote}`;
@@ -217,7 +295,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'GET')    { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-  // 1hr CDN cache — data only changes once per trading day
+  // 1hr CDN cache — data changes once per trading day
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=14400');
 
   const SUPABASE_URL      = process.env.SUPABASE_URL;
@@ -228,6 +306,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 27 parallel fetches — each small, fast, within Vercel limits
     const fetched = await Promise.all(
       CURATED_INDICES.map(name => fetchOneIndex(name, SUPABASE_URL, SUPABASE_ANON_KEY))
     );
