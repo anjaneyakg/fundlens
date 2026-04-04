@@ -140,6 +140,9 @@ function OscillatorChart({ series }) {
   const svgRef = useRef(null);
   const W=860,H=280,PL=36,PR=80,PT=12,PB=28;
   const cW=W-PL-PR, cH=H-PT-PB;
+  console.log('Series length:', series?.length);
+  console.log('First date:', series?.[0]?.date);
+  console.log('Last date:', series?.[series.length-1]?.date);
 
   if (!series?.length) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>No data yet.</div>;
 
