@@ -1,6 +1,6 @@
 // api/market-gauge.js — Market Valuation Gauge (G1)
 // Fetches each index independently in parallel — avoids PostgREST row limits
-// Cache: 5 min live, 10 min stale
+// Cache: 1hr CDN, 4hr stale-while-revalidate
 
 const CURATED_INDICES = [
   'BSE 500',
@@ -180,19 +180,18 @@ function buildBroadMarket(byIndex) {
 function generateCommentary(indexName, data) {
   if (!data) return '';
   const { current_score, current_zone, latest_pe, latest_pb, latest_dy, history_from, returns_from_bottoms } = data;
-  const fromYear   = history_from ? history_from.slice(0,4) : '1990';
-  const medRet3Y   = returns_from_bottoms?.median_returns?.['3Y'];
-  const retNote    = medRet3Y != null ? ` Median 3-year return from similar levels historically: ${medRet3Y>0?'+':''}${medRet3Y}%.` : '';
-  const metrics    = [
-    latest_pe  != null ? `P/E of ${latest_pe.toFixed(1)}x`          : '',
-    latest_pb  != null ? `P/B of ${latest_pb.toFixed(1)}x`          : '',
+  const fromYear  = history_from ? history_from.slice(0,4) : '1990';
+  const medRet3Y  = returns_from_bottoms?.median_returns?.['3Y'];
+  const retNote   = medRet3Y != null ? ` Median 3-year return from similar levels historically: ${medRet3Y>0?'+':''}${medRet3Y}%.` : '';
+  const metrics   = [
+    latest_pe  != null ? `P/E of ${latest_pe.toFixed(1)}x`           : '',
+    latest_pb  != null ? `P/B of ${latest_pb.toFixed(1)}x`           : '',
     latest_dy  != null ? `Dividend Yield of ${latest_dy.toFixed(2)}%` : '',
   ].filter(Boolean).join(', ');
-  const scoreDesc  = current_score>=80?'cheapest':current_score>=60?'below-average (attractive)':current_score>=40?'average':current_score>=20?'above-average (expensive)':'most expensive';
+  const scoreDesc = current_score>=80?'cheapest':current_score>=60?'below-average (attractive)':current_score>=40?'average':current_score>=20?'above-average (expensive)':'most expensive';
   return `${indexName} is trading at ${metrics}. Based on full history since ${fromYear}, current valuations rank at the ${current_score}th percentile — among the ${scoreDesc} seen historically. This places the market in the ${current_zone.label} zone.${retNote}`;
 }
 
-// ── Fetch one index from Supabase ─────────────────────────────────────────────
 async function fetchOneIndex(name, supabaseUrl, anonKey) {
   const url = `${supabaseUrl}/rest/v1/bse_index_data` +
     `?select=date,index_name,close,pe,pb,div_yield` +
@@ -211,7 +210,6 @@ async function fetchOneIndex(name, supabaseUrl, anonKey) {
   }
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -219,7 +217,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'GET')    { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+  // 1hr CDN cache — data only changes once per trading day
+  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=14400');
 
   const SUPABASE_URL      = process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -229,7 +228,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch all 15 indices in parallel — each call is small (~8k rows max)
     const fetched = await Promise.all(
       CURATED_INDICES.map(name => fetchOneIndex(name, SUPABASE_URL, SUPABASE_ANON_KEY))
     );
