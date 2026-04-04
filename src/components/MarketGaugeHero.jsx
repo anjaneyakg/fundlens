@@ -13,17 +13,31 @@ const ZONE_CONFIG = [
 ];
 
 function getZone(score) {
-  return ZONE_CONFIG.find(z=>score>=z.min&&score<=z.max)??ZONE_CONFIG[4];
+  return ZONE_CONFIG.find(z => score >= z.min && score <= z.max) ?? ZONE_CONFIG[4];
 }
-const fmtDate=(s)=>{
-  if(!s) return '—';
-  const d=new Date(s);
-  return isNaN(d)?s:d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+const fmtDate = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
 };
+
+// Build smooth SVG cubic bezier path from points array [{x,y}]
+function smoothPath(pts) {
+  if (!pts.length) return '';
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx  = (prev.x + curr.x) / 2;
+    d += ` C ${cpx.toFixed(1)} ${prev.y.toFixed(1)}, ${cpx.toFixed(1)} ${curr.y.toFixed(1)}, ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`;
+  }
+  return d;
+}
 
 // Arc gauge SVG
 function ArcGauge({ score, zone }) {
-  if (score==null||!zone) return null;
+  if (score == null || !zone) return null;
   const pct=score/100, r=52, cx=68, cy=68;
   function polar(deg,rad){const a=(deg*Math.PI)/180;return{x:cx+rad*Math.cos(a),y:cy+rad*Math.sin(a)};}
   const start=polar(180,r), end=polar(180-pct*180,r), large=pct>0.5?1:0;
@@ -45,103 +59,119 @@ function ArcGauge({ score, zone }) {
   );
 }
 
-// Mini sparkline for 5-year view
+// Smooth sparkline for 5-year view using monthly series
 function Sparkline({ series, zone }) {
   const [tip, setTip] = useState(null);
   if (!series?.length) return null;
   const W=340,H=110,PL=8,PR=8,PT=6,PB=18;
   const cW=W-PL-PR, cH=H-PT-PB;
 
-  const minTs=new Date(series[0].date).getTime();
-  const maxTs=new Date(series[series.length-1].date).getTime();
-  const tsR=maxTs-minTs||1;
-  const xOf=d=>PL+((new Date(d).getTime()-minTs)/tsR)*cW;
-  const yOf=s=>PT+cH-(s/100)*cH;
-  const pts=series.map(p=>`${xOf(p.date).toFixed(1)},${yOf(p.score).toFixed(1)}`).join(' ');
+  const minTs = new Date(series[0].date).getTime();
+  const maxTs = new Date(series[series.length-1].date).getTime();
+  const tsR   = maxTs-minTs||1;
+  const xOf   = d => PL+((new Date(d).getTime()-minTs)/tsR)*cW;
+  const yOf   = s => PT+cH-(s/100)*cH;
 
-  const sy=new Date(series[0].date).getFullYear();
-  const ey=new Date(series[series.length-1].date).getFullYear();
+  // Build smooth path
+  const pts   = series.map(p => ({ x: xOf(p.date), y: yOf(p.score) }));
+  const pathD = smoothPath(pts);
 
-  const onMove=e=>{
-    const svg=e.currentTarget;
-    const rect=svg.getBoundingClientRect();
-    const mx=(e.clientX-rect.left)*(W/rect.width);
-    const ratio=Math.max(0,Math.min(1,(mx-PL)/cW));
-    const idx=Math.round(ratio*(series.length-1));
-    const p=series[Math.max(0,Math.min(series.length-1,idx))];
-    if(p) setTip({x:xOf(p.date),y:yOf(p.score),d:p});
+  const sy = new Date(series[0].date).getFullYear();
+  const ey = new Date(series[series.length-1].date).getFullYear();
+
+  const onMove = e => {
+    const svg  = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const mx   = (e.clientX-rect.left)*(W/rect.width);
+    const ratio= Math.max(0,Math.min(1,(mx-PL)/cW));
+    const idx  = Math.round(ratio*(series.length-1));
+    const p    = series[Math.max(0,Math.min(series.length-1,idx))];
+    if (p) setTip({x:xOf(p.date),y:yOf(p.score),d:p});
   };
 
+  const last = series[series.length-1];
+  const lz   = getZone(last.score);
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}}
+    <svg viewBox={`0 0 ${W} ${H}`}
+      style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}}
       onMouseMove={onMove} onMouseLeave={()=>setTip(null)}>
+
+      {/* Zone bands */}
       {ZONE_CONFIG.map(z=>(
         <rect key={z.label} x={PL} y={PT+cH-(z.max/100)*cH}
           width={cW} height={((z.max-z.min)/100)*cH} fill={z.bg}/>
       ))}
-      <text x={PL} y={H-4} fontSize={8} fill="#94a3b8">{sy}</text>
+
+      {/* Year labels */}
+      <text x={PL}    y={H-4} fontSize={8} fill="#94a3b8">{sy}</text>
       <text x={PL+cW} y={H-4} textAnchor="end" fontSize={8} fill="#94a3b8">{ey}</text>
-      <polyline points={pts} fill="none" stroke={zone?.color??'#2563eb'} strokeWidth={2.5}
+
+      {/* Smooth score line */}
+      <path d={pathD} fill="none" stroke={zone?.color??'#2563eb'} strokeWidth={2.5}
         strokeLinejoin="round" strokeLinecap="round"/>
-      {(()=>{
-        const last=series[series.length-1];
-        const lz=getZone(last.score);
-        return <circle cx={xOf(last.date)} cy={yOf(last.score)} r={4} fill={lz.color} stroke="#fff" strokeWidth={2}/>;
-      })()}
-      {tip&&(
-        <>
-          <line x1={tip.x} x2={tip.x} y1={PT} y2={PT+cH} stroke="#94a3b8" strokeWidth={1} strokeDasharray="2,2"/>
-          <rect x={Math.min(tip.x+4,W-72)} y={PT} width={68} height={38} fill="#fff" stroke="#e2e8f0" rx={5}/>
-          <text x={Math.min(tip.x+4,W-72)+34} y={PT+12} textAnchor="middle" fontSize={8} fill="#374151">{tip.d.date?.slice(0,7)}</text>
-          <text x={Math.min(tip.x+4,W-72)+34} y={PT+24} textAnchor="middle" fontSize={9} fill={getZone(tip.d.score).color} fontWeight="bold">
-            {getZone(tip.d.score).label}
-          </text>
-          <text x={Math.min(tip.x+4,W-72)+34} y={PT+35} textAnchor="middle" fontSize={8} fill="#64748b">Score {tip.d.score}</text>
-        </>
-      )}
+
+      {/* Latest dot */}
+      <circle cx={xOf(last.date)} cy={yOf(last.score)} r={4} fill={lz.color} stroke="#fff" strokeWidth={2}/>
+
+      {/* Hover crosshair */}
+      {tip && <>
+        <line x1={tip.x} x2={tip.x} y1={PT} y2={PT+cH} stroke="#94a3b8" strokeWidth={1} strokeDasharray="2,2"/>
+        <rect x={Math.min(tip.x+4,W-72)} y={PT} width={68} height={38} fill="#fff" stroke="#e2e8f0" rx={5}/>
+        <text x={Math.min(tip.x+4,W-72)+34} y={PT+12} textAnchor="middle" fontSize={8} fill="#374151">
+          {tip.d.date?.slice(0,7)}
+        </text>
+        <text x={Math.min(tip.x+4,W-72)+34} y={PT+24} textAnchor="middle" fontSize={9}
+          fill={getZone(tip.d.score).color} fontWeight="bold">
+          {getZone(tip.d.score).label}
+        </text>
+        <text x={Math.min(tip.x+4,W-72)+34} y={PT+35} textAnchor="middle" fontSize={8} fill="#64748b">
+          Score {tip.d.score}
+        </text>
+      </>}
     </svg>
   );
 }
 
 export default function MarketGaugeHero() {
-  const navigate=useNavigate();
-  const [data,setData]=useState(null);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState(false);
+  const navigate = useNavigate();
+  const [data,setData]       = useState(null);
+  const [loading,setLoading] = useState(true);
+  const [error,setError]     = useState(false);
 
   useEffect(()=>{
     fetch('/api/market-gauge')
-      .then(r=>r.json())
-      .then(d=>{setData(d);setLoading(false);})
-      .catch(()=>{setError(true);setLoading(false);});
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
   },[]);
 
-  const broad=data?.broad_market;
+  const broad = data?.broad_market;
 
-  // Last 5 years of series
-  const series5Y=useMemo(()=>{
-    if(!broad?.series) return [];
-    const cutoff=new Date();
+  // Last 5 years of MONTHLY series for hero sparkline
+  const series5Y = useMemo(()=>{
+    if (!broad?.series_monthly) return [];
+    const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear()-5);
-    const cutStr=cutoff.toISOString().slice(0,10);
-    return broad.series.filter(p=>p.date>=cutStr);
+    const cutStr = cutoff.toISOString().slice(0,10);
+    return broad.series_monthly.filter(p => p.date >= cutStr);
   },[broad]);
 
-  const score=broad?.current_score??null;
-  const zone=score!=null?getZone(score):null;
+  const score = broad?.current_score ?? null;
+  const zone  = score != null ? getZone(score) : null;
 
-  const container={
+  const container = {
     background:'#fff', border:'1px solid #e2e8f0', borderRadius:20,
     overflow:'hidden', boxShadow:'0 2px 12px rgba(0,0,0,.06)',
     fontFamily:"'DM Sans','Segoe UI',sans-serif",
   };
 
-  if(loading) return (
+  if (loading) return (
     <div style={{...container,padding:'40px 20px',textAlign:'center',color:'#94a3b8',fontSize:14}}>
       Loading market valuation…
     </div>
   );
-  if(error||!data) return (
+  if (error || !data) return (
     <div style={{...container,padding:'30px 20px',textAlign:'center',color:'#dc2626',fontSize:13}}>
       Could not load market data.
     </div>
@@ -151,10 +181,10 @@ export default function MarketGaugeHero() {
     <div style={container}>
       {/* Header */}
       <div style={{
-        background:zone?`linear-gradient(135deg,${zone.color}12,${zone.color}04)`:'#f8fafc',
-        borderBottom:`2px solid ${zone?.color??'#e2e8f0'}22`,
-        padding:'16px 20px 12px',
-        display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12,
+        background: zone ? `linear-gradient(135deg,${zone.color}12,${zone.color}04)` : '#f8fafc',
+        borderBottom: `2px solid ${zone?.color??'#e2e8f0'}22`,
+        padding: '16px 20px 12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
       }}>
         <div>
           <div style={{fontSize:10,fontWeight:700,color:'#94a3b8',letterSpacing:1,marginBottom:2}}>
@@ -164,7 +194,7 @@ export default function MarketGaugeHero() {
             Broad Market · BSE 500 + Sensex · as of {fmtDate(broad?.latest_date)}
           </div>
         </div>
-        {zone&&(
+        {zone && (
           <div style={{display:'inline-flex',alignItems:'center',gap:6,background:`${zone.color}18`,border:`1.5px solid ${zone.color}`,borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:700,color:zone.color}}>
             <span style={{width:8,height:8,borderRadius:'50%',background:zone.color,display:'inline-block'}}/>
             {zone.label}
@@ -192,13 +222,13 @@ export default function MarketGaugeHero() {
           </div>
         </div>
 
-        {/* 5-year chart + commentary */}
+        {/* 5-year sparkline + commentary */}
         <div style={{flex:'1 1 200px',minWidth:180}}>
           <div style={{fontSize:11,color:'#94a3b8',marginBottom:6,fontWeight:600}}>
             Valuation Score — Last 5 Years
           </div>
           <Sparkline series={series5Y} zone={zone}/>
-          {broad?.commentary&&(
+          {broad?.commentary && (
             <div style={{fontSize:11,color:'#64748b',lineHeight:1.5,marginTop:8,padding:'8px 10px',background:'#f8fafc',borderRadius:8,borderLeft:`3px solid ${zone?.color??'#e2e8f0'}`}}>
               {broad.commentary.slice(0,180)}{broad.commentary.length>180?'…':''}
             </div>
@@ -209,7 +239,7 @@ export default function MarketGaugeHero() {
       {/* Footer */}
       <div style={{borderTop:'1px solid #f1f5f9',padding:'10px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#fafafa'}}>
         <div style={{fontSize:11,color:'#94a3b8'}}>
-          {broad?.history_from?`Historical data since ${broad.history_from.slice(0,4)}`:'BSE Index Data'}
+          {broad?.history_from ? `Historical data since ${broad.history_from.slice(0,4)}` : 'BSE Index Data'}
         </div>
         <button onClick={()=>navigate('/tools/market-gauge')} style={{
           padding:'7px 16px',borderRadius:20,background:zone?.color??'#2563eb',
