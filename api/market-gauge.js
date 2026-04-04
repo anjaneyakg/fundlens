@@ -25,7 +25,7 @@ const CURATED_INDICES = [
   'BSE Commodities',
   'BSE Consumer Discretionary',
   'BSE OIL & GAS',
-  'BSE POWER',
+  'BSE POWER & ENERGY',
   'BSE Telecommunication',
   // Theme / PSU
   'BSE PSU',
