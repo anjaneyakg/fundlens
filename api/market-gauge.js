@@ -306,10 +306,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 27 parallel fetches — each small, fast, within Vercel limits
-    const fetched = await Promise.all(
-      CURATED_INDICES.map(name => fetchOneIndex(name, SUPABASE_URL, SUPABASE_ANON_KEY))
-    );
+    // Batched fetches — 5 at a time to avoid overwhelming Supabase connection pool
+    const BATCH_SIZE = 5;
+    const fetched = [];
+    for (let i = 0; i < CURATED_INDICES.length; i += BATCH_SIZE) {
+      const batch = CURATED_INDICES.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(name => fetchOneIndex(name, SUPABASE_URL, SUPABASE_ANON_KEY))
+      );
+      fetched.push(...results);
+      if (i + BATCH_SIZE < CURATED_INDICES.length) await new Promise(r => setTimeout(r, 200));
+    }
 
     const byIndex = {};
     CURATED_INDICES.forEach((name, i) => {
