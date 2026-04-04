@@ -5,17 +5,18 @@ const NAV_ITEMS = [
   {
     group: "Data Pipeline",
     items: [
-      { to: "/admin/portfolio-upload", label: "Portfolio Upload", icon: "⬆", live: true  },
-      { to: "/admin/coverage",    label: "Coverage",    icon: "◈", live: true  },
-      { to: "/admin/scheme-mapping",    label: "Scheme Mapping",    icon: "◈", live: true  },
-      { to: "/admin/amc-directory",    label: "AMC Directory",    icon: "◎", live: false },
+      { to: "/admin/portfolio-upload", label: "Portfolio Upload",    icon: "⬆", live: true  },
+      { to: "/admin/coverage",         label: "Coverage",            icon: "◈", live: true  },
+      { to: "/admin/scheme-mapping",   label: "Scheme Mapping",      icon: "◈", live: true  },
+      { to: "/admin/amfi-marketcap",   label: "AMFI Market Cap",     icon: "◉", live: true  },
+      { to: "/admin/amc-directory",    label: "AMC Directory",       icon: "◎", live: false },
     ],
   },
   {
     group: "System",
     items: [
-      { to: "/admin/security-master",  label: "Security Master",  icon: "◆", live: false },
-      { to: "/admin/settings",         label: "Settings",         icon: "◇", live: false },
+      { to: "/admin/security-master",  label: "Security Master",     icon: "◆", live: false },
+      { to: "/admin/settings",         label: "Settings",            icon: "◇", live: false },
     ],
   },
 ];
