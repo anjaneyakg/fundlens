@@ -342,13 +342,15 @@ export default async function handler(req, res) {
       `&order=date.asc` +
       `&limit=500000`;
 
-    const response = await fetch(url, {
-      headers: {
-        apikey:         SUPABASE_ANON_KEY,
-        Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    });
+const response = await fetch(url, {
+  headers: {
+    apikey:         SUPABASE_ANON_KEY,
+    Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Range-Unit':   'items',
+    'Range':        '0-499999',
+  },
+});
 
     if (!response.ok) {
       const errText = await response.text();
