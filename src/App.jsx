@@ -29,6 +29,7 @@ import PostTaxComparator from "./pages/PostTaxComparator";
 import InflationAdjustedReturn from "./pages/InflationAdjustedReturn";
 import PortfolioXIRR from "./pages/PortfolioXIRR";
 import RiskProfiler from "./pages/RiskProfiler";
+import SchemeMapping from './pages/SchemeMapping.jsx'
 
 export default function App() {
   const location = useLocation()
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload" element={<PortfolioUpload />} />
           <Route path="coverage"         element={<CoverageDashboard />} />
+          <Route path="scheme-mapping" element={<SchemeMapping />} />
         </Route>
       </Routes>
     </>
