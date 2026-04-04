@@ -22,12 +22,123 @@ const fmtDate = (s) => {
   return isNaN(d) ? s : d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
 };
 
-// ── SVG Oscillator Chart ─────────────────────────────────────────────────────
+// Build smooth SVG cubic bezier path from points array [{x,y}]
+function smoothPath(pts) {
+  if (!pts.length) return '';
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx  = (prev.x + curr.x) / 2;
+    d += ` C ${cpx.toFixed(1)} ${prev.y.toFixed(1)}, ${cpx.toFixed(1)} ${curr.y.toFixed(1)}, ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+// ── Live Formula Card ────────────────────────────────────────────────────────
+
+function FormulaCard({ weights }) {
+  const fmt = v => `${v}%`;
+  const terms = [
+    { label: 'PE Percentile', key: 'pe',  color: '#0891b2', note: 'inverted — high PE = expensive' },
+    { label: 'PB Percentile', key: 'pb',  color: '#7c3aed', note: 'inverted — high PB = expensive' },
+    { label: 'DY Percentile', key: 'dy',  color: '#0d9488', note: 'direct — high yield = cheap'    },
+  ];
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg,#f0f9ff,#eff6ff)',
+      border: '1px solid #bfdbfe',
+      borderRadius: 16,
+      padding: '20px 24px',
+      marginBottom: 24,
+    }}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
+        <span style={{background:'#2563eb',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700}}>∑</span>
+        <span style={{fontSize:13,fontWeight:700,color:'#1e3a8a'}}>Scoring Formula — updates live with weight sliders</span>
+      </div>
+
+      {/* Formula equation */}
+      <div style={{
+        background:'#fff',
+        border:'1px solid #dbeafe',
+        borderRadius:12,
+        padding:'16px 20px',
+        fontFamily:"'DM Mono',monospace",
+        fontSize:'clamp(11px,1.8vw,14px)',
+        color:'#0f172a',
+        overflowX:'auto',
+        whiteSpace:'nowrap',
+        marginBottom:16,
+      }}>
+        <span style={{color:'#64748b',fontStyle:'italic'}}>Score</span>
+        <span style={{color:'#94a3b8'}}> = </span>
+        {terms.map((t, i) => (
+          <span key={t.key}>
+            <span style={{
+              background:`${t.color}15`,
+              border:`1px solid ${t.color}40`,
+              borderRadius:6,
+              padding:'2px 8px',
+              color: t.color,
+              fontWeight:700,
+            }}>
+              {t.label}
+            </span>
+            <span style={{color:'#94a3b8'}}> × </span>
+            <span style={{
+              background:'#1d4ed815',
+              border:'1px solid #1d4ed840',
+              borderRadius:6,
+              padding:'2px 8px',
+              color:'#1d4ed8',
+              fontWeight:800,
+              transition:'all 0.2s',
+            }}>
+              {fmt(weights[t.key])}
+            </span>
+            {i < terms.length - 1 && <span style={{color:'#94a3b8'}}> + </span>}
+          </span>
+        ))}
+      </div>
+
+      {/* Explanation rows */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10}}>
+        {terms.map(t => (
+          <div key={t.key} style={{
+            display:'flex',alignItems:'flex-start',gap:8,
+            background:'#fff',borderRadius:10,padding:'10px 14px',
+            border:`1px solid ${t.color}25`,
+          }}>
+            <div style={{width:10,height:10,borderRadius:'50%',background:t.color,marginTop:3,flexShrink:0}}/>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:t.color}}>{t.label}</div>
+              <div style={{fontSize:11,color:'#64748b',marginTop:2}}>{t.note}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Plain English explanation */}
+      <div style={{marginTop:14,padding:'10px 14px',background:'#fff',borderRadius:10,border:'1px solid #e0e7ff',fontSize:12,color:'#475569',lineHeight:1.65}}>
+        <b style={{color:'#1e3a8a'}}>How to read the score: </b>
+        Percentile rank = where today's value sits within the full historical range.
+        Score <b>100</b> = cheapest ever recorded. Score <b>0</b> = most expensive ever.
+        P/E and P/B are inverted (higher ratio → more expensive → lower score).
+        Dividend Yield is direct (higher yield → cheaper market → higher score).
+        Weights above control how much each metric influences the final score.
+      </div>
+    </div>
+  );
+}
+
+// ── SVG Oscillator Chart (smooth bezier, zone labels on right axis) ──────────
 
 function OscillatorChart({ series }) {
   const [tooltip, setTooltip] = useState(null);
   const svgRef = useRef(null);
-  const W=800,H=260,PL=36,PR=12,PT=10,PB=28;
+  const W=860,H=280,PL=36,PR=80,PT=12,PB=28;
   const cW=W-PL-PR, cH=H-PT-PB;
 
   if (!series?.length) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>No data yet.</div>;
@@ -37,35 +148,43 @@ function OscillatorChart({ series }) {
   const tsRange = maxTs-minTs||1;
   const xOf = d => PL+((new Date(d).getTime()-minTs)/tsRange)*cW;
   const yOf = s => PT+cH-(s/100)*cH;
-  const points = series.map(p=>`${xOf(p.date).toFixed(1)},${yOf(p.score).toFixed(1)}`).join(' ');
 
+  // Build smooth path points
+  const pts = series.map(p => ({ x: xOf(p.date), y: yOf(p.score) }));
+  const pathD = smoothPath(pts);
+
+  // Determine line color per segment (use zone color of current point)
+  // For performance, draw one path per zone color group
   const sy = new Date(series[0].date).getFullYear();
   const ey = new Date(series[series.length-1].date).getFullYear();
-  const step = Math.max(1,Math.floor((ey-sy)/10));
-  const years=[];
-  for(let y=sy;y<=ey;y+=step){
-    const ts=new Date(`${y}-01-01`).getTime();
-    if(ts>=minTs&&ts<=maxTs) years.push({year:y,x:xOf(`${y}-01-01`)});
+  const step = Math.max(1, Math.floor((ey-sy)/10));
+  const years = [];
+  for (let y=sy; y<=ey; y+=step) {
+    const ts = new Date(`${y}-01-01`).getTime();
+    if (ts>=minTs && ts<=maxTs) years.push({ year:y, x:xOf(`${y}-01-01`) });
   }
 
-  const onMove = useCallback(e=>{
-    const svg=svgRef.current; if(!svg) return;
-    const rect=svg.getBoundingClientRect();
-    const mx=(e.clientX-rect.left)*(W/rect.width);
-    const ratio=Math.max(0,Math.min(1,(mx-PL)/cW));
-    const idx=Math.round(ratio*(series.length-1));
-    const p=series[Math.max(0,Math.min(series.length-1,idx))];
-    if(p) setTooltip({x:xOf(p.date),y:yOf(p.score),d:p});
+  const onMove = useCallback(e => {
+    const svg = svgRef.current; if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const mx = (e.clientX-rect.left)*(W/rect.width);
+    const ratio = Math.max(0, Math.min(1,(mx-PL)/cW));
+    const idx = Math.round(ratio*(series.length-1));
+    const p = series[Math.max(0,Math.min(series.length-1,idx))];
+    if (p) setTooltip({ x:xOf(p.date), y:yOf(p.score), d:p });
   },[series]);
 
   const tz = tooltip ? getZone(tooltip.d.score) : null;
+  const last = series[series.length-1];
+  const lz = getZone(last.score);
 
   return (
     <div style={{position:'relative'}}>
-      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:8}}>
+      {/* Legend */}
+      <div style={{display:'flex',gap:14,flexWrap:'wrap',marginBottom:10}}>
         {ZONE_CONFIG.map(z=>(
           <div key={z.label} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#64748b'}}>
-            <div style={{width:10,height:10,borderRadius:2,background:z.color,opacity:0.7}}/>
+            <div style={{width:10,height:10,borderRadius:2,background:z.color,opacity:0.8}}/>
             {z.label}
           </div>
         ))}
@@ -73,45 +192,68 @@ function OscillatorChart({ series }) {
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`}
         style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}}
         onMouseMove={onMove} onMouseLeave={()=>setTooltip(null)}>
+
+        {/* Zone bands */}
         {ZONE_CONFIG.map(z=>(
           <rect key={z.label} x={PL} y={PT+cH-(z.max/100)*cH}
             width={cW} height={((z.max-z.min)/100)*cH} fill={z.bg}/>
         ))}
-        {[20,40,60,80].map(v=>(
+
+        {/* Zone labels on right axis */}
+        {ZONE_CONFIG.map(z=>{
+          const midY = PT+cH-((z.min+z.max)/200)*cH;
+          return (
+            <text key={z.label} x={PL+cW+6} y={midY+4}
+              fontSize={9} fill={z.color} fontWeight={600}>{z.label}</text>
+          );
+        })}
+
+        {/* Horizontal grid lines + left Y axis labels */}
+        {[0,20,40,60,80,100].map(v=>(
           <g key={v}>
-            <line x1={PL} x2={PL+cW} y1={yOf(v)} y2={yOf(v)} stroke="#e2e8f0" strokeWidth={0.5}/>
+            <line x1={PL} x2={PL+cW} y1={yOf(v)} y2={yOf(v)} stroke="#e2e8f0" strokeWidth={v===0||v===100?0.8:0.5} strokeDasharray={v===0||v===100?'none':'4,4'}/>
             <text x={PL-4} y={yOf(v)+4} textAnchor="end" fontSize={9} fill="#94a3b8">{v}</text>
           </g>
         ))}
+
+        {/* Vertical year markers */}
         {years.map(({year,x})=>(
           <g key={year}>
-            <line x1={x} x2={x} y1={PT} y2={PT+cH} stroke="#f1f5f9" strokeWidth={0.5}/>
+            <line x1={x} x2={x} y1={PT} y2={PT+cH} stroke="#f1f5f9" strokeWidth={0.6}/>
             <text x={x} y={H-6} textAnchor="middle" fontSize={9} fill="#94a3b8">{year}</text>
           </g>
         ))}
-        <polyline points={points} fill="none" stroke="#2563eb" strokeWidth={1.8}
-          strokeLinejoin="round" strokeLinecap="round"/>
-        {(()=>{
-          const last=series[series.length-1];
-          const lz=getZone(last.score);
-          return <circle cx={xOf(last.date)} cy={yOf(last.score)} r={5} fill={lz.color} stroke="#fff" strokeWidth={2}/>;
-        })()}
-        {tooltip&&<>
+
+        {/* Smooth score line */}
+        <path d={pathD} fill="none" stroke="#2563eb" strokeWidth={1.8}
+          strokeLinejoin="round" strokeLinecap="round" opacity={0.9}/>
+
+        {/* Latest dot */}
+        <circle cx={xOf(last.date)} cy={yOf(last.score)} r={5} fill={lz.color} stroke="#fff" strokeWidth={2}/>
+
+        {/* Hover crosshair */}
+        {tooltip && <>
           <line x1={tooltip.x} x2={tooltip.x} y1={PT} y2={PT+cH}
             stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,3"/>
           <circle cx={tooltip.x} cy={tooltip.y} r={4} fill={tz?.color??'#2563eb'} stroke="#fff" strokeWidth={2}/>
         </>}
       </svg>
-      {tooltip&&(
-        <div style={{position:'absolute',top:40,left:16,background:'#fff',border:'1px solid #e2e8f0',
-          borderRadius:8,padding:'8px 12px',fontSize:12,boxShadow:'0 4px 12px rgba(0,0,0,.1)',
-          pointerEvents:'none',zIndex:10}}>
-          <div style={{fontWeight:700,color:'#0f172a'}}>{tooltip.d.date?.slice(0,7)}</div>
-          {tz&&<div style={{color:tz.color,fontWeight:600}}>{tz.label}</div>}
+
+      {/* Tooltip box */}
+      {tooltip && (
+        <div style={{
+          position:'absolute',top:40,left:16,
+          background:'#fff',border:'1px solid #e2e8f0',
+          borderRadius:10,padding:'10px 14px',fontSize:12,
+          boxShadow:'0 4px 16px rgba(0,0,0,.12)',pointerEvents:'none',zIndex:10,
+          borderLeft:`3px solid ${tz?.color??'#2563eb'}`,
+        }}>
+          <div style={{fontWeight:700,color:'#0f172a',marginBottom:4}}>{fmtDate(tooltip.d.date)}</div>
+          {tz && <div style={{color:tz.color,fontWeight:700,fontSize:13,marginBottom:4}}>{tz.label}</div>}
           <div style={{color:'#64748b'}}>Score: <b style={{color:tz?.color}}>{tooltip.d.score}</b></div>
-          {tooltip.d.pe!=null&&<div style={{color:'#64748b'}}>P/E: <b>{tooltip.d.pe?.toFixed(1)}</b></div>}
-          {tooltip.d.pb!=null&&<div style={{color:'#64748b'}}>P/B: <b>{tooltip.d.pb?.toFixed(1)}</b></div>}
-          {tooltip.d.dy!=null&&<div style={{color:'#64748b'}}>Div Yield: <b>{tooltip.d.dy?.toFixed(2)}%</b></div>}
+          {tooltip.d.pe  != null && <div style={{color:'#64748b'}}>P/E: <b>{tooltip.d.pe?.toFixed(1)}</b></div>}
+          {tooltip.d.pb  != null && <div style={{color:'#64748b'}}>P/B: <b>{tooltip.d.pb?.toFixed(1)}</b></div>}
+          {tooltip.d.dy  != null && <div style={{color:'#64748b'}}>Div Yield: <b>{tooltip.d.dy?.toFixed(2)}%</b></div>}
         </div>
       )}
     </div>
@@ -122,16 +264,16 @@ function OscillatorChart({ series }) {
 
 function ReturnsBarChart({ data, type }) {
   const [tip, setTip] = useState(null);
-  if (!data||data.count===0) return (
+  if (!data || data.count === 0) return (
     <div style={{textAlign:'center',padding:30,color:'#94a3b8',fontSize:13}}>
       No {type==='bottom'?'Deep Value':'Stretched'} events detected yet.
     </div>
   );
-  const barData=RETURN_PERIODS.map(p=>({period:p,value:data.median_returns?.[p]??null})).filter(d=>d.value!=null);
-  if(!barData.length) return null;
+  const barData = RETURN_PERIODS.map(p => ({ period:p, value:data.median_returns?.[p]??null })).filter(d => d.value != null);
+  if (!barData.length) return null;
 
   const W=500,H=180,PL=48,PR=12,PT=16,PB=28;
-  const cW=W-PL-PR,cH=H-PT-PB;
+  const cW=W-PL-PR, cH=H-PT-PB;
   const allV=barData.map(d=>d.value);
   const minV=Math.min(0,...allV), maxV=Math.max(0,...allV);
   const range=(maxV-minV)||1;
@@ -167,8 +309,7 @@ function ReturnsBarChart({ data, type }) {
         })}
         {tip&&(
           <g>
-            <rect x={Math.min(tip.cx-30,W-80)} y={PT} width={72} height={36}
-              fill="#fff" stroke="#e2e8f0" rx={6}/>
+            <rect x={Math.min(tip.cx-30,W-80)} y={PT} width={72} height={36} fill="#fff" stroke="#e2e8f0" rx={6}/>
             <text x={Math.min(tip.cx-30,W-80)+36} y={PT+14} textAnchor="middle" fontSize={11} fontWeight="bold" fill="#0f172a">{tip.period}</text>
             <text x={Math.min(tip.cx-30,W-80)+36} y={PT+28} textAnchor="middle" fontSize={11} fontWeight="bold"
               fill={tip.value>=0?'#16a34a':'#dc2626'}>
@@ -181,9 +322,11 @@ function ReturnsBarChart({ data, type }) {
         {RETURN_PERIODS.map(p=>{
           const val=data.median_returns?.[p];
           return (
-            <div key={p} style={{background:val==null?'#f1f5f9':val>=0?'#f0fdf4':'#fef2f2',
+            <div key={p} style={{
+              background:val==null?'#f1f5f9':val>=0?'#f0fdf4':'#fef2f2',
               border:`1px solid ${val==null?'#e2e8f0':val>=0?'#bbf7d0':'#fecaca'}`,
-              borderRadius:8,padding:'8px 10px',textAlign:'center'}}>
+              borderRadius:8,padding:'8px 10px',textAlign:'center',
+            }}>
               <div style={{fontSize:15,fontWeight:700,color:val==null?'#94a3b8':val>=0?'#16a34a':'#dc2626'}}>
                 {val!=null?`${val>0?'+':''}${val}%`:'—'}
               </div>
@@ -192,7 +335,7 @@ function ReturnsBarChart({ data, type }) {
           );
         })}
       </div>
-      {data.events?.length>0&&(
+      {data.events?.length > 0 && (
         <div style={{marginTop:16,overflowX:'auto'}}>
           <div style={{fontSize:12,color:'#64748b',marginBottom:6,fontWeight:600}}>Historical Events (most recent first)</div>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
@@ -321,13 +464,13 @@ function EmbedGenerator({ selected }) {
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function MarketGauge() {
-  const navigate=useNavigate();
-  const [apiData,setApiData]=useState(null);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState(null);
-  const [selected,setSelected]=useState('__broad__');
-  const [weights,setWeights]=useState({pe:30,pb:40,dy:30});
-  const [showEmbed,setShowEmbed]=useState(false);
+  const navigate = useNavigate();
+  const [apiData,setApiData]   = useState(null);
+  const [loading,setLoading]   = useState(true);
+  const [error,setError]       = useState(null);
+  const [selected,setSelected] = useState('__broad__');
+  const [weights,setWeights]   = useState({pe:30,pb:40,dy:30});
+  const [showEmbed,setShowEmbed] = useState(false);
 
   useEffect(()=>{
     fetch('/api/market-gauge')
@@ -336,35 +479,48 @@ export default function MarketGauge() {
       .catch(e=>{setError(e.message);setLoading(false);});
   },[]);
 
-  const rawData=useMemo(()=>{
-    if(!apiData) return null;
-    return selected==='__broad__'?apiData.broad_market:(apiData.by_index?.[selected]??null);
+  const rawData = useMemo(()=>{
+    if (!apiData) return null;
+    return selected==='__broad__' ? apiData.broad_market : (apiData.by_index?.[selected]??null);
   },[apiData,selected]);
 
-  const series=useMemo(()=>recompute(rawData?.series,weights),[rawData,weights]);
-  const currentScore=series.length?series[series.length-1]?.score:rawData?.current_score;
-  const currentZone=currentScore!=null?getZone(currentScore):null;
-  const available=apiData?.meta?.indices_available??[];
-  const displayName=selected==='__broad__'?'Broad Market (BSE 500 + Sensex)':selected;
+  const series       = useMemo(()=>recompute(rawData?.series, weights),[rawData,weights]);
+  const currentScore = series.length ? series[series.length-1]?.score : rawData?.current_score;
+  const currentZone  = currentScore!=null ? getZone(currentScore) : null;
+  const available    = apiData?.meta?.indices_available ?? [];
+  const displayName  = selected==='__broad__' ? 'Broad Market (BSE 500 + Sensex)' : selected;
 
-  if(loading) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',color:'#94a3b8',fontFamily:'sans-serif'}}>⏳ Loading market data…</div>;
-  if(error||!apiData) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',color:'#dc2626',fontFamily:'sans-serif'}}>Failed to load. {error}</div>;
+  if (loading) return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',color:'#94a3b8',fontFamily:'sans-serif'}}>
+      ⏳ Loading market data…
+    </div>
+  );
+  if (error||!apiData) return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',color:'#dc2626',fontFamily:'sans-serif'}}>
+      Failed to load. {error}
+    </div>
+  );
 
-  const card={background:'#fff',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 4px rgba(0,0,0,.06)',marginBottom:24,overflow:'hidden'};
-  const cardHdr={padding:'18px 24px 14px',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10};
-  const cardBody={padding:'20px 24px'};
+  const card    = {background:'#fff',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 4px rgba(0,0,0,.06)',marginBottom:24,overflow:'hidden'};
+  const cardHdr = {padding:'18px 24px 14px',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10};
+  const cardBody= {padding:'20px 24px'};
 
   return (
     <div style={{minHeight:'100vh',background:'#f8fafc',fontFamily:"'DM Sans','Segoe UI',sans-serif",padding:'24px 16px 48px'}}>
       <div style={{maxWidth:1200,margin:'0 auto'}}>
 
-        {/* Header */}
+        {/* Page Header */}
         <div style={{marginBottom:28}}>
           <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:20,padding:'3px 12px',fontSize:12,fontWeight:600,color:'#1d4ed8',marginBottom:10}}>
             📊 G1 · Market Intelligence
           </div>
-          <h1 style={{fontSize:'clamp(22px,4vw,32px)',fontWeight:800,color:'#0f172a',margin:'0 0 8px'}}>Market Valuation Gauge</h1>
-          <p style={{color:'#64748b',fontSize:15,margin:0}}>Percentile-based valuation score across full BSE history (1990–present). Score 100 = cheapest ever · Score 0 = most expensive ever.</p>
+          <h1 style={{fontSize:'clamp(22px,4vw,32px)',fontWeight:800,color:'#0f172a',margin:'0 0 8px'}}>
+            Market Valuation Gauge
+          </h1>
+          <p style={{color:'#64748b',fontSize:15,margin:0}}>
+            Percentile-based valuation score across full BSE history (1990–present).
+            Score 100 = cheapest ever · Score 0 = most expensive ever.
+          </p>
         </div>
 
         {/* Controls */}
@@ -388,12 +544,17 @@ export default function MarketGauge() {
           </div>
         </div>
 
-        {/* Summary */}
+        {/* Live Formula Card */}
+        <FormulaCard weights={weights}/>
+
+        {/* Summary Card */}
         <div style={card}>
           <div style={cardHdr}>
             <div>
               <div style={{fontSize:16,fontWeight:700,color:'#0f172a'}}>{displayName}</div>
-              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>As of {fmtDate(rawData?.latest_date)} · Data since {rawData?.history_from?.slice(0,4)??'1990'}</div>
+              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>
+                As of {fmtDate(rawData?.latest_date)} · Data since {rawData?.history_from?.slice(0,4)??'1990'}
+              </div>
             </div>
             {currentZone&&(
               <div style={{display:'inline-flex',alignItems:'center',gap:6,background:`${currentZone.color}18`,border:`1.5px solid ${currentZone.color}`,borderRadius:20,padding:'4px 14px',fontSize:13,fontWeight:700,color:currentZone.color}}>
@@ -408,12 +569,12 @@ export default function MarketGauge() {
               <div style={{flex:1}}>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:12,marginBottom:20}}>
                   {[
-                    {label:'Valuation Score',    value:currentScore??'—',                                              color:'#2563eb'},
-                    {label:'Price / Earnings',   value:rawData?.latest_pe!=null?`${rawData.latest_pe.toFixed(1)}x`:'—', color:'#0891b2'},
+                    {label:'Valuation Score',     value:currentScore??'—',                                               color:'#2563eb'},
+                    {label:'Price / Earnings',    value:rawData?.latest_pe!=null?`${rawData.latest_pe.toFixed(1)}x`:'—', color:'#0891b2'},
                     {label:'Price / Book',        value:rawData?.latest_pb!=null?`${rawData.latest_pb.toFixed(1)}x`:'—', color:'#7c3aed'},
                     {label:'Dividend Yield',      value:rawData?.latest_dy!=null?`${rawData.latest_dy.toFixed(2)}%`:'—', color:'#0d9488'},
-                    {label:'Avg Score (All-Time)',value:rawData?.score_avg??'—',                                        color:'#64748b'},
-                    {label:'Monthly Data Points', value:rawData?.data_points??'—',                                      color:'#64748b'},
+                    {label:'Avg Score (All-Time)',value:rawData?.score_avg??'—',                                          color:'#64748b'},
+                    {label:'Weekly Data Points',  value:rawData?.data_points??'—',                                        color:'#64748b'},
                   ].map(m=>(
                     <div key={m.label} style={{background:'#f8fafc',border:`1.5px solid ${m.color}30`,borderRadius:12,padding:'12px 16px',textAlign:'center'}}>
                       <div style={{fontSize:22,fontWeight:800,color:m.color}}>{m.value}</div>
@@ -431,7 +592,7 @@ export default function MarketGauge() {
           </div>
         </div>
 
-        {/* Panel A */}
+        {/* Panel A — Oscillator */}
         <div style={card}>
           <div style={cardHdr}>
             <div>
@@ -439,13 +600,15 @@ export default function MarketGauge() {
                 <span style={{background:'#2563eb',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700}}>A</span>
                 Valuation Regime Oscillator
               </div>
-              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>Composite score over time · Coloured bands = valuation zones</div>
+              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>
+                Weekly composite score · 1990–present · Coloured bands = valuation zones
+              </div>
             </div>
           </div>
           <div style={cardBody}><OscillatorChart series={series}/></div>
         </div>
 
-        {/* Panel B */}
+        {/* Panel B — Deep Value entries */}
         <div style={card}>
           <div style={cardHdr}>
             <div>
@@ -453,13 +616,15 @@ export default function MarketGauge() {
                 <span style={{background:'#16a34a',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700}}>B</span>
                 Returns from Deep Value Entries
               </div>
-              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>Every time score entered Deep Value zone (≥80) — forward returns at 1M to 3Y</div>
+              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>
+                Every time score entered Deep Value zone (≥80) — forward returns at 1M to 3Y
+              </div>
             </div>
           </div>
           <div style={cardBody}><ReturnsBarChart data={rawData?.returns_from_bottoms} type="bottom"/></div>
         </div>
 
-        {/* Panel C */}
+        {/* Panel C — Stretched peaks */}
         <div style={card}>
           <div style={cardHdr}>
             <div>
@@ -467,7 +632,9 @@ export default function MarketGauge() {
                 <span style={{background:'#dc2626',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700}}>C</span>
                 Returns from Stretched Peaks
               </div>
-              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>Every time score entered Stretched zone (≤20) — forward returns at 1M to 3Y</div>
+              <div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>
+                Every time score entered Stretched zone (≤20) — forward returns at 1M to 3Y
+              </div>
             </div>
           </div>
           <div style={cardBody}><ReturnsBarChart data={rawData?.returns_from_peaks} type="peak"/></div>
@@ -488,9 +655,14 @@ export default function MarketGauge() {
           {showEmbed&&<div style={cardBody}><EmbedGenerator selected={selected}/></div>}
         </div>
 
-        {/* Methodology */}
+        {/* Methodology footer */}
         <div style={{background:'#fafafa',border:'1px solid #e2e8f0',borderRadius:12,padding:'16px 20px',fontSize:12,color:'#94a3b8',lineHeight:1.7}}>
-          <b style={{color:'#64748b'}}>Methodology:</b> Valuation score = weighted percentile rank across full BSE history. P/E and P/B inverted (high = expensive = low score). Dividend Yield directional (high yield = cheap = high score). Score 100 = cheapest ever; 0 = most expensive. Weights adjustable above. Data: BSE India. Not investment advice.
+          <b style={{color:'#64748b'}}>Methodology:</b> Valuation score = weighted percentile rank across full BSE history.
+          P/E and P/B are inverted (high ratio = expensive = low score).
+          Dividend Yield is direct (high yield = cheap market = high score).
+          Score 100 = cheapest ever recorded; 0 = most expensive.
+          Weights adjustable above — formula card updates live.
+          Data source: BSE India. Not investment advice.
         </div>
 
       </div>
