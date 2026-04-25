@@ -1,11 +1,17 @@
 // src/pages/PortfolioUpload.jsx
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AMC_LIST, CAT_LABELS, CAT_DESCRIPTIONS } from "../data/amcList";
 
 const GITHUB_OWNER  = "anjaneyakg";
 const GITHUB_REPO   = "FundInsight";
 const GITHUB_BRANCH = "main";
 const GITHUB_TOKEN  = import.meta.env.VITE_GITHUB_PAT;
+
+// amc_config_key → friendly AMC name, for right-panel labels
+const AMC_KEY_TO_NAME = AMC_LIST.reduce((acc, a) => {
+  if (a.amc_config_key) acc[a.amc_config_key] = a.name;
+  return acc;
+}, {});
 
 // ── GitHub helpers ────────────────────────────────────────────────────────────
 
@@ -36,6 +42,20 @@ async function ghDelete(path, sha, message) {
   );
   if (!res.ok) { const e = await res.json(); throw new Error(e.message || `GitHub ${res.status}`); }
   return res.json();
+}
+
+async function fetchAmcMap(month) {
+  const data = await ghGet(`data/raw/${month}/amc_map.json`);
+  if (!data) return { map: {}, sha: null };
+  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+  const text = new TextDecoder().decode(bytes);
+  return { map: JSON.parse(text), sha: data.sha };
+}
+
+async function putAmcMap(month, map, sha, message) {
+  const json = JSON.stringify(map, null, 2);
+  const buf = new TextEncoder().encode(json).buffer;
+  return ghPut(`data/raw/${month}/amc_map.json`, buf, message, sha);
 }
 
 async function listMonthFiles(month) {
@@ -75,14 +95,12 @@ function defaultMonth() {
 
 function fileIcon(name) {
   if (!name) return "📄";
-  const n = name.toLowerCase();
-  if (n.endsWith(".zip")) return "🗜";
-  return "📊";
+  return name.toLowerCase().endsWith(".zip") ? "🗜" : "📊";
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GROUP_ORDER = [3, 4, 1, 2]; // C first (most used), then D, A, B
+const GROUP_ORDER = [3, 4, 1, 2];
 const grouped = AMC_LIST.reduce((acc, a) => {
   (acc[a.category] = acc[a.category] || []).push(a);
   return acc;
@@ -91,19 +109,53 @@ const grouped = AMC_LIST.reduce((acc, a) => {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PortfolioUpload() {
-  const [selectedAmc, setSelectedAmc] = useState(null);
-  const [month,       setMonth]       = useState(defaultMonth());
-  const [files,       setFiles]       = useState([]);         // queued local files
-  const [isDragging,  setIsDragging]  = useState(false);
-  const [uploading,   setUploading]   = useState(false);
-  const [uploadResults, setUploadResults] = useState([]);    // [{name, status, path, error}]
+  const [selectedAmc,   setSelectedAmc]   = useState(null);
+  const [month,         setMonth]         = useState(defaultMonth());
+  const [files,         setFiles]         = useState([]);
+  const [isDragging,    setIsDragging]    = useState(false);
+  const [uploading,     setUploading]     = useState(false);
+  const [uploadResults, setUploadResults] = useState([]);
 
-  // Existing files panel
-  const [existingFiles, setExistingFiles]     = useState(null);  // null = not loaded
+  // Right panel
+  const [existingFiles,   setExistingFiles]   = useState(null);  // null = loading
   const [loadingExisting, setLoadingExisting] = useState(false);
-  const [deletingFile,  setDeletingFile]      = useState(null);  // filename being deleted
+  const [deletingFile,    setDeletingFile]    = useState(null);
 
   const fileInputRef = useRef(null);
+
+  // Group existing files by AMC key for right panel
+  const groupedExisting = existingFiles
+    ? existingFiles.reduce((acc, f) => {
+        const key = f.amcKey || "__unknown__";
+        (acc[key] = acc[key] || []).push(f);
+        return acc;
+      }, {})
+    : null;
+
+  // ── Load existing files (also called on month change) ───────────────────────
+
+  async function loadExistingFiles() {
+    if (!month) return;
+    setLoadingExisting(true);
+    try {
+      const [items, { map }] = await Promise.all([
+        listMonthFiles(month),
+        fetchAmcMap(month),
+      ]);
+      setExistingFiles(items.map(f => ({ ...f, amcKey: map[f.name] || null })));
+    } catch {
+      setExistingFiles([]);
+    } finally {
+      setLoadingExisting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (month) {
+      setExistingFiles(null);
+      loadExistingFiles();
+    }
+  }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── File acceptance ──────────────────────────────────────────────────────────
 
@@ -124,6 +176,24 @@ export default function PortfolioUpload() {
     setFiles(prev => prev.filter(f => f.name !== name));
   }
 
+  // ── Update amc_map.json after successful uploads ─────────────────────────────
+
+  async function updateAmcMapAfterUpload(successResults, amc) {
+    if (!amc?.amc_config_key) return;
+    try {
+      const { map, sha } = await fetchAmcMap(month);
+      for (const r of successResults) {
+        map[r.safeName] = amc.amc_config_key;
+      }
+      await putAmcMap(
+        month, map, sha,
+        `amc_map: add ${successResults.length} file(s) — ${amc.name} ${month}`
+      );
+    } catch (err) {
+      console.error("amc_map update failed:", err);
+    }
+  }
+
   // ── Upload ───────────────────────────────────────────────────────────────────
 
   async function handleUpload() {
@@ -135,41 +205,44 @@ export default function PortfolioUpload() {
     const results = [];
 
     for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._\-() ]/g, "_");
       try {
-        const buffer   = await file.arrayBuffer();
-        const safeName = file.name.replace(/[^a-zA-Z0-9._\-() ]/g, "_");
-        const path     = `data/raw/${month}/${safeName}`;
-        const msg      = `raw: manual upload — ${selectedAmc.name} ${month}`;
+        const buffer = await file.arrayBuffer();
+        const path   = `data/raw/${month}/${safeName}`;
+        const msg    = `raw: manual upload — ${selectedAmc.name} ${month}`;
         await saveFile(path, buffer, msg);
-        results.push({ name: file.name, status: "ok", path, size: file.size });
+        results.push({ name: file.name, safeName, status: "ok", path, size: file.size });
       } catch (err) {
-        results.push({ name: file.name, status: "error", error: err.message });
+        results.push({ name: file.name, safeName, status: "error", error: err.message });
       }
     }
 
     setUploadResults(results);
     setUploading(false);
-    if (results.every(r => r.status === "ok")) {
+
+    const ok = results.filter(r => r.status === "ok");
+    if (ok.length > 0) {
       setFiles([]);
-      // Refresh existing files panel if open
-      if (existingFiles !== null) loadExistingFiles();
+      await updateAmcMapAfterUpload(ok, selectedAmc);
+      loadExistingFiles();
     }
   }
 
-  // ── Existing files panel ─────────────────────────────────────────────────────
-
-  async function loadExistingFiles() {
-    setLoadingExisting(true);
-    const items = await listMonthFiles(month);
-    setExistingFiles(items);
-    setLoadingExisting(false);
-  }
+  // ── Delete existing file ─────────────────────────────────────────────────────
 
   async function handleDeleteExisting(file) {
     if (!confirm(`Delete "${file.name}" from GitHub?\n\nThis cannot be undone.`)) return;
     setDeletingFile(file.name);
     try {
       await ghDelete(file.path, file.sha, `cleanup: remove ${file.name} from data/raw/${month}`);
+      // Remove entry from amc_map.json (best-effort)
+      try {
+        const { map, sha } = await fetchAmcMap(month);
+        if (sha && file.name in map) {
+          delete map[file.name];
+          await putAmcMap(month, map, sha, `amc_map: remove ${file.name}`);
+        }
+      } catch { /* non-critical */ }
       setExistingFiles(prev => prev.filter(f => f.name !== file.name));
     } catch (err) {
       alert(`Delete failed: ${err.message}`);
@@ -181,6 +254,9 @@ export default function PortfolioUpload() {
 
   const canUpload = !!selectedAmc && !!month && files.length > 0 && !uploading;
   const allOk     = uploadResults.length > 0 && uploadResults.every(r => r.status === "ok");
+  const amcCount  = groupedExisting
+    ? Object.keys(groupedExisting).filter(k => k !== "__unknown__").length
+    : 0;
 
   return (
     <div style={s.page}>
@@ -194,8 +270,7 @@ export default function PortfolioUpload() {
             <h1 style={s.title}>Portfolio Upload</h1>
             <p style={s.subtitle}>
               Upload AMC month-end portfolio files to FundInsight GitHub.
-              Supports single or multiple files per AMC. After upload, run{" "}
-              <code style={s.ic}>cell_4d_v2.py --source github</code> to parse.
+              Supports single or multiple files per AMC.
             </p>
           </div>
         </div>
@@ -220,7 +295,6 @@ export default function PortfolioUpload() {
                 onChange={e => {
                   setSelectedAmc(AMC_LIST.find(a => a.id === e.target.value) || null);
                   setUploadResults([]);
-                  setExistingFiles(null);
                 }}
               >
                 <option value="">— select AMC —</option>
@@ -256,7 +330,6 @@ export default function PortfolioUpload() {
               onChange={e => {
                 setMonth(e.target.value);
                 setUploadResults([]);
-                setExistingFiles(null);
               }}
               style={{ colorScheme: "light" }}
             />
@@ -338,11 +411,7 @@ export default function PortfolioUpload() {
           )}
 
           {/* Upload button */}
-          <button
-            className="pu-btn"
-            onClick={handleUpload}
-            disabled={!canUpload}
-          >
+          <button className="pu-btn" onClick={handleUpload} disabled={!canUpload}>
             {uploading
               ? <><span style={s.spinner} /> Uploading…</>
               : <>Upload {files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "file"}</>
@@ -351,70 +420,104 @@ export default function PortfolioUpload() {
 
           {allOk && (
             <div style={s.nextBox}>
-              <div style={s.nextLabel}>Next step</div>
+              <div style={s.nextLabel}>Upload complete</div>
               <div style={s.nextBody}>
-                Run <code style={s.ic}>python pipeline/cell_4d_v2.py --month {month} --source github</code> to parse.
+                Files uploaded successfully! Next step: run the Portfolio Parser from your terminal to process this data.
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Right: Existing files panel ── */}
+        {/* ── Right: panels ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Existing files card */}
+          {/* Uploaded files tracker */}
           <div style={s.card}>
-            <div style={s.panelTitle}>Existing files on GitHub</div>
-            <p style={s.panelSub}>
-              Files already in <code style={s.ic}>data/raw/{month || "YYYY-MM"}/</code>
-              {selectedAmc ? ` for ${selectedAmc.name}` : ""}.
-              Delete duplicates before uploading fresh files.
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={s.panelTitle}>Uploaded this month</div>
+              <button
+                className="pu-ghost"
+                style={{ padding: "4px 10px", fontSize: 11 }}
+                onClick={loadExistingFiles}
+                disabled={!month || loadingExisting}
+              >
+                {loadingExisting
+                  ? <><span style={{ ...s.spinner, borderTopColor: "#6366f1", borderColor: "#e5e7eb" }} /></>
+                  : "↻ Refresh"
+                }
+              </button>
+            </div>
 
-            <button
-              className="pu-ghost"
-              style={{ width: "100%", marginBottom: 12 }}
-              onClick={loadExistingFiles}
-              disabled={!month || loadingExisting}
-            >
-              {loadingExisting
-                ? <><span style={{ ...s.spinner, borderTopColor: "#6366f1", borderColor: "#e5e7eb" }} /> Loading…</>
-                : existingFiles === null ? "Load existing files" : "Refresh"
-              }
-            </button>
+            {month && (
+              <div style={s.panelSub}>
+                <code style={s.ic}>data/raw/{month}/</code>
+                {amcCount > 0 && (
+                  <span style={{ marginLeft: 6, color: "#059669", fontWeight: 600 }}>
+                    {amcCount} AMC{amcCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            )}
 
-            {existingFiles !== null && (
-              existingFiles.length === 0
-                ? <div style={s.emptyMsg}>No files found in this folder yet.</div>
-                : <div style={s.existingList}>
-                    {existingFiles.map(f => (
-                      <div key={f.name} style={s.existingRow}>
-                        <span style={{ fontSize: 16, flexShrink: 0 }}>{fileIcon(f.name)}</span>
-                        <div style={s.fileInfo}>
-                          <div style={{ ...s.fileName, fontSize: 12 }}>{f.name}</div>
-                          <div style={s.fileSize}>{formatBytes(f.size)}</div>
+            {existingFiles === null ? (
+              <div style={s.emptyMsg}>{loadingExisting ? "Loading…" : "—"}</div>
+            ) : existingFiles.length === 0 ? (
+              <div style={s.emptyMsg}>No files yet for {getMonthLabel(month)}.</div>
+            ) : (
+              <div style={s.existingList}>
+                {Object.entries(groupedExisting)
+                  .sort(([a], [b]) => {
+                    if (a === "__unknown__") return 1;
+                    if (b === "__unknown__") return -1;
+                    return (AMC_KEY_TO_NAME[a] || a).localeCompare(AMC_KEY_TO_NAME[b] || b);
+                  })
+                  .map(([amcKey, amcFiles]) => {
+                    const label = amcKey === "__unknown__"
+                      ? "Unknown AMC"
+                      : (AMC_KEY_TO_NAME[amcKey] || amcKey);
+                    return (
+                      <div key={amcKey} style={s.amcGroup}>
+                        <div style={s.amcGroupHeader}>
+                          <span style={amcKey === "__unknown__" ? s.unknownDot : s.checkDot}>
+                            {amcKey === "__unknown__" ? "?" : "✓"}
+                          </span>
+                          <span style={s.amcGroupName}>{label}</span>
+                          <span style={s.amcGroupCount}>
+                            {amcFiles.length} file{amcFiles.length > 1 ? "s" : ""}
+                          </span>
                         </div>
-                        <button
-                          style={s.deleteBtn}
-                          onClick={() => handleDeleteExisting(f)}
-                          disabled={deletingFile === f.name}
-                          title="Delete from GitHub"
-                        >
-                          {deletingFile === f.name ? "…" : "🗑"}
-                        </button>
+                        {amcFiles.map(f => (
+                          <div key={f.name} style={s.existingRow}>
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>{fileIcon(f.name)}</span>
+                            <div style={{ ...s.fileInfo, marginLeft: 6 }}>
+                              <div style={{ ...s.fileName, fontSize: 11 }}>{f.name}</div>
+                              <div style={s.fileSize}>{formatBytes(f.size)}</div>
+                            </div>
+                            <button
+                              style={s.deleteBtn}
+                              onClick={() => handleDeleteExisting(f)}
+                              disabled={deletingFile === f.name}
+                              title="Delete from GitHub"
+                            >
+                              {deletingFile === f.name ? "…" : "🗑"}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })
+                }
+              </div>
             )}
           </div>
 
-          {/* Checklist card */}
+          {/* Upload checklist */}
           <div style={s.card}>
             <div style={s.panelTitle}>Upload checklist</div>
             {[
-              { done: !!selectedAmc, label: "AMC selected" },
-              { done: !!month,       label: "Closing month set" },
-              { done: files.length > 0, label: `File${files.length > 1 ? "s" : ""} attached${files.length > 1 ? ` (${files.length})` : ""}` },
+              { done: !!selectedAmc,      label: "AMC selected" },
+              { done: !!month,            label: "Closing month set" },
+              { done: files.length > 0,   label: `File${files.length > 1 ? "s" : ""} attached${files.length > 1 ? ` (${files.length})` : ""}` },
             ].map(item => (
               <div key={item.label} style={{ ...s.checkRow, ...(item.done ? s.checkRowDone : {}) }}>
                 <div style={{ ...s.checkCircle, ...(item.done ? s.checkCircleDone : {}) }}>
@@ -423,12 +526,6 @@ export default function PortfolioUpload() {
                 {item.label}
               </div>
             ))}
-
-            <div style={s.divider} />
-            <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.8 }}>
-              <strong style={{ color: "#6b7280" }}>Commit format</strong><br />
-              <code style={s.ic}>raw: manual upload — {selectedAmc?.name || "{AMC}"} {month}</code>
-            </div>
           </div>
 
         </div>
@@ -483,25 +580,25 @@ const CSS = `
 `;
 
 const s = {
-  page:     { fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#111827", maxWidth: 980 },
-  header:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid #e5e7eb" },
-  headerLeft: { display: "flex", alignItems: "flex-start", gap: 16 },
-  headerIcon: { width: 48, height: 48, borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, boxShadow: "0 4px 14px rgba(99,102,241,0.3)" },
-  title:    { fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 5px", letterSpacing: "-0.5px" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: 0, maxWidth: 520, lineHeight: 1.7 },
-  headerBadges: { display: "flex", gap: 6, flexShrink: 0, marginTop: 4 },
-  badge:    { fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20, border: "1.5px solid #e5e7eb", color: "#6b7280", background: "#fff" },
-  badgeLive:{ borderColor: "#a7f3d0", color: "#059669", background: "#f0fdf4" },
-  grid:     { display: "grid", gridTemplateColumns: "1fr 320px", gap: "1.5rem", alignItems: "start" },
-  card:     { background: "#fff", borderRadius: 16, border: "1px solid #f3f4f6", boxShadow: "0 1px 12px rgba(0,0,0,0.06)", padding: "1.75rem" },
-  field:    { marginBottom: "1.5rem" },
-  label:    { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 7 },
-  labelSub: { fontWeight: 400, color: "#9ca3af", fontSize: 12 },
-  arrow:    { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#9ca3af", pointerEvents: "none" },
-  monthHint:{ display: "block", fontSize: 12, color: "#6366f1", fontWeight: 500, marginTop: 6 },
-  amcNote:  { display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 },
-  groupHint:{ marginTop: 6, fontSize: 11, color: "#6b7280", lineHeight: 1.6 },
-  dropIcon: { fontSize: 30, marginBottom: 8, color: "#6366f1" },
+  page:        { fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#111827", maxWidth: 980 },
+  header:      { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid #e5e7eb" },
+  headerLeft:  { display: "flex", alignItems: "flex-start", gap: 16 },
+  headerIcon:  { width: 48, height: 48, borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, boxShadow: "0 4px 14px rgba(99,102,241,0.3)" },
+  title:       { fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 5px", letterSpacing: "-0.5px" },
+  subtitle:    { fontSize: 13, color: "#6b7280", margin: 0, maxWidth: 520, lineHeight: 1.7 },
+  headerBadges:{ display: "flex", gap: 6, flexShrink: 0, marginTop: 4 },
+  badge:       { fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20, border: "1.5px solid #e5e7eb", color: "#6b7280", background: "#fff" },
+  badgeLive:   { borderColor: "#a7f3d0", color: "#059669", background: "#f0fdf4" },
+  grid:        { display: "grid", gridTemplateColumns: "1fr 320px", gap: "1.5rem", alignItems: "start" },
+  card:        { background: "#fff", borderRadius: 16, border: "1px solid #f3f4f6", boxShadow: "0 1px 12px rgba(0,0,0,0.06)", padding: "1.75rem" },
+  field:       { marginBottom: "1.5rem" },
+  label:       { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 7 },
+  labelSub:    { fontWeight: 400, color: "#9ca3af", fontSize: 12 },
+  arrow:       { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#9ca3af", pointerEvents: "none" },
+  monthHint:   { display: "block", fontSize: 12, color: "#6366f1", fontWeight: 500, marginTop: 6 },
+  amcNote:     { display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 },
+  groupHint:   { marginTop: 6, fontSize: 11, color: "#6b7280", lineHeight: 1.6 },
+  dropIcon:    { fontSize: 30, marginBottom: 8, color: "#6366f1" },
   dropPrimary: { fontSize: 14, fontWeight: 500, color: "#374151", marginBottom: 4 },
   dropSub:     { fontSize: 12, color: "#9ca3af" },
   dropHint:    { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#4f46e5", fontWeight: 500, justifyContent: "center" },
@@ -519,15 +616,20 @@ const s = {
   nextLabel:   { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#059669", marginBottom: 4 },
   nextBody:    { fontSize: 12, color: "#047857", lineHeight: 1.8 },
   ic:          { background: "#f3f4f6", padding: "1px 5px", borderRadius: 4, fontFamily: "monospace", fontSize: 11, color: "#4f46e5" },
-  panelTitle:  { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6 },
-  panelSub:    { fontSize: 12, color: "#9ca3af", lineHeight: 1.6, marginBottom: 14, marginTop: 0 },
+  panelTitle:  { fontSize: 13, fontWeight: 700, color: "#374151" },
+  panelSub:    { fontSize: 11, color: "#9ca3af", marginBottom: 12, marginTop: 4 },
   emptyMsg:    { fontSize: 12, color: "#9ca3af", textAlign: "center", padding: "12px 0" },
-  existingList:{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" },
-  existingRow: { display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "#fafafa", border: "1px solid #f3f4f6" },
-  deleteBtn:   { background: "none", border: "none", fontSize: 14, cursor: "pointer", padding: "2px 4px", flexShrink: 0, opacity: 0.5, transition: "opacity 0.15s" },
+  existingList:{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 360, overflowY: "auto" },
+  amcGroup:    { marginBottom: 2 },
+  amcGroupHeader: { display: "flex", alignItems: "center", gap: 7, padding: "5px 4px 3px", borderBottom: "1px solid #f3f4f6" },
+  amcGroupName:   { flex: 1, fontSize: 12, fontWeight: 600, color: "#374151", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  amcGroupCount:  { fontSize: 10, color: "#9ca3af", flexShrink: 0 },
+  checkDot:    { width: 16, height: 16, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff", flexShrink: 0 },
+  unknownDot:  { width: 16, height: 16, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af", flexShrink: 0 },
+  existingRow: { display: "flex", alignItems: "center", gap: 6, padding: "5px 4px 5px 22px" },
+  deleteBtn:   { background: "none", border: "none", fontSize: 13, cursor: "pointer", padding: "2px 4px", flexShrink: 0, opacity: 0.45, transition: "opacity 0.15s" },
   checkRow:    { display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 13, color: "#9ca3af" },
   checkRowDone:{ color: "#374151" },
   checkCircle: { width: 20, height: 20, borderRadius: "50%", border: "1.5px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0, color: "#d1d5db" },
   checkCircleDone: { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none", color: "#fff" },
-  divider:     { height: 1, background: "#f3f4f6", margin: "1rem 0" },
 };
