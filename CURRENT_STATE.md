@@ -37,3 +37,4 @@ _Last updated: 25 Apr 2026 · v20.0_
 - At session start: paste this URL in chat
 - Raw URL: https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - At session end: update this file + git commit + push
+- Claude Code installed + working in VS Code. cell_4d_v2.py shows v2.3 but AMC_CONFIG fixes still in progress in separate session — do not commit yet
