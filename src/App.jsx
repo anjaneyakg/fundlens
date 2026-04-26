@@ -31,6 +31,10 @@ import PortfolioXIRR from "./pages/PortfolioXIRR";
 import RiskProfiler from "./pages/RiskProfiler";
 import SchemeMapping from './pages/SchemeMapping.jsx'
 import AmfiMarketCapUpload from './pages/admin/AmfiMarketCapUpload.jsx'
+import Login from './pages/Login';
+import ProtectedRoute from './components/ProtectedRoute';
+import UserManager from './pages/admin/UserManager';
+import ToolAccessMatrix from './pages/admin/ToolAccessMatrix';
 
 export default function App() {
   const location = useLocation()
@@ -66,12 +70,15 @@ export default function App() {
         <Route path="/risk-profiler"        element={<RiskProfiler />} />
         <Route path="/tools/market-gauge"   element={<MarketGauge />} />
         <Route path="/embed/market-gauge"   element={<MarketGaugeEmbed />} />
+        <Route path="/login"              element={<Login />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload"    element={<PortfolioUpload />} />
           <Route path="coverage"            element={<CoverageDashboard />} />
           <Route path="scheme-mapping"      element={<SchemeMapping />} />
           <Route path="amfi-marketcap"      element={<AmfiMarketCapUpload />} />
+          <Route path="users"               element={<UserManager />} />
+          <Route path="tool-access"         element={<ToolAccessMatrix />} />
         </Route>
       </Routes>
     </>

@@ -13,6 +13,13 @@ const NAV_ITEMS = [
     ],
   },
   {
+    group: "Access Control",
+    items: [
+      { to: "/admin/users",            label: "User Manager",        icon: "◈", live: true  },
+      { to: "/admin/tool-access",      label: "Tool Access Matrix",  icon: "◈", live: true  },
+    ],
+  },
+  {
     group: "System",
     items: [
       { to: "/admin/security-master",  label: "Security Master",     icon: "◆", live: false },
