@@ -38,3 +38,22 @@ _Last updated: 25 Apr 2026 · v20.0_
 - Raw URL: https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - At session end: update this file + git commit + push
 - Claude Code installed + working in VS Code. cell_4d_v2.py shows v2.3 but AMC_CONFIG fixes still in progress in separate session — do not commit yet
+
+---
+
+## Access Control System — Live (26 Apr 2026)
+- Migration 07: RTA Portfolio Module tables (staging + prod) ✅
+- Migration 08: Tiers, roles, feature_flags seeded (staging + prod) ✅
+- useAuth.jsx + ProtectedRoute.jsx live ✅
+- Login page live at /login ✅
+- Admin: User Manager at /admin/users ✅
+- Admin: Tool Access Matrix at /admin/tool-access ✅
+- .gitignore created (node_modules, dist, .env excluded) ✅
+- Commit: 68705d1
+
+## Next Session Priority
+- [ ] Fix User Manager "Loading users" — pass accessToken to sbFetch
+- [ ] Deploy to Vercel staging and test set-user-tier + set-flag APIs
+- [ ] Add VITE_SUPABASE_ANON_KEY to Vercel environment variables
+- [ ] Run same .env fix on Vercel (trailing ^M issue won't exist there)
+- [ ] Begin RTA Parser (Step 1B) — client-side SheetJS for 4 file formats
