@@ -50,7 +50,7 @@ const fmtDate = (s) => {
 };
 
 export default function UserManager() {
-  const { accessToken } = useAuth();
+  const { accessToken, loading: authLoading } = useAuth();
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
@@ -88,7 +88,7 @@ export default function UserManager() {
     }
   }
 
-  useEffect(() => { if (accessToken) loadUsers(); }, [accessToken]);
+  useEffect(() => { if (accessToken && !authLoading) loadUsers(); }, [accessToken, authLoading]);
 
   async function changeTier(userId, newTier) {
     setSaving(userId);
