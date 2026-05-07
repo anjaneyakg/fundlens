@@ -88,7 +88,7 @@ export default function UserManager() {
     }
   }
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { if (accessToken) loadUsers(); }, [accessToken]);
 
   async function changeTier(userId, newTier) {
     setSaving(userId);
