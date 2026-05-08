@@ -59,6 +59,15 @@ export function deletePortfolio(portfolioId) {
   savePortfolios(getPortfolios().filter(p => p.portfolio_id !== portfolioId))
 }
 
+export function updatePortfolio(portfolioId, updates) {
+  const portfolios = getPortfolios().map(p =>
+    p.portfolio_id === portfolioId
+      ? { ...p, ...updates, last_updated: new Date().toISOString() }
+      : p
+  )
+  savePortfolios(portfolios)
+}
+
 export function deleteAllData() {
   localStorage.removeItem(PORTFOLIOS_KEY)
   localStorage.removeItem(CONSENT_KEY)

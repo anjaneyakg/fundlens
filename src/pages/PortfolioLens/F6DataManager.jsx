@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   hasConsent, saveConsent,
-  getPortfolios, addPortfolio, deletePortfolio, deleteAllData,
+  getPortfolios, addPortfolio, deletePortfolio, updatePortfolio, deleteAllData,
   newPortfolio,
 } from './utils/portfolioStore'
+import { detectAndParse } from './utils/fileParser'
+import { buildHoldings } from './utils/portfolioEngine'
 
 const ACC  = '#1D9E75'
 const WARN = '#ef4444'
@@ -252,8 +254,7 @@ function AddWizard({ onDone, onCancel }) {
           </div>
 
           <div style={{ ...s.infoBox, marginBottom: '1.25rem' }}>
-            <strong>Note:</strong> Transaction parsing will be available in the next release.
-            Your portfolio is saved and ready to receive data.
+            <strong>Note:</strong> After saving, use the <strong>Parse transactions</strong> button on the portfolio card to load your data.
           </div>
 
           <div style={s.btnRow}>
@@ -268,8 +269,13 @@ function AddWizard({ onDone, onCancel }) {
 
 // ── Portfolio card ──────────────────────────────────────────────────────────
 
-function PortfolioCard({ portfolio, onDelete }) {
-  const [confirming, setConfirming] = useState(false)
+function PortfolioCard({ portfolio, onDelete, onParsed }) {
+  const [confirming,  setConfirming]  = useState(false)
+  const [parsing,     setParsing]     = useState(false)
+  const [parseError,  setParseError]  = useState(null)
+  const [parseResult, setParseResult] = useState(null)
+  const fileRef = useRef(null)
+
   const sourceColors = { CAMS: '#635bff', KFin: '#f43f8e', Holdings: '#f59e0b' }
 
   const fmtDate = (iso) => {
@@ -277,6 +283,49 @@ function PortfolioCard({ portfolio, onDelete }) {
     const d = new Date(iso)
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   }
+
+  const handleParseFile = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setParsing(true)
+    setParseError(null)
+    setParseResult(null)
+    try {
+      const parsed = await detectAndParse(file)
+      if (parsed.error || !parsed.detected) {
+        setParseError(parsed.error ?? 'Could not identify file type.')
+        return
+      }
+      if (parsed.detected === 'Holdings') {
+        // Holdings snapshot: update current_value / current_nav on existing holdings
+        updatePortfolio(portfolio.portfolio_id, {
+          status:     'active',
+          holdings:   parsed.snapshots,
+          pii:        parsed.meta,
+          upload:     { filename: file.name, size_kb: Math.round(file.size / 1024), upload_date: new Date().toISOString() },
+        })
+      } else {
+        // Transaction file: build full holdings
+        const holdings = buildHoldings(parsed.transactions)
+        updatePortfolio(portfolio.portfolio_id, {
+          status:   'active',
+          holdings,
+          pii:      parsed.meta,
+          upload:   { filename: file.name, size_kb: Math.round(file.size / 1024), upload_date: new Date().toISOString() },
+        })
+        setParseResult({ detected: parsed.detected, count: holdings.length, txCount: parsed.transactions.length })
+      }
+      onParsed()
+    } catch (err) {
+      console.error('PortfolioCard: parse failed', err)
+      setParseError('Parsing failed: ' + err.message)
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  const active   = portfolio.status === 'active'
+  const holdings = portfolio.holdings ?? []
 
   return (
     <div style={s.portCard}>
@@ -290,28 +339,61 @@ function PortfolioCard({ portfolio, onDelete }) {
             <span style={s.portDate}>Added {fmtDate(portfolio.created_at)}</span>
           </div>
         </div>
-        <div style={{ ...s.statusChip, ...(portfolio.status === 'active' ? s.statusActive : s.statusPending) }}>
-          {portfolio.status === 'active' ? 'Active' : 'Pending parse'}
+        <div style={{ ...s.statusChip, ...(active ? s.statusActive : s.statusPending) }}>
+          {active ? `Active · ${holdings.length} schemes` : 'Pending parse'}
         </div>
       </div>
 
       {portfolio.upload && (
         <div style={s.portFile}>
-          📄 {portfolio.upload.filename} · {portfolio.upload.size_kb} KB
+          📄 {portfolio.upload.filename} · {portfolio.upload.size_kb} KB · parsed {fmtDate(portfolio.upload.upload_date)}
+        </div>
+      )}
+
+      {/* Parse error */}
+      {parseError && (
+        <div style={{ ...s.infoBox, background: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', marginBottom: 10 }}>
+          {parseError}
+        </div>
+      )}
+
+      {/* Parse success */}
+      {parseResult && (
+        <div style={{ ...s.infoBox, marginBottom: 10 }}>
+          Parsed {parseResult.txCount} transactions → {parseResult.count} active holdings.
         </div>
       )}
 
       <div style={s.portActions}>
-        {!confirming
-          ? <button style={{ ...s.btn, ...s.btnDanger }} onClick={() => setConfirming(true)}>Delete</button>
-          : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: WARN }}>Delete this portfolio?</span>
-              <button style={{ ...s.btn, ...s.btnDanger }}    onClick={() => onDelete(portfolio.portfolio_id)}>Yes, delete</button>
-              <button style={{ ...s.btn, ...s.btnGhost }}     onClick={() => setConfirming(false)}>Cancel</button>
-            </div>
-          )
-        }
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Parse / re-parse button */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xls,.xlsx"
+            style={{ display: 'none' }}
+            onChange={handleParseFile}
+          />
+          <button
+            style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: '6px 14px', ...(parsing ? s.btnDisabled : {}) }}
+            disabled={parsing}
+            onClick={() => { setParseError(null); setParseResult(null); fileRef.current?.click() }}
+          >
+            {parsing ? 'Parsing…' : active ? 'Re-parse file' : 'Parse transactions'}
+          </button>
+
+          {/* Delete */}
+          {!confirming
+            ? <button style={{ ...s.btn, ...s.btnDanger, fontSize: 12, padding: '6px 14px' }} onClick={() => setConfirming(true)}>Delete</button>
+            : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: WARN }}>Delete this portfolio?</span>
+                <button style={{ ...s.btn, ...s.btnDanger,   fontSize: 12, padding: '6px 12px' }} onClick={() => onDelete(portfolio.portfolio_id)}>Yes</button>
+                <button style={{ ...s.btn, ...s.btnGhost,    fontSize: 12, padding: '6px 12px' }} onClick={() => setConfirming(false)}>Cancel</button>
+              </div>
+            )
+          }
+        </div>
       </div>
     </div>
   )
@@ -387,7 +469,7 @@ export default function F6DataManager() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: '2rem' }}>
           {portfolios.map(p => (
-            <PortfolioCard key={p.portfolio_id} portfolio={p} onDelete={handleDelete} />
+            <PortfolioCard key={p.portfolio_id} portfolio={p} onDelete={handleDelete} onParsed={refresh} />
           ))}
         </div>
       )}

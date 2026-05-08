@@ -1,5 +1,5 @@
 # FundInsight — Current State
-_Last updated: 25 Apr 2026 · v20.0_
+_Last updated: 08 May 2026 · v21.0_
 
 ## Pipeline Scripts — Live Versions
 | Script | Version | Status |
@@ -51,9 +51,53 @@ _Last updated: 25 Apr 2026 · v20.0_
 - .gitignore created (node_modules, dist, .env excluded) ✅
 - Commit: 68705d1
 
+## PortfolioLens Build Status (as of 08 May 2026)
+
+| Session | Deliverable | Status |
+|---------|-------------|--------|
+| PL-1 | Shell layout + sidebar + routing | ✅ DONE |
+| PL-2 | F6 Data Manager + DPDP consent wizard | ✅ DONE |
+| PL-3 | Parser engine (CAMS + KFin + Holdings) + portfolioEngine.js | ✅ DONE |
+| PL-4 | E1 Dashboard | ✅ DONE |
+| PL-5 | E2 Visual Overview | ⏳ NEXT |
+| PL-6 | E3 Holdings & Exposure | pending |
+| PL-7 | E4 Overlap Analysis | pending |
+| PL-8 | E5 Performance Matrix | pending |
+| PL-9 | E6 Cashflow & Returns | pending |
+| PL-10 | E7 Capital Gains | pending |
+| PL-11 | E8 Transaction Report | pending |
+| PL-12 | F1 Health Check (8 rules) | pending |
+| PL-13 | F2 Alerts engine | pending |
+| PL-14 | F3 Rebalance Planner | pending PL-12 |
+| PL-15 | F4 Model Portfolio | pending |
+| PL-16 | F5 Send Report | pending PL-12 |
+| PL-17 | Advisor mode | pending all E+F |
+
+### PortfolioLens Key Files
+- `src/pages/PortfolioLens/` — all PL pages and utils
+- `src/pages/PortfolioLens/utils/fileParser.js` — CAMS / KFin / Holdings Excel parser (SheetJS)
+- `src/pages/PortfolioLens/utils/portfolioEngine.js` — XIRR, avg-cost, buildHoldings, portfolioXirr, summarise
+- `src/pages/PortfolioLens/utils/portfolioStore.js` — localStorage CRUD + DPDP consent
+- `src/pages/PortfolioLens/F6DataManager.jsx` — DPDP consent gate + 3-step add wizard + parse button
+- `src/pages/PortfolioLens/E1Dashboard.jsx` — summary cards, top holdings table, LTCG hint
+- `src/hooks/useWindowWidth.js` — responsive width hook
+- localStorage keys: `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "1.0")
+- `xlsx` (SheetJS 0.18.5) added for .xls/.xlsx parsing
+
+### PortfolioLens Mandatory Rules
+1. JSX only — no TypeScript/.tsx
+2. All dates via custom fmtDate() — no toLocaleDateString()/toISOString() for display
+3. No dark themes — pastel/soft gradient, `#1D9E75` accent
+4. Indian currency: toLocaleString('en-IN') with ₹ prefix
+5. useWindowWidth() for responsive behaviour
+6. service_role key never in frontend
+7. No silent catch — always console.error with context
+
+---
+
 ## Next Session Priority
+- [ ] PL-5 — E2 Visual Overview (allocation donut, AMC treemap, journey chart, SIP vs lumpsum AUM)
 - [ ] Fix User Manager "Loading users" — pass accessToken to sbFetch
 - [ ] Deploy to Vercel staging and test set-user-tier + set-flag APIs
 - [ ] Add VITE_SUPABASE_ANON_KEY to Vercel environment variables
-- [ ] Run same .env fix on Vercel (trailing ^M issue won't exist there)
-- [ ] Begin RTA Parser (Step 1B) — client-side SheetJS for 4 file formats
+- [ ] NAV Backfill — resume from 2018-01-01 when Supabase is stable (see backfill_nav_history.py)
