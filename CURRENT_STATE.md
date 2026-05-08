@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 (PL-11)
+**Last updated:** 09 May 2026 · v23.1
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -171,11 +171,21 @@ SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
 
 | # | Issue | Deadline | Status |
 |---|---|---|---|
-| S1 | Git history audit | Before Phase 2 | ⚠ Pending |
-| S2 | GIST_PAT renewal + PAT scope audit | ~20 May 2026 | ⚠ URGENT |
+| S1 | Git history audit | Before Phase 2 | ✅ Clean, 09 May 2026 |
+| S2 | GIST_PAT renewal + PAT scope audit | ~20 May 2026 | ✅ Complete, 09 May 2026 |
 | S3 | Node.js 24 upgrade | June 2026 | ⚠ Pending |
 | S4 | FundInsight-Pipeline GIST_PAT | Jul 6 2026 | ⚠ Pending |
-| S5 | LICENSE file | Before go-live | ⚠ Pending |
+| S5 | LICENSE file | Before go-live | ✅ Live on GitHub, 09 May 2026 |
+
+---
+
+## Security Sessions
+
+| Session | Action | Status |
+|---|---|---|
+| S1 | Git history audit | ✅ Clean, 09 May 2026 |
+| S2 | PAT scope audit + GIST_PAT renewal | ✅ Complete, 09 May 2026 |
+| S3 | LICENSE file (Indiadvice) | ✅ Live on GitHub, 09 May 2026 |
 
 ---
 
@@ -252,5 +262,5 @@ SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
 | Venv activate | `source .venv/Scripts/activate` (Git Bash) |
 | Supabase URL | https://sewywgatxkiulbrhwpyh.supabase.co |
 | VITE_GITHUB_PAT | Renewed Apr 2026 in Vercel |
-| GIST_PAT | ⚠ Due ~20 May 2026 — RENEW URGENTLY |
+| GIST_PAT | ✅ Renewed 09 May 2026 |
 | Health endpoint | https://fundlens-six.vercel.app/api/v1/health |
