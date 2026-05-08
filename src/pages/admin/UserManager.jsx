@@ -64,6 +64,7 @@ export default function UserManager() {
   }
 
   async function loadUsers() {
+    console.log('🔍 loadUsers START', { accessToken: accessToken?.substring(0,20), loading });
     setLoading(true);
     try {
       // Fetch users with their tier via join
@@ -71,6 +72,7 @@ export default function UserManager() {
         'users?select=id,email,full_name,created_at,last_login,user_roles(tier_id,tiers(name))',
         accessToken
       );
+      console.log('📦 sbFetch result:', { usersCount: rows?.length, users: rows });
       const mapped = (rows || []).map(u => ({
         id:         u.id,
         email:      u.email || '—',
@@ -81,6 +83,7 @@ export default function UserManager() {
         role_id:    u.user_roles?.[0]?.id || null,
       }));
       setUsers(mapped);
+      console.log('✅ setUsers called', mapped.length);
     } catch (err) {
       console.error('loadUsers error:', err);
     } finally {
