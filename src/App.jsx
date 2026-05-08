@@ -26,6 +26,7 @@ import F6DataManager from './pages/PortfolioLens/F6DataManager.jsx'
 import E1Dashboard   from './pages/PortfolioLens/E1Dashboard.jsx'
 import E2Overview    from './pages/PortfolioLens/E2Overview.jsx'
 import E3Holdings    from './pages/PortfolioLens/E3Holdings.jsx'
+import E4Overlap     from './pages/PortfolioLens/E4Overlap.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
@@ -84,7 +85,7 @@ export default function App() {
           <Route path="e1" element={<E1Dashboard />} />
           <Route path="e2" element={<E2Overview />} />
           <Route path="e3" element={<E3Holdings />} />
-          <Route path="e4" element={<PLPlaceholder code="E4" name="Overlap Analysis"   tagline="Jaccard similarity matrix, clustered heatmap & ranked pairs" />} />
+          <Route path="e4" element={<E4Overlap />} />
           <Route path="e5" element={<PLPlaceholder code="E5" name="Performance Matrix" tagline="AMC & category returns vs SEBI Tier 1 TRI benchmark" />} />
           <Route path="e6" element={<PLPlaceholder code="E6" name="Cashflow & Returns" tagline="Year-wise: opening balance, flows, closing value, CAGR" />} />
           <Route path="e7" element={<PLPlaceholder code="E7" name="Capital Gains"      tagline="Redeemed & current investments · grandfathering (2018) · tax estimates" />} />
