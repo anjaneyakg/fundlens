@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.1
+**Last updated:** 09 May 2026 · v23.2
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -92,7 +92,7 @@
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
-| `nav_history` | 0 | ⏳ Awaiting backfill | Script validated at 99.5% match rate. Resume from 2018-01-01. |
+| `nav_history` | 8.5M+ (backfill run 5 in progress, resuming from 2018-04-19) | ⏳ Backfill in progress | Script validated at 99.5% match rate. |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
 
@@ -117,7 +117,7 @@
 | `cell_4d_v2.py` | v2.3 | ✅ Live | All 50 AMCs configured. xlrd fallback. AMC_CONFIG fixes in progress — do not commit yet. |
 | `backfill_amc_map.py` | v3 | ✅ Live | One-time per historical month. |
 | `bulk_upload.py` | v1 | ✅ Live | Emergency batch upload only. |
-| `backfill_nav_history.py` | v1.1.0 | ✅ Ready | 30Y NAV backfill. Dry run: 99.5% match. Resume from 2018-01-01. |
+| `backfill_nav_history.py` | v1.2.0 | ✅ Live | --auto-resume flag added. 300s timeout. 3-attempt retry on load_scheme_map. Run 5 in progress. |
 | `sync_amc_master.py` | v2.0 | ✅ Ready | Sync AMCs from FundInsight → amcs table. |
 | `populate_schemes_table.py` | v2.0 | ✅ Ready | Load scheme master from AMFI. |
 | `uti_fetch.py` | v1.0 | ⛔ Retired | Replaced by cell_a_fetcher. |
@@ -174,7 +174,7 @@ SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
 | S1 | Git history audit | Before Phase 2 | ✅ Clean, 09 May 2026 |
 | S2 | GIST_PAT renewal + PAT scope audit | ~20 May 2026 | ✅ Complete, 09 May 2026 |
 | S3 | Node.js 24 upgrade | June 2026 | ⚠ Pending |
-| S4 | FundInsight-Pipeline GIST_PAT | Jul 6 2026 | ⚠ Pending |
+| S4 | FundInsight-Pipeline token (gist+repo scope) — review before expiry | Jul 6 2026 | ⚠ Review by Jul 6 2026 |
 | S5 | LICENSE file | Before go-live | ✅ Live on GitHub, 09 May 2026 |
 
 ---
@@ -183,9 +183,20 @@ SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
 
 | Session | Action | Status |
 |---|---|---|
-| S1 | Git history audit | ✅ Clean, 09 May 2026 |
-| S2 | PAT scope audit + GIST_PAT renewal | ✅ Complete, 09 May 2026 |
-| S3 | LICENSE file (Indiadvice) | ✅ Live on GitHub, 09 May 2026 |
+| S1 | Git history audit | ✅ 09 May 2026 — clean |
+| S2 | PAT scope audit + GIST_PAT renewal | ✅ 09 May 2026 |
+| S3 | LICENSE file (Indiadvice) | ✅ 09 May 2026 |
+
+---
+
+## Open Priorities — Resolved This Session
+
+| Item | Status |
+|---|---|
+| GIST_PAT renewal | ✅ DONE — 09 May 2026 |
+| Git history audit | ✅ DONE — 09 May 2026 — clean |
+| VITE_GITHUB_PAT scope | ✅ DONE — 09 May 2026 |
+| LICENSE file | ✅ DONE — 09 May 2026 |
 
 ---
 
