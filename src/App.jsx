@@ -24,6 +24,7 @@ import PortfolioLensIndex from './pages/PortfolioLens/index.jsx'
 import PLPlaceholder from './pages/PortfolioLens/PLPlaceholder.jsx'
 import F6DataManager from './pages/PortfolioLens/F6DataManager.jsx'
 import E1Dashboard   from './pages/PortfolioLens/E1Dashboard.jsx'
+import E2Overview    from './pages/PortfolioLens/E2Overview.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
@@ -80,7 +81,7 @@ export default function App() {
         <Route path="/portfolio" element={<PortfolioLensLayout />}>
           <Route index element={<PortfolioLensIndex />} />
           <Route path="e1" element={<E1Dashboard />} />
-          <Route path="e2" element={<PLPlaceholder code="E2" name="Visual Overview"    tagline="Allocation donut, AMC treemap, journey chart & SIP vs lumpsum AUM" />} />
+          <Route path="e2" element={<E2Overview />} />
           <Route path="e3" element={<PLPlaceholder code="E3" name="Holdings"           tagline="Tax lot drill-down per scheme · top stocks, debt, sector & market cap" />} />
           <Route path="e4" element={<PLPlaceholder code="E4" name="Overlap Analysis"   tagline="Jaccard similarity matrix, clustered heatmap & ranked pairs" />} />
           <Route path="e5" element={<PLPlaceholder code="E5" name="Performance Matrix" tagline="AMC & category returns vs SEBI Tier 1 TRI benchmark" />} />

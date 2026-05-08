@@ -38,8 +38,9 @@
 | PL-2 | F6 Data Manager + DPDP consent wizard | ✅ Done |
 | PL-3 | Parser engine (CAMS + KFin + Holdings) + portfolioEngine.js | ✅ Done |
 | PL-4 | E1 Dashboard | ✅ Done |
-| PL-5 | E2 Visual Overview | ⏳ Next |
-| PL-6 | E3 Holdings & Exposure | ⏳ Pending |
+| PL-5 | E2 Visual Overview | ✅ Done |
+| PL-6 | E3 Holdings & Exposure | ⏳ Next |
+| PL-6 | E3 Holdings & Exposure | ⏳ Pending (after Next) |
 | PL-7 | E4 Overlap Analysis | ⏳ Pending |
 | PL-8 | E5 Performance Matrix | ⏳ Pending |
 | PL-9 | E6 Cashflow & Returns | ⏳ Pending |
@@ -64,14 +65,14 @@
 | `src/pages/PortfolioLens/E1Dashboard.jsx` | Summary cards, top holdings table, LTCG hint |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
-**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "1.0")
+**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots)
 **SheetJS:** xlsx 0.18.5 added for .xls/.xlsx parsing
 
 ---
 
 ## Immediate Next Session Priorities
 
-1. **PL-5** — E2 Visual Overview (allocation donut, AMC treemap, journey chart, SIP vs lumpsum AUM)
+1. **PL-6** — E3 Holdings & Exposure (per-scheme drill-down, tax lot detail, plan/option/folio breakdown)
 2. **Fix User Manager** — "Loading users" bug — pass `accessToken` to `sbFetch`
 3. **Deploy to Vercel staging** — test `set-user-tier` + `set-flag` APIs
 4. **Add `VITE_SUPABASE_ANON_KEY`** to Vercel environment variables
