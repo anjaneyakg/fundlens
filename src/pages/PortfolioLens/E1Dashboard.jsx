@@ -47,7 +47,7 @@ function PortfolioSelector({ portfolios, selectedId, onChange }) {
           const count = (p.holdings ?? []).filter(h => h.units > 0).length
           return (
             <option key={p.portfolio_id} value={p.portfolio_id}>
-              {p.name}{p.status === 'active' ? ` · ${count} schemes` : ' (not parsed)'}
+              {p.name}{count > 0 ? ` · ${count} schemes` : ' (no data yet)'}
             </option>
           )
         })}
@@ -200,8 +200,8 @@ export default function E1Dashboard() {
           <div style={s.emptyIcon}>📋</div>
           <h2 style={s.emptyTitle}>No holdings data</h2>
           <p style={s.emptySub}>
-            {portfolio?.status === 'pending_parse'
-              ? 'Parse your transaction file in the Data Manager to load holdings.'
+            {portfolio?.status === 'pending'
+              ? 'Upload your CAMS and KFin files in the Data Manager to load holdings.'
               : 'No active holdings found in this portfolio.'}
           </p>
           <button style={{ ...s.btn, ...s.btnPrimary }} onClick={() => navigate('/portfolio/f6')}>

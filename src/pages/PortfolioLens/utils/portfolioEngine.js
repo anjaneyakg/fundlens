@@ -155,6 +155,18 @@ export function buildHoldings(transactions, snapshots = []) {
   return holdings
 }
 
+// ── Merge all raw source data into holdings ───────────────────────────────────
+// raw = { cams: {transactions, meta, ...}, kfin: {...}, holdings: {snapshots, ...} }
+
+export function mergeRawToHoldings(raw) {
+  const transactions = [
+    ...(raw?.cams?.transactions     ?? []),
+    ...(raw?.kfin?.transactions     ?? []),
+  ]
+  const snapshots = raw?.holdings?.snapshots ?? []
+  return buildHoldings(transactions, snapshots)
+}
+
 // ── Portfolio-level XIRR ─────────────────────────────────────────────────────
 
 export function portfolioXirr(holdings) {

@@ -1,6 +1,6 @@
-const PORTFOLIOS_KEY = 'fundlens_portfolios'
-const CONSENT_KEY    = 'fundlens_pl_consent'
-const SCHEMA_VERSION = '1.0'
+const PORTFOLIOS_KEY  = 'fundlens_portfolios'
+const CONSENT_KEY     = 'fundlens_pl_consent'
+const SCHEMA_VERSION  = '2.0'   // bumped: portfolio is now investor-level, not file-level
 const CONSENT_VERSION = '1.0'
 
 // ── Consent ────────────────────────────────────────────────────────────────
@@ -16,9 +16,9 @@ export function hasConsent() {
 
 export function saveConsent(checkboxLabels) {
   localStorage.setItem(CONSENT_KEY, JSON.stringify({
-    given: true,
+    given:     true,
     timestamp: new Date().toISOString(),
-    version: CONSENT_VERSION,
+    version:   CONSENT_VERSION,
     checkboxes: checkboxLabels,
   }))
 }
@@ -43,6 +43,10 @@ export function getPortfolios() {
   }
 }
 
+export function getPortfolio(portfolioId) {
+  return getPortfolios().find(p => p.portfolio_id === portfolioId) ?? null
+}
+
 export function savePortfolios(portfolios) {
   localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify({
     schema_version: SCHEMA_VERSION,
@@ -51,8 +55,7 @@ export function savePortfolios(portfolios) {
 }
 
 export function addPortfolio(portfolio) {
-  const existing = getPortfolios()
-  savePortfolios([...existing, portfolio])
+  savePortfolios([...getPortfolios(), portfolio])
 }
 
 export function deletePortfolio(portfolioId) {
@@ -75,20 +78,20 @@ export function deleteAllData() {
 
 // ── Factory ────────────────────────────────────────────────────────────────
 
-export function newPortfolio(name, ownerType, source, uploadInfo = null) {
+const RAW_INIT = { cams: null, kfin: null, holdings: null }
+
+export function newPortfolio(name, ownerType) {
   const now = new Date().toISOString()
   return {
-    portfolio_id:  crypto.randomUUID(),
+    portfolio_id: crypto.randomUUID(),
     name,
-    owner_type:    ownerType,    // "individual" | "advisor_client"
-    created_at:    now,
-    last_updated:  now,
-    source,                      // "CAMS" | "KFin" | "Holdings"
-    status:        'pending_parse',
-    upload:        uploadInfo,   // { filename, size_kb, upload_date }
-    pii:           { pan_present: false, folio_hashes: [] },
-    holdings:      [],
-    review_config: null,
-    triggers:      [],
+    owner_type:   ownerType,   // "individual" | "advisor_client"
+    created_at:   now,
+    last_updated: now,
+    status:       'pending',   // "pending" | "partial" | "active"
+    pii:          { pan_present: false, folio_hashes: [] },
+    // raw stores parsed source data per RTA — any slot can be re-uploaded independently
+    raw:          { ...RAW_INIT },
+    holdings:     [],
   }
 }
