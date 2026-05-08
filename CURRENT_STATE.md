@@ -150,12 +150,12 @@ SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
 
 | # | Issue | Detail | Status |
 |---|---|---|---|
-| 1 | Mahindra 0 rows | R3C2 scheme, R6C2 header — verify against actual file | ⚠ P0 |
-| 2 | Shriram 0 rows | Header scan R16-R19 not finding data. Possible xlrd + layout mismatch. | ⚠ P0 |
+| 1 | Mahindra 0 rows | 1,482 rows, 27 schemes confirmed. v2.3 fix (scheme R3C2) correct. Feb ✅ — Mar still needs run. | ✅ RESOLVED |
+| 2 | Shriram 0 rows | 1,012 rows, 10 schemes confirmed. xlrd fallback + "money market instrument" fix applied. | ✅ RESOLVED |
 | 3 | Nippon 0 rows | Config issue — verify against actual file | ⚠ P0 |
 | 4 | Union 0 rows | 33 inner files. R6C3 scheme, R8/R9C3 header. One-file-per-scheme layout. | ⚠ P0 |
 | 5 | Zerodha 0 rows | R2C3/R4C3 config untested. Open ZIP inner files to verify. | ⚠ P0 |
-| 6 | Run Mar 2026 parser | `python pipeline/cell_4d_v2.py --month 2026-03 --source github` | ⚠ P0 |
+| 6 | Run Mar 2026 parser | `python pipeline/cell_4d_v2.py --month 2026-03 --source github` — confirm Mahindra (Feb=1,482 rows ✅, Mar untested) | ⚠ P0 |
 | 7 | Build merge_holdings.py | Remap Feb+Mar CSVs to canonical schema. pd.concat → master_holdings.csv | ⏳ P1 |
 | 8 | Build Cell C — Scheme Reconciler | AMFI NAV master fuzzy-match → scheme_code_amfi | ⏳ P1 |
 | 9 | Build Cell E — Quality Gate | | ⏳ P2 |
