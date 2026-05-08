@@ -53,6 +53,7 @@ export default function UserManager() {
   const { accessToken, loading: authLoading } = useAuth();
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
+  console.log('🚀 UserManager rendered', { accessToken: accessToken?.substring(0,20), loading });
   const [search, setSearch]     = useState('');
   const [filterTier, setFilter] = useState('all');
   const [saving, setSaving]     = useState(null); // userId being saved
@@ -91,7 +92,10 @@ export default function UserManager() {
     }
   }
 
-  useEffect(() => { if (accessToken && !authLoading) loadUsers(); }, [accessToken, authLoading]);
+  useEffect(() => {
+    console.log('🎯 useEffect fired', { accessToken: accessToken?.substring(0,20), loading });
+    if (accessToken && !loading) loadUsers();
+  }, [accessToken, loading]);
 
   async function changeTier(userId, newTier) {
     setSaving(userId);
