@@ -3,3 +3,9 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Tool artifacts
+.claude/
+
+# Pipeline logs
+*.log

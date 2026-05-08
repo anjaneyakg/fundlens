@@ -32,6 +32,7 @@ from datetime import date, timedelta, datetime
 import requests
 from dateutil.relativedelta import relativedelta
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -39,17 +40,20 @@ from supabase import create_client, Client
 
 AMFI_NAV_HISTORY_URL = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx"
 WINDOW_DAYS          = 89      # safe AMFI window to avoid WAF/timeout
-REQUEST_DELAY_SEC    = 5.0     # seconds between AMFI requests
+REQUEST_DELAY_SEC    = 8.0     # seconds between AMFI requests
 NAV_HISTORY_TIMEOUT  = 60      # seconds per HTTP request
 MAX_RETRIES          = 5
 RETRY_BACKOFF_BASE   = 10      # seconds; doubles each retry
 LOG_EVERY_N_WINDOWS  = 5
-BATCH_UPSERT_SIZE    = 1000    # rows per Supabase upsert call
+BATCH_UPSERT_SIZE    = 100     # rows per Supabase upsert call (keep under statement timeout)
+INTER_BATCH_SLEEP    = 1.0     # seconds between batches within a window
 
 FULL_START_DATE      = date(1994, 1, 1)
 FULL_END_DATE        = date(2026, 4, 30)
 
 RETRYABLE_STATUS     = {429, 500, 502, 503, 504}
+UPSERT_RETRY_LIMIT   = 4
+UPSERT_RETRY_BACKOFF = 5   # seconds; doubles each attempt
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -100,20 +104,39 @@ def load_scheme_map(client: Client) -> dict[int, str]:
 
 def upsert_nav_rows(client: Client, rows: list[dict]) -> int:
     """
-    Upsert rows into nav_history with ON CONFLICT DO NOTHING.
-    Returns the count of rows accepted (not duplicates).
+    Upsert rows into nav_history in batches with retry on connection errors.
+    Returns the number of rows submitted (duplicates silently skipped by DB).
     """
-    inserted = 0
+    import httpx
+
     for i in range(0, len(rows), BATCH_UPSERT_SIZE):
         batch = rows[i : i + BATCH_UPSERT_SIZE]
-        result = (
-            client.table("nav_history")
-            .upsert(batch, on_conflict="scheme_id,nav_date", ignore_duplicates=True)
-            .execute()
-        )
-        if result.data is not None:
-            inserted += len(result.data)
-    return inserted
+
+        for attempt in range(1, UPSERT_RETRY_LIMIT + 1):
+            try:
+                client.table("nav_history").upsert(
+                    batch,
+                    on_conflict="scheme_id,nav_date",
+                    ignore_duplicates=True,
+                ).execute()
+                break  # success
+            except Exception as exc:
+                # Catch postgrest APIError (statement timeout 57014) and httpx
+                # connection errors; both are transient and safe to retry.
+                exc_str = str(exc)
+                wait = UPSERT_RETRY_BACKOFF * (2 ** (attempt - 1))
+                if attempt == UPSERT_RETRY_LIMIT:
+                    raise RuntimeError(
+                        f"Supabase upsert failed after {UPSERT_RETRY_LIMIT} attempts: {exc}"
+                    ) from exc
+                log.warning("Supabase upsert error (attempt %d/%d): %s -- retry in %ds",
+                            attempt, UPSERT_RETRY_LIMIT, exc_str[:120], wait)
+                time.sleep(wait)
+
+        if i + BATCH_UPSERT_SIZE < len(rows):
+            time.sleep(INTER_BATCH_SLEEP)
+
+    return len(rows)
 
 # ---------------------------------------------------------------------------
 # Date window helpers
@@ -164,7 +187,7 @@ def fetch_window(from_date: date, to_date: date) -> list[dict]:
             if attempt == MAX_RETRIES:
                 raise RuntimeError(
                     f"AMFI fetch failed after {MAX_RETRIES} attempts "
-                    f"for window {from_date} → {to_date}: {exc}"
+                    f"for window {from_date} ->{to_date}: {exc}"
                 ) from exc
             log.warning(
                 "AMFI error (attempt %d/%d): %s — retry in %ds",
@@ -227,7 +250,7 @@ def run_backfill(start: date, end: date, dry_run: bool = False) -> None:
     windows = date_windows(start, end)
     total   = len(windows)
     log.info(
-        "Backfill range: %s → %s  |  %d windows × %d days",
+        "Backfill range: %s ->%s  |  %d windows × %d days",
         start, end, total, WINDOW_DAYS,
     )
     if dry_run:
@@ -243,7 +266,7 @@ def run_backfill(start: date, end: date, dry_run: bool = False) -> None:
         try:
             raw_rows = fetch_window(w_start, w_end)
         except RuntimeError as exc:
-            log.error("[Window %d/%d] %s → %s  FAILED: %s", idx, total, w_start, w_end, exc)
+            log.error("[Window %d/%d] %s ->%s  FAILED: %s", idx, total, w_start, w_end, exc)
             failed_windows += 1
             time.sleep(REQUEST_DELAY_SEC)
             continue
@@ -273,7 +296,7 @@ def run_backfill(start: date, end: date, dry_run: bool = False) -> None:
 
         if idx % LOG_EVERY_N_WINDOWS == 0 or idx == total:
             log.info(
-                "[Window %d/%d] %s → %s  fetched %d / matched %d / inserted %d",
+                "[Window %d/%d] %s ->%s  fetched %d / matched %d / inserted %d",
                 idx, total, w_start, w_end,
                 total_fetched, total_matched,
                 total_inserted if not dry_run else 0,
@@ -326,7 +349,7 @@ Examples:
     mode.add_argument(
         "--full",
         action="store_true",
-        help=f"Full 30-year backfill: {FULL_START_DATE} → {FULL_END_DATE}.",
+        help=f"Full 30-year backfill: {FULL_START_DATE} ->{FULL_END_DATE}.",
     )
     mode.add_argument(
         "--start-date",
@@ -406,7 +429,7 @@ def main() -> None:
         "  Mode     : %s",
         "full" if args.full else f"test ({args.months}m)" if args.test_mode else "custom",
     )
-    log.info("  Range    : %s → %s", start, end)
+    log.info("  Range    : %s ->%s", start, end)
     log.info("  Dry run  : %s", args.dry_run)
     log.info("  Window   : %d days  |  delay: %.1fs between requests", WINDOW_DAYS, REQUEST_DELAY_SEC)
 

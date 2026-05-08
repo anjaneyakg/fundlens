@@ -74,6 +74,16 @@ const navStyle = `
   .fl-group-btn:hover { color: #0f0c2e; border-bottom-color: rgba(99,91,255,0.3); }
   .fl-group-btn.group-active { color: #635bff; border-bottom-color: #635bff; }
   .fl-group-btn .chevron { font-size: 8px; opacity: 0.5; transition: transform 0.2s; display: inline-block; margin-left: 2px; }
+  .fl-pl-link {
+    padding: 0 12px; height: 40px; display: flex; align-items: center; gap: 6px;
+    font-family: 'DM Mono'; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    color: #1D9E75; text-decoration: none; border-bottom: 2px solid transparent;
+    transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+    border-left: 1px solid rgba(29,158,117,0.15); margin-left: 4px; padding-left: 14px;
+  }
+  .fl-pl-link:hover { color: #0f7a5a; border-bottom-color: rgba(29,158,117,0.35); background: rgba(29,158,117,0.04); }
+  .fl-pl-link.active { color: #0f7a5a; border-bottom-color: #1D9E75; background: rgba(29,158,117,0.06); }
+  .fl-pl-dot { width: 6px; height: 6px; border-radius: 50%; background: #1D9E75; display: inline-block; flex-shrink: 0; }
   .fl-group-btn.open .chevron { transform: rotate(180deg); }
   .group-id-pill { font-family: 'DM Mono'; font-size: 9px; letter-spacing: 1px; padding: 1px 5px; border-radius: 4px; margin-right: 3px; transition: all 0.15s; }
 
@@ -431,6 +441,11 @@ export default function Nav() {
           {GROUPS.map(group => (
             <GroupDropdown key={group.id} group={group} currentPath={currentPath} />
           ))}
+          <NavLink to="/portfolio" end={false}
+            className={({isActive}) => `fl-pl-link${isActive ? ' active' : ''}`}>
+            <span className="fl-pl-dot" />
+            PortfolioLens
+          </NavLink>
         </div>
 
       </div>

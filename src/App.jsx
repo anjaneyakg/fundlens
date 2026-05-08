@@ -19,6 +19,10 @@ import LoanCalc from './pages/LoanCalc'
 import PrepayVsInvest from './pages/PrepayVsInvest'
 import STPCalculator from './pages/STPCalculator'
 import AdminLayout from './pages/AdminLayout.jsx'
+import PortfolioLensLayout from './pages/PortfolioLens/PortfolioLensLayout.jsx'
+import PortfolioLensIndex from './pages/PortfolioLens/index.jsx'
+import PLPlaceholder from './pages/PortfolioLens/PLPlaceholder.jsx'
+import F6DataManager from './pages/PortfolioLens/F6DataManager.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
@@ -71,6 +75,24 @@ export default function App() {
         <Route path="/tools/market-gauge"   element={<MarketGauge />} />
         <Route path="/embed/market-gauge"   element={<MarketGaugeEmbed />} />
         <Route path="/login"              element={<Login />} />
+
+        <Route path="/portfolio" element={<PortfolioLensLayout />}>
+          <Route index element={<PortfolioLensIndex />} />
+          <Route path="e1" element={<PLPlaceholder code="E1" name="Dashboard"          tagline="Summary metrics, health status & LTCG harvest alerts" />} />
+          <Route path="e2" element={<PLPlaceholder code="E2" name="Visual Overview"    tagline="Allocation donut, AMC treemap, journey chart & SIP vs lumpsum AUM" />} />
+          <Route path="e3" element={<PLPlaceholder code="E3" name="Holdings"           tagline="Tax lot drill-down per scheme · top stocks, debt, sector & market cap" />} />
+          <Route path="e4" element={<PLPlaceholder code="E4" name="Overlap Analysis"   tagline="Jaccard similarity matrix, clustered heatmap & ranked pairs" />} />
+          <Route path="e5" element={<PLPlaceholder code="E5" name="Performance Matrix" tagline="AMC & category returns vs SEBI Tier 1 TRI benchmark" />} />
+          <Route path="e6" element={<PLPlaceholder code="E6" name="Cashflow & Returns" tagline="Year-wise: opening balance, flows, closing value, CAGR" />} />
+          <Route path="e7" element={<PLPlaceholder code="E7" name="Capital Gains"      tagline="Redeemed & current investments · grandfathering (2018) · tax estimates" />} />
+          <Route path="e8" element={<PLPlaceholder code="E8" name="Transaction Report" tagline="P&L per transaction · holding period · realised / unrealised split" />} />
+          <Route path="f1" element={<PLPlaceholder code="F1" name="Health Check"       tagline="8-rule engine with confidence scoring — time horizon to liquidity stress" />} />
+          <Route path="f2" element={<PLPlaceholder code="F2" name="Alerts"             tagline="Trigger setup · fired / watching / active / paused states" />} />
+          <Route path="f3" element={<PLPlaceholder code="F3" name="Rebalance Planner"  tagline="Redemption + investment plan with tax impact per lot" />} />
+          <Route path="f4" element={<PLPlaceholder code="F4" name="Model Portfolio"    tagline="Editable 3×3 risk × horizon grid · HO defaults · advisor overrides" />} />
+          <Route path="f5" element={<PLPlaceholder code="F5" name="Send Report"        tagline="PDF report with section toggles · email to client · DPDP-safe" />} />
+          <Route path="f6" element={<F6DataManager />} />
+        </Route>
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="portfolio-upload"    element={<PortfolioUpload />} />
