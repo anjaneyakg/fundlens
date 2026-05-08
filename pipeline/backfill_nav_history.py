@@ -1,5 +1,5 @@
 """
-backfill_nav_history.py  —  v1.1.0
+backfill_nav_history.py  —  v1.2.0
 
 Fetches NAV history from AMFI and inserts into Supabase nav_history table.
 
@@ -18,6 +18,8 @@ Usage:
     python backfill_nav_history.py --full
     python backfill_nav_history.py --start-date 2015-01-01 --end-date 2020-12-31
     python backfill_nav_history.py --full --dry-run
+    python backfill_nav_history.py --auto-resume
+    python backfill_nav_history.py --auto-resume --dry-run
 
 Requires env vars: SUPABASE_URL, SUPABASE_KEY
 """
@@ -32,7 +34,6 @@ from datetime import date, timedelta, datetime
 import requests
 from dateutil.relativedelta import relativedelta
 from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -77,19 +78,31 @@ def get_supabase_client() -> Client:
     if not url or not key:
         log.error("SUPABASE_URL and SUPABASE_KEY must be set as environment variables.")
         sys.exit(1)
-    return create_client(url, key)
+    client = create_client(url, key)
+    client.postgrest.timeout = 300
+    return client
 
 
 def load_scheme_map(client: Client) -> dict[int, str]:
     """Return {amfi_code: scheme_id_uuid} for all active schemes."""
-    log.info("Loading scheme map from Supabase …")
-    result = (
-        client.table("schemes")
-        .select("id, amfi_code")
-        .eq("is_active", True)
-        .execute()
-    )
-    if result.data is None:
+    log.info("Loading scheme map from Supabase ...")
+    result = None
+    for attempt in range(1, 4):
+        try:
+            result = (
+                client.table("schemes")
+                .select("id, amfi_code")
+                .eq("is_active", True)
+                .execute()
+            )
+            break
+        except Exception as exc:
+            if attempt == 3:
+                log.error("load_scheme_map failed after 3 attempts: %s", exc)
+                sys.exit(1)
+            log.warning("load_scheme_map attempt %d/3 failed: %s -- retry in 30s", attempt, exc)
+            time.sleep(30)
+    if result is None or result.data is None:
         log.error("Failed to load schemes table.")
         sys.exit(1)
 
@@ -100,6 +113,20 @@ def load_scheme_map(client: Client) -> dict[int, str]:
 
     log.info("Loaded %d active schemes.", len(mapping))
     return mapping
+
+
+def fetch_max_nav_date(client: Client) -> date | None:
+    """Return the latest nav_date already in nav_history, or None if the table is empty."""
+    result = (
+        client.table("nav_history")
+        .select("nav_date")
+        .order("nav_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return date.fromisoformat(result.data[0]["nav_date"])
+    return None
 
 
 def upsert_nav_rows(client: Client, rows: list[dict]) -> int:
@@ -243,8 +270,23 @@ def _parse_amfi_response(text: str) -> list[dict]:
 # Main backfill loop
 # ---------------------------------------------------------------------------
 
-def run_backfill(start: date, end: date, dry_run: bool = False) -> None:
-    client     = get_supabase_client()
+def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
+                 auto_resume: bool = False) -> None:
+    client = get_supabase_client()
+
+    if auto_resume:
+        max_date = fetch_max_nav_date(client)
+        if max_date is None:
+            start = FULL_START_DATE
+            log.info("nav_history is empty — auto-resuming from full start %s", FULL_START_DATE)
+        else:
+            start = max_date + timedelta(days=1)
+            log.info(
+                "Auto-resuming from %s  (last loaded date was %s)",
+                start, max_date,
+            )
+        end = FULL_END_DATE
+
     scheme_map = load_scheme_map(client)
 
     windows = date_windows(start, end)
@@ -356,6 +398,12 @@ Examples:
         metavar="YYYY-MM-DD",
         help="Custom start date (requires --end-date or defaults to today).",
     )
+    mode.add_argument(
+        "--auto-resume",
+        action="store_true",
+        help="Query MAX(nav_date) from nav_history and resume from the next day. "
+             f"Falls back to {FULL_START_DATE} if the table is empty.",
+    )
 
     parser.add_argument(
         "--end-date",
@@ -422,18 +470,25 @@ def main() -> None:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    start, end = resolve_date_range(args)
+    if args.auto_resume:
+        start, end = None, None   # resolved inside run_backfill after DB query
+    else:
+        start, end = resolve_date_range(args)
 
-    log.info("backfill_nav_history.py  v1.1.0  starting")
+    log.info("backfill_nav_history.py  v1.2.0  starting")
     log.info(
         "  Mode     : %s",
-        "full" if args.full else f"test ({args.months}m)" if args.test_mode else "custom",
+        "auto-resume" if args.auto_resume
+        else "full" if args.full
+        else f"test ({args.months}m)" if args.test_mode
+        else "custom",
     )
-    log.info("  Range    : %s ->%s", start, end)
+    if not args.auto_resume:
+        log.info("  Range    : %s ->%s", start, end)
     log.info("  Dry run  : %s", args.dry_run)
     log.info("  Window   : %d days  |  delay: %.1fs between requests", WINDOW_DAYS, REQUEST_DELAY_SEC)
 
-    run_backfill(start, end, dry_run=args.dry_run)
+    run_backfill(start, end, dry_run=args.dry_run, auto_resume=args.auto_resume)
 
 
 if __name__ == "__main__":
