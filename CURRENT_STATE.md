@@ -42,8 +42,8 @@
 | PL-6 | E3 Holdings & Exposure | ✅ Done |
 | PL-7 | E4 Overlap Analysis | ✅ Done |
 | PL-8 | E5 Performance Matrix | ✅ Done |
-| PL-9 | E6 Cashflow & Returns | ⏳ Next |
-| PL-10 | E7 Capital Gains | ⏳ Pending |
+| PL-9 | E6 Cashflow & Returns | ✅ Done |
+| PL-10 | E7 Capital Gains | ⏳ Next |
 | PL-11 | E8 Transaction Report | ⏳ Pending |
 | PL-12 | F1 Health Check (8 rules) | ⏳ Pending |
 | PL-13 | F2 Alerts engine | ⏳ Pending |
@@ -66,6 +66,7 @@
 | `src/pages/PortfolioLens/E3Holdings.jsx` | Filterable holdings table + expand drill-down + exposure summary |
 | `src/pages/PortfolioLens/E4Overlap.jsx` | Tag-based Jaccard similarity matrix + clustered heatmap + ranked pairs |
 | `src/pages/PortfolioLens/E5Performance.jsx` | XIRR-ranked scheme table + category & AMC breakdown tabs |
+| `src/pages/PortfolioLens/E6CashflowReturns.jsx` | Year-wise cashflow bar chart + FY/CY toggle + annual table |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
 **localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots)
@@ -75,7 +76,7 @@
 
 ## Immediate Next Session Priorities
 
-1. **PL-9** — E6 Cashflow & Returns (year-wise: opening balance, flows, closing value, CAGR)
+1. **PL-10** — E7 Capital Gains (redeemed & current lots · grandfathering 2018 · tax estimates)
 2. **Fix User Manager** — "Loading users" bug — pass `accessToken` to `sbFetch`
 3. **Deploy to Vercel staging** — test `set-user-tier` + `set-flag` APIs
 4. **Add `VITE_SUPABASE_ANON_KEY`** to Vercel environment variables

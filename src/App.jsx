@@ -27,7 +27,8 @@ import E1Dashboard   from './pages/PortfolioLens/E1Dashboard.jsx'
 import E2Overview    from './pages/PortfolioLens/E2Overview.jsx'
 import E3Holdings    from './pages/PortfolioLens/E3Holdings.jsx'
 import E4Overlap     from './pages/PortfolioLens/E4Overlap.jsx'
-import E5Performance from './pages/PortfolioLens/E5Performance.jsx'
+import E5Performance      from './pages/PortfolioLens/E5Performance.jsx'
+import E6CashflowReturns from './pages/PortfolioLens/E6CashflowReturns.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
@@ -88,7 +89,7 @@ export default function App() {
           <Route path="e3" element={<E3Holdings />} />
           <Route path="e4" element={<E4Overlap />} />
           <Route path="e5" element={<E5Performance />} />
-          <Route path="e6" element={<PLPlaceholder code="E6" name="Cashflow & Returns" tagline="Year-wise: opening balance, flows, closing value, CAGR" />} />
+          <Route path="e6" element={<E6CashflowReturns />} />
           <Route path="e7" element={<PLPlaceholder code="E7" name="Capital Gains"      tagline="Redeemed & current investments · grandfathering (2018) · tax estimates" />} />
           <Route path="e8" element={<PLPlaceholder code="E8" name="Transaction Report" tagline="P&L per transaction · holding period · realised / unrealised split" />} />
           <Route path="f1" element={<PLPlaceholder code="F1" name="Health Check"       tagline="8-rule engine with confidence scoring — time horizon to liquidity stress" />} />
