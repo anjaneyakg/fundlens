@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026
+**Last updated:** 09 May 2026 (PL-11)
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -44,8 +44,8 @@
 | PL-8 | E5 Performance Matrix | ✅ Done |
 | PL-9 | E6 Cashflow & Returns | ✅ Done |
 | PL-10 | E7 Capital Gains | ✅ Done |
-| PL-11 | E8 Transaction Report | ⏳ Next |
-| PL-12 | F1 Health Check (8 rules) | ⏳ Pending |
+| PL-11 | E8 Transaction Report | ✅ Done |
+| PL-12 | F1 Health Check (8 rules) | ⏳ Next |
 | PL-13 | F2 Alerts engine | ⏳ Pending |
 | PL-14 | F3 Rebalance Planner | ⏳ Pending PL-12 |
 | PL-15 | F4 Model Portfolio | ⏳ Pending |
@@ -68,6 +68,7 @@
 | `src/pages/PortfolioLens/E5Performance.jsx` | XIRR-ranked scheme table + category & AMC breakdown tabs |
 | `src/pages/PortfolioLens/E6CashflowReturns.jsx` | Year-wise cashflow bar chart + FY/CY toggle + annual table |
 | `src/pages/PortfolioLens/E7CapitalGains.jsx` | Unrealised/realised gains · LTCG/STCG · grandfathering (2018) · tax estimates |
+| `src/pages/PortfolioLens/E8TransactionReport.jsx` | Full transaction log · avg-cost P&L on sells · FY/type/search filters · pagination |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
 **localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots)
@@ -77,7 +78,7 @@
 
 ## Immediate Next Session Priorities
 
-1. **PL-11** — E8 Transaction Report (P&L per transaction · holding period · realised / unrealised split)
+1. **PL-12** — F1 Health Check (8-rule engine with confidence scoring — time horizon to liquidity stress)
 2. **Fix User Manager** — "Loading users" bug — pass `accessToken` to `sbFetch`
 3. **Deploy to Vercel staging** — test `set-user-tier` + `set-flag` APIs
 4. **Add `VITE_SUPABASE_ANON_KEY`** to Vercel environment variables

@@ -29,7 +29,8 @@ import E3Holdings    from './pages/PortfolioLens/E3Holdings.jsx'
 import E4Overlap     from './pages/PortfolioLens/E4Overlap.jsx'
 import E5Performance      from './pages/PortfolioLens/E5Performance.jsx'
 import E6CashflowReturns from './pages/PortfolioLens/E6CashflowReturns.jsx'
-import E7CapitalGains   from './pages/PortfolioLens/E7CapitalGains.jsx'
+import E7CapitalGains        from './pages/PortfolioLens/E7CapitalGains.jsx'
+import E8TransactionReport  from './pages/PortfolioLens/E8TransactionReport.jsx'
 import PortfolioUpload from './pages/PortfolioUpload.jsx'
 import CoverageDashboard from './pages/CoverageDashboard.jsx'
 import SchemeBasket from './pages/SchemeBasket'
@@ -92,7 +93,7 @@ export default function App() {
           <Route path="e5" element={<E5Performance />} />
           <Route path="e6" element={<E6CashflowReturns />} />
           <Route path="e7" element={<E7CapitalGains />} />
-          <Route path="e8" element={<PLPlaceholder code="E8" name="Transaction Report" tagline="P&L per transaction · holding period · realised / unrealised split" />} />
+          <Route path="e8" element={<E8TransactionReport />} />
           <Route path="f1" element={<PLPlaceholder code="F1" name="Health Check"       tagline="8-rule engine with confidence scoring — time horizon to liquidity stress" />} />
           <Route path="f2" element={<PLPlaceholder code="F2" name="Alerts"             tagline="Trigger setup · fired / watching / active / paused states" />} />
           <Route path="f3" element={<PLPlaceholder code="F3" name="Rebalance Planner"  tagline="Redemption + investment plan with tax impact per lot" />} />
