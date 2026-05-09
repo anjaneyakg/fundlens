@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useRole } from '../hooks/useRole'
 import useWindowWidth from '../hooks/useWindowWidth'
+import { useAdvisorMode } from '../context/AdvisorModeContext'
 
 // ── PLAN UNIVERSE (kept for tool backward-compat) ─────────────────────────────
 export const PLAN_KEY = 'fundlens_plan_universe'
@@ -524,7 +525,7 @@ function UserMenu({ user, onSignOut }) {
   )
 }
 
-function DrawerSection({ label, type, isGuest, groupIds, path, currentPath, onClose }) {
+function DrawerSection({ label, type, isGuest, groupIds, currentPath, onClose }) {
   const [open, setOpen] = useState(false)
   const navigate        = useNavigate()
 
@@ -607,7 +608,7 @@ function MobileDrawer({
         <div className="fl-drawer-body">
           <DrawerSection label="Plan"           type="plan"     isGuest={false}    groupIds={PLAN_GROUP_IDS}     currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Research"       type="research" isGuest={isGuest}  groupIds={RESEARCH_GROUP_IDS} currentPath={currentPath} onClose={onClose} />
-          <DrawerSection label="Track"          type="track"    isGuest={isGuest}  path="/portfolio"             currentPath={currentPath} onClose={onClose} />
+          <DrawerSection label="Track"          type="track"    isGuest={isGuest}  currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Save & Invest"  type="disabled" isGuest={false}    currentPath={currentPath} onClose={onClose} />
           {advisorMode && isAdvisor && (
             <DrawerSection label="Promote" type="promote" isGuest={false} currentPath={currentPath} onClose={onClose} />
@@ -683,16 +684,15 @@ export default function Nav() {
   const navigate   = useNavigate()
   const { user, signOut } = useAuth()
   const { isGuest, isAdvisor } = useRole()
+  const { advisorMode, setAdvisorMode } = useAdvisorMode()
   const width      = useWindowWidth()
 
-  const [plan, setPlan]               = useState(getStoredPlan)
-  const [advisorMode, setAdvisorMode] = useState(false)
-  const [drawerOpen, setDrawerOpen]   = useState(false)
+  const [plan, setPlan]             = useState(getStoredPlan)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const isMobile   = width <= 768
   const currentPath = location.pathname
 
-  // Determine which top-level tab is active
   const isPlanActive     = PLAN_GROUP_IDS.some(id =>
     GROUP_MAP[id]?.items.some(i => i.live && i.path === currentPath)
   )
@@ -703,9 +703,9 @@ export default function Nav() {
 
   const showPromote = advisorMode && isAdvisor
 
-  const handlePlanChange    = useCallback(p => { setPlan(p); setStoredPlan(p) }, [])
-  const handleAdvisorMode   = useCallback(v => setAdvisorMode(v), [])
-  const handleSignOut       = useCallback(async () => {
+  const handlePlanChange  = useCallback(p => { setPlan(p); setStoredPlan(p) }, [])
+  const handleAdvisorMode = useCallback(v => setAdvisorMode(v), [setAdvisorMode])
+  const handleSignOut     = useCallback(async () => {
     try { await signOut(); navigate('/') }
     catch (err) { console.error('Nav sign-out error:', err) }
   }, [signOut, navigate])

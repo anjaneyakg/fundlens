@@ -39,7 +39,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH0-S1 | Firebase Auth setup — project, SDK, OTP, users table, Supabase JWT config | ✅ Done — 09 May 2026 |
 | PH0-S2 | User roles & access control — roles table, Guest/Individual/Advisor claims, Admin UI | ✅ Done — 09 May 2026 |
 | PH0-S3 | New navigation shell — Plan/Research/Track/Save & Invest/Promote, sidebar, vercel.json | ✅ Done — 09 May 2026 |
-| PH0-S4 | Homepage redesign — v3 design, carousel, sticky auth+assistant buttons, Investor/Advisor toggle | ⏳ Pending |
+| PH0-S4 | Homepage redesign — v3 design, carousel, sticky auth+assistant buttons, Investor/Advisor toggle | ✅ Done — 09 May 2026 |
 | PH0-S5 | CSS theming system — custom properties, white-label override, dark mode, logo swap | ⏳ Pending |
 
 ### Phase 1 — Data Foundation (Weeks 2–3, parallel with Phase 0)

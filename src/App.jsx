@@ -48,89 +48,92 @@ import Upgrade                 from './pages/Upgrade';
 import ProtectedRoute          from './components/ProtectedRoute';
 import UserManager             from './pages/admin/UserManager';
 import ToolAccessMatrix        from './pages/admin/ToolAccessMatrix';
+import { AdvisorModeProvider } from './context/AdvisorModeContext';
 
 export default function App() {
   const location = useLocation();
   const isAdmin  = location.pathname.startsWith('/admin');
 
   return (
-    <>
-      {!isAdmin && <Nav />}
-      <Routes>
+    <AdvisorModeProvider>
+      <>
+        {!isAdmin && <Nav />}
+        <Routes>
 
-        {/* ── Public routes (Guest / any visitor) ── */}
-        <Route path="/"                       element={<Home />} />
-        <Route path="/login"                  element={<Login />} />
-        <Route path="/upgrade"                element={<Upgrade />} />
-        <Route path="/tools/market-gauge"     element={<MarketGauge />} />
-        <Route path="/embed/market-gauge"     element={<MarketGaugeEmbed />} />
+          {/* ── Public routes (Guest / any visitor) ── */}
+          <Route path="/"                       element={<Home />} />
+          <Route path="/login"                  element={<Login />} />
+          <Route path="/upgrade"                element={<Upgrade />} />
+          <Route path="/tools/market-gauge"     element={<MarketGauge />} />
+          <Route path="/embed/market-gauge"     element={<MarketGaugeEmbed />} />
 
-        {/* Plan tools — public, no login required */}
-        <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
-        <Route path="/sip-performance"        element={<SIPCalculator />} />
-        <Route path="/wealth-creator"         element={<WealthCreator />} />
-        <Route path="/fd-calculator"          element={<FDCalculator />} />
-        <Route path="/swp-performance"        element={<SWPCalculator />} />
-        <Route path="/fd-vs-mf"              element={<FDvsMF />} />
-        <Route path="/goal-sip"              element={<GoalSIP />} />
-        <Route path="/goal-calculator"       element={<GoalCalculator />} />
-        <Route path="/loan-calculator"       element={<LoanCalc />} />
-        <Route path="/prepay-vs-invest"      element={<PrepayVsInvest />} />
-        <Route path="/stp-calculator"        element={<STPCalculator />} />
-        <Route path="/stp-actual"            element={<STPActual />} />
-        <Route path="/scheme-basket"         element={<SchemeBasket />} />
-        <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
-        <Route path="/rd-calculator"         element={<RDCalculator />} />
-        <Route path="/capital-gains"         element={<CapitalGains />} />
-        <Route path="/post-tax"              element={<PostTaxComparator />} />
-        <Route path="/real-return"           element={<InflationAdjustedReturn />} />
-        <Route path="/xirr-calc"             element={<PortfolioXIRR />} />
-        <Route path="/risk-profiler"         element={<RiskProfiler />} />
+          {/* Plan tools — public, no login required */}
+          <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
+          <Route path="/sip-performance"        element={<SIPCalculator />} />
+          <Route path="/wealth-creator"         element={<WealthCreator />} />
+          <Route path="/fd-calculator"          element={<FDCalculator />} />
+          <Route path="/swp-performance"        element={<SWPCalculator />} />
+          <Route path="/fd-vs-mf"              element={<FDvsMF />} />
+          <Route path="/goal-sip"              element={<GoalSIP />} />
+          <Route path="/goal-calculator"       element={<GoalCalculator />} />
+          <Route path="/loan-calculator"       element={<LoanCalc />} />
+          <Route path="/prepay-vs-invest"      element={<PrepayVsInvest />} />
+          <Route path="/stp-calculator"        element={<STPCalculator />} />
+          <Route path="/stp-actual"            element={<STPActual />} />
+          <Route path="/scheme-basket"         element={<SchemeBasket />} />
+          <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
+          <Route path="/rd-calculator"         element={<RDCalculator />} />
+          <Route path="/capital-gains"         element={<CapitalGains />} />
+          <Route path="/post-tax"              element={<PostTaxComparator />} />
+          <Route path="/real-return"           element={<InflationAdjustedReturn />} />
+          <Route path="/xirr-calc"             element={<PortfolioXIRR />} />
+          <Route path="/risk-profiler"         element={<RiskProfiler />} />
 
-        {/* ── Research routes — Individual required ── */}
-        <Route path="/schemes"
-          element={<ProtectedRoute requiredRole="individual"><Schemes /></ProtectedRoute>} />
-        <Route path="/category-leaderboard"
-          element={<ProtectedRoute requiredRole="individual"><CategoryLeaderboard /></ProtectedRoute>} />
-        <Route path="/compare-schemes"
-          element={<ProtectedRoute requiredRole="individual"><CompareSchemes /></ProtectedRoute>} />
+          {/* ── Research routes — Individual required ── */}
+          <Route path="/schemes"
+            element={<ProtectedRoute requiredRole="individual"><Schemes /></ProtectedRoute>} />
+          <Route path="/category-leaderboard"
+            element={<ProtectedRoute requiredRole="individual"><CategoryLeaderboard /></ProtectedRoute>} />
+          <Route path="/compare-schemes"
+            element={<ProtectedRoute requiredRole="individual"><CompareSchemes /></ProtectedRoute>} />
 
-        {/* ── Track / PortfolioLens — Individual required ── */}
-        <Route
-          path="/portfolio"
-          element={<ProtectedRoute requiredRole="individual"><PortfolioLensLayout /></ProtectedRoute>}
-        >
-          <Route index        element={<PortfolioLensIndex />} />
-          <Route path="e1"    element={<E1Dashboard />} />
-          <Route path="e2"    element={<E2Overview />} />
-          <Route path="e3"    element={<E3Holdings />} />
-          <Route path="e4"    element={<E4Overlap />} />
-          <Route path="e5"    element={<E5Performance />} />
-          <Route path="e6"    element={<E6CashflowReturns />} />
-          <Route path="e7"    element={<E7CapitalGains />} />
-          <Route path="e8"    element={<E8TransactionReport />} />
-          <Route path="f1"    element={<PLPlaceholder code="F1" name="Health Check"      tagline="8-rule engine with confidence scoring — time horizon to liquidity stress" />} />
-          <Route path="f2"    element={<PLPlaceholder code="F2" name="Alerts"            tagline="Trigger setup · fired / watching / active / paused states" />} />
-          <Route path="f3"    element={<PLPlaceholder code="F3" name="Rebalance Planner" tagline="Redemption + investment plan with tax impact per lot" />} />
-          <Route path="f4"    element={<PLPlaceholder code="F4" name="Model Portfolio"   tagline="Editable 3×3 risk × horizon grid · HO defaults · advisor overrides" />} />
-          <Route path="f5"    element={<PLPlaceholder code="F5" name="Send Report"       tagline="PDF report with section toggles · email to client · DPDP-safe" />} />
-          <Route path="f6"    element={<F6DataManager />} />
-        </Route>
+          {/* ── Track / PortfolioLens — Individual required ── */}
+          <Route
+            path="/portfolio"
+            element={<ProtectedRoute requiredRole="individual"><PortfolioLensLayout /></ProtectedRoute>}
+          >
+            <Route index        element={<PortfolioLensIndex />} />
+            <Route path="e1"    element={<E1Dashboard />} />
+            <Route path="e2"    element={<E2Overview />} />
+            <Route path="e3"    element={<E3Holdings />} />
+            <Route path="e4"    element={<E4Overlap />} />
+            <Route path="e5"    element={<E5Performance />} />
+            <Route path="e6"    element={<E6CashflowReturns />} />
+            <Route path="e7"    element={<E7CapitalGains />} />
+            <Route path="e8"    element={<E8TransactionReport />} />
+            <Route path="f1"    element={<PLPlaceholder code="F1" name="Health Check"      tagline="8-rule engine with confidence scoring — time horizon to liquidity stress" />} />
+            <Route path="f2"    element={<PLPlaceholder code="F2" name="Alerts"            tagline="Trigger setup · fired / watching / active / paused states" />} />
+            <Route path="f3"    element={<PLPlaceholder code="F3" name="Rebalance Planner" tagline="Redemption + investment plan with tax impact per lot" />} />
+            <Route path="f4"    element={<PLPlaceholder code="F4" name="Model Portfolio"   tagline="Editable 3×3 risk × horizon grid · HO defaults · advisor overrides" />} />
+            <Route path="f5"    element={<PLPlaceholder code="F5" name="Send Report"       tagline="PDF report with section toggles · email to client · DPDP-safe" />} />
+            <Route path="f6"    element={<F6DataManager />} />
+          </Route>
 
-        {/* ── Admin routes — Admin required ── */}
-        <Route
-          path="/admin"
-          element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>}
-        >
-          <Route path="portfolio-upload" element={<PortfolioUpload />} />
-          <Route path="coverage"         element={<CoverageDashboard />} />
-          <Route path="scheme-mapping"   element={<SchemeMapping />} />
-          <Route path="amfi-marketcap"   element={<AmfiMarketCapUpload />} />
-          <Route path="users"            element={<UserManager />} />
-          <Route path="tool-access"      element={<ToolAccessMatrix />} />
-        </Route>
+          {/* ── Admin routes — Admin required ── */}
+          <Route
+            path="/admin"
+            element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>}
+          >
+            <Route path="portfolio-upload" element={<PortfolioUpload />} />
+            <Route path="coverage"         element={<CoverageDashboard />} />
+            <Route path="scheme-mapping"   element={<SchemeMapping />} />
+            <Route path="amfi-marketcap"   element={<AmfiMarketCapUpload />} />
+            <Route path="users"            element={<UserManager />} />
+            <Route path="tool-access"      element={<ToolAccessMatrix />} />
+          </Route>
 
-      </Routes>
-    </>
+        </Routes>
+      </>
+    </AdvisorModeProvider>
   );
 }

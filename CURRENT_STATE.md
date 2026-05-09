@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.5
+**Last updated:** 09 May 2026 · v23.6
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,37 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## PH0-S4 — Homepage v3 Redesign ✅ (09 May 2026)
+
+| Item | Status |
+|---|---|
+| `migrations/003_promo_messages.sql` — promo_messages table + public RLS read policy (run when Supabase recovers) | ✅ Written |
+| `src/context/AdvisorModeContext.jsx` — shared context for Investor/Advisor toggle, single source of truth | ✅ Done |
+| `src/App.jsx` — wrapped with `AdvisorModeProvider` | ✅ Done |
+| `src/components/Nav.jsx` — `advisorMode` now reads from `AdvisorModeContext` (not local state) | ✅ Done |
+| `src/pages/Home.jsx` — full rewrite: v3 long-page Apple-style design | ✅ Done |
+| Vite build — 942 modules, no new errors | ✅ Done |
+
+### Homepage v3 — sections delivered
+
+- **A. Carousel** — auto-scrolls 4s, dot navigation, tries Supabase `promo_messages` table, falls back to 3 static messages (table doesn't exist yet → fallback path confirmed active)
+- **B. Hero** — centered, system-font headline; switches on `advisorMode`: Investor ("Know your mutual funds. Really know them.") / Advisor ("Give your clients the analysis they deserve.")
+- **C. Data indicators strip** — 3 plain-language items with dividers, no numbers
+- **D. Feature sections** — Plan (text-left), Research (text-right / flipped, alt bg), Track (text-left); each with CSS-drawn visual panel and CTA button
+- **E. Advisor strip** — MFD card (green, #1D9E75) + RIA card (blue, #1565C0), 2-col desktop → 1-col mobile
+- **F. Save & Invest teaser** — centered, "coming soon" badge, no CTA
+- **G. Footer** — FundLens wordmark, Privacy Policy / Terms / Contact links, AMFI + BSE data disclaimer; no individual name
+
+### Toggle sync
+
+`advisorMode` lifted from Nav local state → `AdvisorModeContext`. Nav and Home both read from context. One source of truth. Toggle in Nav instantly switches hero content on homepage.
+
+### Pending manual actions (Supabase down — run when recovered)
+
+4. Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor, then populate with 3 rows matching STATIC_PROMOS content.
 
 ---
 
