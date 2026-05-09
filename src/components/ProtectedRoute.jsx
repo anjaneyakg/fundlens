@@ -1,8 +1,10 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+const ROLE_ORDER = { guest: 0, individual: 1, advisor: 2, admin: 3 };
+
+export default function ProtectedRoute({ children, requiredRole = 'individual' }) {
+  const { user, role, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return (
@@ -17,8 +19,16 @@ export default function ProtectedRoute({ children }) {
     </div>
   );
 
-  if (!isAuthenticated) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  const effectiveRole = role || 'individual';
+  const hasAccess =
+    (ROLE_ORDER[effectiveRole] ?? 0) >= (ROLE_ORDER[requiredRole] ?? 0);
+
+  if (!hasAccess) {
+    return <Navigate to="/upgrade" replace />;
   }
 
   return children;

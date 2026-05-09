@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.3
+**Last updated:** 09 May 2026 · v23.4
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,45 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## PH0-S2 — Roles, ProtectedRoute Tiers, UserManager Fix ✅ (09 May 2026)
+
+| Item | Status |
+|---|---|
+| `migrations/001_users_table.sql` — PH0-S1 SQL as file (run when Supabase recovers) | ✅ Written |
+| `migrations/002_advisor_profiles.sql` — advisor_profiles table + admin RLS policies | ✅ Written |
+| `src/hooks/useAuth.jsx` — added `planTier` state + exposed in context | ✅ Done |
+| `src/hooks/useRole.jsx` — new hook: isGuest/isIndividual/isAdvisor/isAdmin/hasRole | ✅ Done |
+| `src/components/ProtectedRoute.jsx` — `requiredRole` prop, role hierarchy, /upgrade redirect | ✅ Done |
+| `api/get-users.js` — admin-verified serverless function, paginated, service_role | ✅ Done |
+| `api/set-role.js` — admin-verified serverless function, validates + updates role | ✅ Done |
+| `src/pages/admin/UserManager.jsx` — full rewrite: new schema, /api/get-users, /api/set-role, pagination | ✅ Done |
+| `src/pages/Upgrade.jsx` — placeholder page, pricing preview, View plans + Go back | ✅ Done |
+| `src/App.jsx` — research routes → `requiredRole="individual"`, admin → `requiredRole="admin"`, /upgrade added | ✅ Done |
+| Vite build — 900 modules, no new errors | ✅ Done |
+
+### Route protection map (as of PH0-S2)
+
+| Route | Protection |
+|---|---|
+| `/`, `/login`, `/upgrade` | Public |
+| Plan tools (calculators) | Public |
+| `/schemes`, `/category-leaderboard`, `/stp-actual`, `/compare-schemes` | `requiredRole="individual"` |
+| `/portfolio/*` | `requiredRole="individual"` |
+| `/admin/*` | `requiredRole="admin"` |
+
+### Pending manual actions (Supabase down — run when recovered)
+
+1. Run `migrations/001_users_table.sql` in fundlens-prod SQL editor
+2. Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor
+3. Add VITE_FIREBASE_* (6 vars) to Vercel dashboard
+
+### env var note for api/get-users.js + api/set-role.js
+
+Both functions use `SUPABASE_SERVICE_KEY` (matches existing `api/admin/set-user-tier.js`).
+No new Vercel env vars needed — `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are already set.
 
 ---
 

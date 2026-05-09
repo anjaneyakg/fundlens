@@ -33,10 +33,11 @@ async function sbFetch(path, token, options = {}) {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [token, setToken]     = useState(null);
-  const [role, setRole]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]         = useState(null);
+  const [token, setToken]       = useState(null);
+  const [role, setRole]         = useState(null);
+  const [planTier, setPlanTier] = useState(null);
+  const [loading, setLoading]   = useState(true);
 
   async function loadOrCreateProfile(firebaseUser, idToken) {
     const uid = firebaseUser.uid;
@@ -47,8 +48,10 @@ export function AuthProvider({ children }) {
       );
       if (rows && rows.length > 0) {
         setRole(rows[0].role || 'individual');
+        setPlanTier(rows[0].plan_tier || 'free');
         return;
       }
+      // First sign-in — create the row
       await sbFetch('users', idToken, {
         method: 'POST',
         headers: { Prefer: 'return=minimal' },
@@ -60,9 +63,11 @@ export function AuthProvider({ children }) {
         }),
       });
       setRole('individual');
+      setPlanTier('free');
     } catch (err) {
       console.error('loadOrCreateProfile error:', err);
       setRole('individual');
+      setPlanTier('free');
     }
   }
 
@@ -79,11 +84,13 @@ export function AuthProvider({ children }) {
           setUser(null);
           setToken(null);
           setRole(null);
+          setPlanTier(null);
         }
       } else {
         setUser(null);
         setToken(null);
         setRole(null);
+        setPlanTier(null);
       }
       setLoading(false);
     });
@@ -110,6 +117,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setToken(null);
     setRole(null);
+    setPlanTier(null);
   }
 
   return (
@@ -117,6 +125,7 @@ export function AuthProvider({ children }) {
       user,
       token,
       role,
+      planTier,
       loading,
       isAuthenticated: !!user,
       accessToken: token,
