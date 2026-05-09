@@ -36,11 +36,12 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 
 | Session | Deliverable | Status |
 |---|---|---|
-| PH0-S1 | Firebase Auth setup — project, SDK, OTP, users table, Supabase JWT config | ✅ Done — 09 May 2026 |
-| PH0-S2 | User roles & access control — roles table, Guest/Individual/Advisor claims, Admin UI | ✅ Done — 09 May 2026 |
-| PH0-S3 | New navigation shell — Plan/Research/Track/Save & Invest/Promote, sidebar, vercel.json | ✅ Done — 09 May 2026 |
-| PH0-S4 | Homepage redesign — v3 design, carousel, sticky auth+assistant buttons, Investor/Advisor toggle | ✅ Done — 09 May 2026 |
-| PH0-S5 | CSS theming system — custom properties, white-label override, dark mode, logo swap | ✅ Done — 09 May 2026 |
+| PH0-S1 | `bb220e0` — firebase.js, useAuth.jsx, supabaseClient.js, Login.jsx, ProtectedRoute.jsx; Supabase Third-Party Auth wired | ✅ Done — 09 May 2026 |
+| PH0-S2 | `c89ddac` — useRole.jsx, advisor_profiles migration, UserManager rewrite, api/get-users.js, api/set-role.js, Upgrade.jsx, ProtectedRoute tier gates | ✅ Done — 09 May 2026 |
+| PH0-S3 | `a28d312` — Nav.jsx full rewrite, Plan/Research/Track/Save & Invest/Promote, mobile drawer, AdvisorModeContext.jsx | ✅ Done — 09 May 2026 |
+| PH0-S4 | `fc9a1db` — Home.jsx v3, carousel, hero toggle, feature sections, advisor strip, footer, migrations/003 | ✅ Done — 09 May 2026 |
+| PH0-S5 | `5543556` — theme.css, useAdvisorTheme.jsx, index.css, logo swap, CSS vars audit on Nav/Home/Login/Upgrade | ✅ Done — 09 May 2026 |
+| API fix | `6895c38` — 14 → 5 serverless functions; api/amfi.js (4 actions), api/admin.js (4 actions); dead auth fns deleted; CORS tightened | ✅ Done — 09 May 2026 |
 
 ### Phase 1 — Data Foundation (Weeks 2–3, parallel with Phase 0)
 
@@ -139,11 +140,17 @@ Plan | Research | Track | Save & Invest | [Promote — advisor only]
 4. Supabase RLS verifies JWT using Firebase's public key (one-time config in Supabase dashboard)
 5. RLS policies use `auth.uid()` — each user sees only their own data
 
-### New Supabase tables needed (Phase 0, PH0-S1)
+### Supabase Tables — Live & Pending
+
+| Table | Status | Migration | Notes |
+|---|---|---|---|
+| `profiles` | ✅ RLS live | `migrations/001_users_table.sql` | id TEXT (Firebase UID), email, role, plan_tier; RLS on SELECT/INSERT/UPDATE by sub claim |
+| `advisor_profiles` | ⚠ Pending run | `migrations/002_advisor_profiles.sql` | user_id → profiles.id; logo_url, css_override, max_clients; admin RLS policies |
+| `promo_messages` | ⚠ Pending run | `migrations/003_promo_messages.sql` | id UUID, text, is_active, display_order; public RLS read policy |
 
 ```sql
--- Users (Firebase UID as primary key)
-CREATE TABLE users (
+-- profiles (Firebase UID as primary key) — RLS live in fundlens-prod
+CREATE TABLE profiles (
   id TEXT PRIMARY KEY,           -- Firebase UID
   email TEXT,
   role TEXT DEFAULT 'individual', -- 'guest' | 'individual' | 'advisor' | 'admin'
@@ -151,9 +158,9 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT now()
 );
 
--- Advisor profiles
+-- advisor_profiles — migration written, pending run (002)
 CREATE TABLE advisor_profiles (
-  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  user_id TEXT PRIMARY KEY REFERENCES profiles(id),
   firm_name TEXT,
   logo_url TEXT,
   css_override TEXT,
@@ -161,7 +168,7 @@ CREATE TABLE advisor_profiles (
   max_clients INTEGER DEFAULT 50
 );
 
--- Promo messages (carousel — admin-controlled)
+-- promo_messages — migration written, pending run (003)
 CREATE TABLE promo_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   text TEXT,
@@ -211,8 +218,8 @@ Full spec: `FundLens_Master_Reference_v23.docx`
 
 | # | Issue | Detail | Status |
 |---|---|---|---|
-| 1 | Firebase + Supabase JWT wiring | Set JWT secret in Supabase dashboard. Phase 0 S1. | ⏳ Phase 0 |
-| 2 | Supabase RLS policies | Must be designed before PortfolioLens goes to production. Blocks Phase 2. | 🔴 Blocks P2 |
+| 1 | Firebase + Supabase JWT wiring | Third-Party Auth configured in Supabase dashboard. | ✅ Complete |
+| 2 | Supabase RLS policies | profiles table RLS live. advisor_profiles migration pending (002). | ⚠ 002 pending |
 | 3 | SchemeMapping autocomplete | Axis and others showing wrong AMC schemes in dropdown. | ⚠ Pending |
 | 4 | SchemeBasket slug bug | "Children's" → children_s not childrens | ⚠ Pending |
 | 5 | SIPCalculator mfapi migration | Migrate away from api.mfapi.in | ⚠ Pending |
@@ -247,5 +254,5 @@ Full spec: `FundLens_Master_Reference_v23.docx`
 | Live URL | fundlens-six.vercel.app / fundlens.in |
 | Stack | React + Vite + Vercel |
 | VITE_GITHUB_PAT | Renewed Apr 2026 in Vercel |
-| GIST_PAT | ⚠ Due ~20 May 2026 — RENEW IMMEDIATELY |
+| GIST_PAT | ✅ Renewed 09 May 2026 |
 | Health endpoint | https://fundlens-six.vercel.app/api/v1/health |

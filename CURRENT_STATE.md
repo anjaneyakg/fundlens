@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.8
+**Last updated:** 09 May 2026 · v24.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,40 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## Phase 0 — Complete ✅ (09 May 2026)
+
+| Session | Commit | Key files |
+|---|---|---|
+| PH0-S1 — Firebase Auth | `bb220e0` | firebase.js · useAuth.jsx · supabaseClient.js · Login.jsx · ProtectedRoute.jsx |
+| PH0-S2 — Roles & access | `c89ddac` | useRole.jsx · ProtectedRoute.jsx · Upgrade.jsx · api/get-users.js · api/set-role.js |
+| PH0-S3 — Nav shell | `a28d312` | Nav.jsx · AdvisorModeContext.jsx |
+| PH0-S4 — Home v3 | `fc9a1db` | Home.jsx · migrations/003_promo_messages.sql |
+| API consolidation | `6895c38` | api/amfi.js · api/admin.js |
+| PH0-S5 — Theming | `5543556` | theme.css · useAdvisorTheme.jsx · index.css · Nav/Home/Login/Upgrade CSS vars |
+
+### Phase 0 New Files
+
+| File | Created in |
+|---|---|
+| `src/firebase.js` | PH0-S1 |
+| `src/lib/supabaseClient.js` | PH0-S1 |
+| `src/hooks/useAuth.jsx` | PH0-S1 (rewrite) |
+| `src/pages/Login.jsx` | PH0-S1 (rewrite) |
+| `src/hooks/useRole.jsx` | PH0-S2 |
+| `src/pages/Upgrade.jsx` | PH0-S2 |
+| `src/context/AdvisorModeContext.jsx` | PH0-S3 |
+| `src/components/Nav.jsx` | PH0-S3 (rewrite) |
+| `src/pages/Home.jsx` | PH0-S4 (rewrite) |
+| `migrations/002_advisor_profiles.sql` | PH0-S2 |
+| `migrations/003_promo_messages.sql` | PH0-S4 |
+| `api/amfi.js` | API fix |
+| `api/admin.js` | API fix |
+| `src/theme.css` | PH0-S5 |
+| `src/index.css` | PH0-S5 |
+| `src/hooks/useAdvisorTheme.jsx` | PH0-S5 |
 
 ---
 
@@ -291,11 +325,35 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ## Immediate Next Session Priorities
 
-1. **PL-12** — F1 Health Check (8-rule engine with confidence scoring — time horizon to liquidity stress)
-2. **Fix User Manager** — "Loading users" bug — pass `accessToken` to `sbFetch`
-3. **Deploy to Vercel staging** — test `set-user-tier` + `set-flag` APIs
-4. **Add `VITE_SUPABASE_ANON_KEY`** to Vercel environment variables
-5. **NAV Backfill** — resume from 2018-01-01 when Supabase is stable (see `backfill_nav_history.py`)
+| Priority | Task |
+|---|---|
+| P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
+| P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
+| P0 | Confirm Vercel deployment `5543556` is live and green at fundlens-six.vercel.app |
+| P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
+| P1 | **PL-12** — F1 Health Check (8-rule engine with confidence scoring) |
+| P2 | Resume NAV backfill — nights/weekends only; monitor Supabase IO budget daily |
+
+---
+
+## Pending Manual Actions
+
+| # | Action | Blocked by | Notes |
+|---|---|---|---|
+| 1 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod | Supabase IO timeout | advisor_profiles table + admin RLS policies |
+| 2 | Run `migrations/003_promo_messages.sql` in fundlens-prod | Supabase IO timeout | promo_messages table + public read RLS; populate with 3 STATIC_PROMOS rows |
+| 3 | Vercel redeploy — promote commit `5543556` to Production | Manual trigger | Required for theme.css / useAdvisorTheme to go live |
+
+---
+
+## Resource Management Rules
+
+| Rule | Detail |
+|---|---|
+| NAV backfill | Run only outside working hours (nights/weekends). Monitor IO budget at Supabase dashboard before starting. |
+| Serverless function count | Always check `api/` count before adding functions — Vercel Hobby hard limit is 12. Currently at 5. |
+| Supabase migrations | Run immediately after the session that writes them — never batch across sessions. |
+| Supabase IO budget | Check dashboard before any large data operation. Backfill is the primary consumer. |
 
 ---
 
