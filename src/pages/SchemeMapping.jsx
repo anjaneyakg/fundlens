@@ -403,12 +403,12 @@ export default function SchemeMapping() {
         setHoldings(holdingsList)
 
         // 2. AMFI scheme master
-        const amfiRes  = await fetch('/api/amfi-schemes-list')
+        const amfiRes  = await fetch('/api/amfi?action=schemes-list')
         const amfiData = await amfiRes.json()
         setAmfiMap(amfiData.byAmc || {})
 
         // 3. Existing mapping from GitHub
-        const mapRes = await fetch('/api/scheme-code-map')
+        const mapRes = await fetch('/api/amfi?action=scheme-code-map')
         if (mapRes.ok) {
           const mapData = await mapRes.json()
           setMapping(mapData || {})
@@ -479,7 +479,7 @@ export default function SchemeMapping() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/scheme-code-map', {
+      const res = await fetch('/api/amfi?action=scheme-code-map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mapping })

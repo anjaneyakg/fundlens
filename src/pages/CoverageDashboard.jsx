@@ -2,7 +2,7 @@
 // Admin: Portfolio Coverage Dashboard
 //
 // Data sources:
-//   Y (expected schemes) — /api/amfi-schemes (Vercel route → AMFI scheme master, server-side)
+//   Y (expected schemes) — /api/amfi?action=schemes (Vercel route → AMFI scheme master, server-side)
 //   X (uploaded schemes) — holdings_latest.csv from FundInsight GitHub
 //
 // No CORS issues — AMFI is fetched server-side via the API route.
@@ -65,7 +65,7 @@ export default function CoverageDashboard() {
     setLoading(true);
     setError("");
     Promise.all([
-      fetch("/api/amfi-schemes")
+      fetch("/api/amfi?action=schemes")
         .then(r => r.json())
         .then(d => { if (!d.ok) throw new Error(d.error || "AMFI fetch failed"); return d.amcs; }),
       fetch(HOLDINGS_URL).then(r => r.text()).then(parseCsv),

@@ -1,7 +1,7 @@
 // src/pages/admin/UserManager.jsx
 // Admin page: /admin/users
-// Lists all users from public.users via /api/get-users (service_role, admin-verified).
-// Role changes call /api/set-role.
+// Lists all users from public.users via /api/admin?action=get-users (service_role, admin-verified).
+// Role changes call /api/admin?action=set-role.
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -54,7 +54,7 @@ export default function UserManager() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/get-users?page=${pageNum}`, {
+      const res = await fetch(`/api/admin?action=get-users&page=${pageNum}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -82,7 +82,7 @@ export default function UserManager() {
     if (!token) return;
     setSaving(userId);
     try {
-      const res = await fetch('/api/set-role', {
+      const res = await fetch('/api/admin?action=set-role', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

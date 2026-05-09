@@ -178,7 +178,7 @@ export default function AmfiMarketCapUpload() {
   // Load history on mount + after successful upload
   useEffect(() => {
     setHistoryLoading(true);
-    fetch('/api/amfi-marketcap')
+    fetch('/api/amfi?action=marketcap')
       .then(r => r.json())
       .then(d => { setHistory(d.history ?? []); setHistoryLoading(false); })
       .catch(() => setHistoryLoading(false));
@@ -235,7 +235,7 @@ export default function AmfiMarketCapUpload() {
 
     try {
       // Step 1 — send parsed rows to API (no base64, no xlsx)
-      const res = await fetch('/api/amfi-marketcap', {
+      const res = await fetch('/api/amfi?action=marketcap', {
         method:  'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({

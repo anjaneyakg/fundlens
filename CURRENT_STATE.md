@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.6
+**Last updated:** 09 May 2026 · v23.7
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,26 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## API Consolidation ✅ (09 May 2026)
+
+Consolidated 14 Vercel serverless functions → 5 to stay under Hobby plan 12-function limit.
+
+| New file | Actions | Replaces |
+|---|---|---|
+| `api/amfi.js` | `?action=marketcap`, `schemes`, `schemes-list`, `scheme-code-map` | 4 files |
+| `api/admin.js` | `?action=get-users`, `set-role`, `set-flag`, `set-user-tier` | 4 files |
+| `api/holdings-csv.js` | — | kept as-is |
+| `api/market-gauge.js` | — | kept as-is (wildcard CORS intentional) |
+| `api/v1/health.js` | — | kept as-is |
+
+Deleted: `amfi-marketcap.js`, `amfi-schemes.js`, `amfi-schemes-list.js`, `scheme-code-map.js`, `get-users.js`, `set-role.js`, `admin/set-flag.js`, `admin/set-user-tier.js`, `v1/auth/login.js`, `v1/auth/logout.js`, `v1/auth/signup.js` (auth/* confirmed dead — Firebase replaced Supabase auth in PH0-S1).
+
+Frontend callers updated: `CoverageDashboard.jsx`, `ToolAccessMatrix.jsx`, `AmfiMarketCapUpload.jsx`, `UserManager.jsx`, `SchemeMapping.jsx`. Build: 942 modules, no new errors.
+
+CORS fix: `amfi-schemes.js` used wildcard `*` — corrected to `fundlens-six.vercel.app` in `api/amfi.js`.
 
 ---
 

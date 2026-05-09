@@ -1,7 +1,7 @@
 // src/pages/admin/ToolAccessMatrix.jsx
 // Admin page: /admin/tool-access
 // Visual grid: 52 tools × 4 tiers. Each cell is a toggle.
-// Reads from feature_flags. Writes via serverless /api/admin/set-flag.
+// Reads from feature_flags. Writes via serverless /api/admin?action=set-flag.
 
 import { useState, useEffect } from 'react';
 
@@ -146,7 +146,7 @@ export default function ToolAccessMatrix() {
     setFlags(prev => ({ ...prev, [slot]: { ...current, enabled: newVal } }));
 
     try {
-      const res = await fetch('/api/admin/set-flag', {
+      const res = await fetch('/api/admin?action=set-flag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ flagId: current.id, enabled: newVal }),
