@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.2
+**Last updated:** 09 May 2026 · v23.3
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -14,19 +14,66 @@
 
 ---
 
-## Access Control System — Live (26 Apr 2026)
+## PH0-S1 — Firebase Auth + Supabase JWT Wiring ✅ (09 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/firebase.js` — Firebase app init, env-var only | ✅ Done |
+| `src/lib/supabaseClient.js` — `createSupabaseClient(token)` + guest `supabase` export | ✅ Done |
+| `src/hooks/useAuth.jsx` — full rewrite: Firebase onAuthStateChanged, JWT in memory only | ✅ Done |
+| `src/pages/Login.jsx` — Google Sign-In primary, email/password secondary, #1D9E75 | ✅ Done |
+| `src/components/ProtectedRoute.jsx` — simplified to Firebase user check | ✅ Done |
+| `src/App.jsx` — `/portfolio` + `/admin` wrapped in ProtectedRoute | ✅ Done |
+| `npm install firebase` — firebase ^12.13.0 added | ✅ Done |
+| Vite build — 899 modules, no new errors | ✅ Done |
+| Supabase SQL: users table + RLS policies | ⚠ Run manually in Supabase SQL editor (see SQL below) |
+| Vercel env vars: VITE_FIREBASE_* (6 vars) | ⚠ Add to Vercel dashboard manually |
+
+### Supabase SQL — Run Once in fundlens-prod SQL editor
+
+```sql
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  email TEXT,
+  role TEXT NOT NULL DEFAULT 'individual',
+  plan_tier TEXT NOT NULL DEFAULT 'free',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users_read_own" ON public.users
+  FOR SELECT USING (auth.jwt() ->> 'sub' = id);
+
+CREATE POLICY "users_insert_own" ON public.users
+  FOR INSERT WITH CHECK (auth.jwt() ->> 'sub' = id);
+
+CREATE POLICY "users_update_own" ON public.users
+  FOR UPDATE USING (auth.jwt() ->> 'sub' = id);
+```
+
+### .env status
+All VITE_FIREBASE_* and VITE_SUPABASE_* variables confirmed present in local .env.
+Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → Environment Variables.
+
+**Notes for PH0-S2:**
+- UserManager.jsx still queries old `user_roles` + `tiers` tables — will fail gracefully. Rewrite in PH0-S2.
+- `accessToken` is aliased to `token` in new useAuth context so UserManager doesn't hard-crash.
+- ProtectedRoute simplified to auth-only check; tier/role-based gates go in PH0-S2.
+
+---
+
+## Access Control System — Superseded by Firebase Auth (PH0-S1)
 
 | Item | Status |
 |---|---|
 | Migration 07: RTA Portfolio Module tables (staging + prod) | ✅ Done |
 | Migration 08: Tiers, roles, feature_flags seeded (staging + prod) | ✅ Done |
-| `useAuth.jsx` + `ProtectedRoute.jsx` | ✅ Live |
-| Login page at `/login` | ✅ Live |
-| Admin: User Manager at `/admin/users` | ✅ Live |
+| Admin: User Manager at `/admin/users` | ✅ Live (queries old schema — rewrite in PH0-S2) |
 | Admin: Tool Access Matrix at `/admin/tool-access` | ✅ Live |
 | `.gitignore` created (node_modules, dist, .env excluded) | ✅ Done |
 
-**Last commit:** 68705d1
+**Last commit before PH0-S1:** 68705d1
 
 ---
 

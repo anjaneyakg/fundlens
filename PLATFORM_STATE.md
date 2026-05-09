@@ -36,7 +36,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 
 | Session | Deliverable | Status |
 |---|---|---|
-| PH0-S1 | Firebase Auth setup — project, SDK, OTP, users table, Supabase JWT config | ⏳ Pending |
+| PH0-S1 | Firebase Auth setup — project, SDK, OTP, users table, Supabase JWT config | ✅ Done — 09 May 2026 |
 | PH0-S2 | User roles & access control — roles table, Guest/Individual/Advisor claims, Admin UI | ⏳ Pending |
 | PH0-S3 | New navigation shell — Plan/Research/Track/Save & Invest/Promote, sidebar, vercel.json | ⏳ Pending |
 | PH0-S4 | Homepage redesign — v3 design, carousel, sticky auth+assistant buttons, Investor/Advisor toggle | ⏳ Pending |
@@ -50,7 +50,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH1-S2 | Fix AMC parsers (Union, Zerodha, Shriram, Mahindra) | ⏳ Pending |
 | PH1-S3 | Canara Robeco + stragglers | ⏳ Pending |
 | PH1-S4 | Pipeline Cell 1 rebuild (today-only NAV fetch) | ⏳ Pending |
-| PH1-S5 | Security S1+S2+S3 — GIST_PAT renewal ⚠ DEADLINE ~20 May | ⚠ Urgent |
+| PH1-S5 | Security S1+S2+S3 — GIST_PAT renewal ⚠ DEADLINE ~20 May | ✅ Done — 09 May 2026 |
 
 ### Phase 2 — PortfolioLens Core (Weeks 3–7)
 

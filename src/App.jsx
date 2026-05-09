@@ -84,7 +84,7 @@ export default function App() {
         <Route path="/embed/market-gauge"   element={<MarketGaugeEmbed />} />
         <Route path="/login"              element={<Login />} />
 
-        <Route path="/portfolio" element={<PortfolioLensLayout />}>
+        <Route path="/portfolio" element={<ProtectedRoute><PortfolioLensLayout /></ProtectedRoute>}>
           <Route index element={<PortfolioLensIndex />} />
           <Route path="e1" element={<E1Dashboard />} />
           <Route path="e2" element={<E2Overview />} />
@@ -102,7 +102,7 @@ export default function App() {
           <Route path="f6" element={<F6DataManager />} />
         </Route>
 
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route path="portfolio-upload"    element={<PortfolioUpload />} />
           <Route path="coverage"            element={<CoverageDashboard />} />
           <Route path="scheme-mapping"      element={<SchemeMapping />} />
