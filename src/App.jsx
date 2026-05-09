@@ -77,6 +77,7 @@ export default function App() {
         <Route path="/loan-calculator"       element={<LoanCalc />} />
         <Route path="/prepay-vs-invest"      element={<PrepayVsInvest />} />
         <Route path="/stp-calculator"        element={<STPCalculator />} />
+        <Route path="/stp-actual"            element={<STPActual />} />
         <Route path="/scheme-basket"         element={<SchemeBasket />} />
         <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
         <Route path="/rd-calculator"         element={<RDCalculator />} />
@@ -91,8 +92,6 @@ export default function App() {
           element={<ProtectedRoute requiredRole="individual"><Schemes /></ProtectedRoute>} />
         <Route path="/category-leaderboard"
           element={<ProtectedRoute requiredRole="individual"><CategoryLeaderboard /></ProtectedRoute>} />
-        <Route path="/stp-actual"
-          element={<ProtectedRoute requiredRole="individual"><STPActual /></ProtectedRoute>} />
         <Route path="/compare-schemes"
           element={<ProtectedRoute requiredRole="individual"><CompareSchemes /></ProtectedRoute>} />
 

@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.4
+**Last updated:** 09 May 2026 · v23.5
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,38 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## PH0-S3 — New Navigation Shell ✅ (09 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/components/Nav.jsx` — full rewrite: single-row sticky, Plan/Research/Track/Save & Invest/Promote tabs | ✅ Done |
+| `src/App.jsx` — `/stp-actual` moved from individual-protected to public (group A = Plan) | ✅ Done |
+| Vite build — 901 modules, no new errors | ✅ Done |
+
+### Nav features delivered
+
+- **Plan tab** — public mega dropdown (2-col grid), groups A/B/C/D/E
+- **Research tab** — individual-required dropdown (1-col), groups Z/X; lock icon + redirect to /login for guests
+- **Track tab** — individual-required link to /portfolio; same lock/redirect for guests
+- **Save & Invest** — disabled pill, "Soon" badge, no dropdown
+- **Promote tab** — hidden unless `advisorMode && isAdvisor`
+- **Direct/Regular universe pill** — preserved from old nav, localStorage + CustomEvent
+- **Investor/Advisor toggle** — pill with icons; only shown to advisor-role users; controls Promote visibility
+- **User menu** — avatar initials + sign out dropdown when logged in; Sign in / Get started buttons when guest
+- **Mobile drawer** — hamburger at ≤768px; slide-in from right with all nav sections + universe pill + auth button
+
+### Route protection map (as of PH0-S3)
+
+| Route | Protection |
+|---|---|
+| `/`, `/login`, `/upgrade` | Public |
+| Plan tools (all calculators + `/stp-actual`) | Public |
+| `/schemes`, `/category-leaderboard`, `/compare-schemes` | `requiredRole="individual"` |
+| `/portfolio/*` | `requiredRole="individual"` |
+| `/admin/*` | `requiredRole="admin"` |
 
 ---
 
