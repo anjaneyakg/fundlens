@@ -57,7 +57,7 @@ export default function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f0fdf8 0%, #f8fafc 60%, #f0f9ff 100%)',
+      background: 'var(--color-bg)',
       fontFamily: 'DM Sans, sans-serif',
       padding: '2rem 1rem',
     }}>
@@ -66,19 +66,19 @@ export default function Login() {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <Link to="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontSize: 28, fontWeight: 700, color: '#1D9E75' }}>
-              Fund<span style={{ color: '#0f172a' }}>Lens</span>
+            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-primary)' }}>
+              Fund<span style={{ color: 'var(--color-text-primary)' }}>Lens</span>
             </span>
           </Link>
-          <p style={{ margin: '8px 0 0', fontSize: 14, color: '#64748b' }}>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--color-text-secondary)' }}>
             Institutional-grade mutual fund analytics
           </p>
         </div>
 
         {/* Card */}
         <div style={{
-          background: '#fff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--color-surface-raised)',
+          border: '1px solid var(--color-border)',
           borderRadius: 20,
           boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
           overflow: 'hidden',
@@ -90,7 +90,7 @@ export default function Login() {
               <div style={{
                 background: '#fff5f5', border: '1px solid #fca5a5',
                 borderRadius: 10, padding: '12px 14px',
-                fontSize: 13, color: '#dc2626', marginBottom: 20,
+                fontSize: 13, color: 'var(--color-error)', marginBottom: 20,
               }}>
                 {error}
               </div>
@@ -101,7 +101,7 @@ export default function Login() {
               style={{
                 width: '100%', height: 52,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-                background: gLoading ? '#b7e4d3' : '#1D9E75',
+                background: gLoading ? 'rgba(29,158,117,0.35)' : 'var(--color-primary)',
                 color: '#fff',
                 border: 'none', borderRadius: 12,
                 fontSize: 16, fontWeight: 600,
@@ -114,24 +114,24 @@ export default function Login() {
               {!gLoading && <GoogleIcon />}
               {gLoading ? 'Signing in…' : 'Continue with Google'}
             </button>
-            <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
+            <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center' }}>
               New users — your account is created automatically on first sign-in.
             </p>
           </div>
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 32px 0' }}>
-            <div style={{ flex: 1, height: 1, background: '#f1f5f9' }} />
-            <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
               or sign in with email
             </span>
-            <div style={{ flex: 1, height: 1, background: '#f1f5f9' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
           </div>
 
           {/* Email + Password — secondary */}
           <form onSubmit={handleEmail} style={{ padding: '20px 32px 32px' }}>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
                 Email
               </label>
               <input
@@ -143,14 +143,15 @@ export default function Login() {
                 style={{
                   width: '100%', height: 42, padding: '0 14px',
                   boxSizing: 'border-box',
-                  border: '1px solid #e2e8f0', borderRadius: 8,
+                  border: '1px solid var(--color-border)', borderRadius: 8,
                   fontSize: 14, fontFamily: 'DM Sans, sans-serif',
-                  outline: 'none', color: '#0f172a',
+                  outline: 'none', color: 'var(--color-text-primary)',
+                  background: 'var(--color-bg)',
                 }}
               />
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
                 Password
               </label>
               <input
@@ -162,9 +163,10 @@ export default function Login() {
                 style={{
                   width: '100%', height: 42, padding: '0 14px',
                   boxSizing: 'border-box',
-                  border: '1px solid #e2e8f0', borderRadius: 8,
+                  border: '1px solid var(--color-border)', borderRadius: 8,
                   fontSize: 14, fontFamily: 'DM Sans, sans-serif',
-                  outline: 'none', color: '#0f172a',
+                  outline: 'none', color: 'var(--color-text-primary)',
+                  background: 'var(--color-bg)',
                 }}
               />
             </div>
@@ -173,9 +175,9 @@ export default function Login() {
               disabled={loading}
               style={{
                 width: '100%', height: 44,
-                background: loading ? '#f8fafc' : '#f8fafc',
-                color: loading ? '#94a3b8' : '#1D9E75',
-                border: '1.5px solid ' + (loading ? '#e2e8f0' : '#1D9E75'),
+                background: 'var(--color-surface)',
+                color: loading ? 'var(--color-text-muted)' : 'var(--color-primary)',
+                border: loading ? '1.5px solid var(--color-border)' : '1.5px solid var(--color-primary)',
                 borderRadius: 10,
                 fontSize: 15, fontWeight: 600,
                 fontFamily: 'DM Sans, sans-serif',
@@ -188,11 +190,11 @@ export default function Login() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
           By signing in you agree to our{' '}
-          <Link to="/terms" style={{ color: '#1D9E75', textDecoration: 'none' }}>Terms</Link>{' '}
+          <Link to="/terms" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Terms</Link>{' '}
           and{' '}
-          <Link to="/privacy" style={{ color: '#1D9E75', textDecoration: 'none' }}>Privacy Policy</Link>.
+          <Link to="/privacy" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Privacy Policy</Link>.
         </p>
       </div>
     </div>

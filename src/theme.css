@@ -1,0 +1,61 @@
+/* ─── FundLens Design Tokens ──────────────────────────────────────────────────
+   Single source of truth for all CSS custom properties.
+   Imported once in main.jsx. Never import in individual components.
+   White-label overrides: inject <style id="advisor-theme"> via useAdvisorTheme.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand */
+  --color-primary:       #1D9E75;
+  --color-primary-dark:  #167a5c;
+  --color-primary-light: #e8f7f2;
+  --color-advisor-ria:   #1565C0;
+
+  /* Surfaces */
+  --color-bg:             #ffffff;
+  --color-surface:        #f8f9fa;
+  --color-surface-raised: #ffffff;
+  --color-border:         #e5e7eb;
+
+  /* Text */
+  --color-text-primary:   #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted:     #9ca3af;
+
+  /* Semantic */
+  --color-success: #1D9E75;
+  --color-warning: #f59e0b;
+  --color-error:   #ef4444;
+
+  /* Typography */
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               Oxygen, Ubuntu, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Shadows */
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.08);
+  --shadow-card:  0 4px 16px rgba(0,0,0,0.08);
+  --shadow-modal: 0 20px 60px rgba(0,0,0,0.15);
+}
+
+/* Dark mode — system default only. No JS toggle. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg:             #0f172a;
+    --color-surface:        #1e293b;
+    --color-surface-raised: #263347;
+    --color-border:         #334155;
+    --color-text-primary:   #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted:     #64748b;
+    --shadow-card:          0 4px 16px rgba(0,0,0,0.3);
+  }
+}
+
+/* TODO PH4: audit remaining tool pages for hardcoded colours */

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useRole } from '../hooks/useRole'
 import useWindowWidth from '../hooks/useWindowWidth'
 import { useAdvisorMode } from '../context/AdvisorModeContext'
+import { useAdvisorTheme } from '../hooks/useAdvisorTheme'
 
 // ── PLAN UNIVERSE (kept for tool backward-compat) ─────────────────────────────
 export const PLAN_KEY = 'fundlens_plan_universe'
@@ -103,7 +104,7 @@ const navStyle = `
     position: sticky; top: 0; z-index: 200;
     background: rgba(255,255,255,0.96);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid #e8f5f0;
+    border-bottom: 1px solid var(--color-primary-light);
     box-shadow: 0 2px 16px rgba(29,158,117,0.06);
     width: 100%; box-sizing: border-box;
   }
@@ -119,16 +120,19 @@ const navStyle = `
   }
   .fl-logo-mark {
     width: 30px; height: 30px; border-radius: 8px;
-    background: linear-gradient(135deg, #1D9E75, #0f7a5a);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 3px 10px rgba(29,158,117,0.3);
     font-family: 'DM Sans'; font-size: 15px; font-weight: 700; color: #fff;
   }
   .fl-logo-text {
     font-family: 'DM Sans'; font-size: 17px; font-weight: 700;
-    color: #0f172a; letter-spacing: -0.3px;
+    color: var(--color-text-primary); letter-spacing: -0.3px;
   }
-  .fl-logo-text span { color: #1D9E75; }
+  .fl-logo-text span { color: var(--color-primary); }
+  .fl-logo-img {
+    max-height: 32px; max-width: 120px; object-fit: contain; display: block;
+  }
 
   .fl-tabs {
     display: flex; align-items: center; flex: 1; gap: 2px;
@@ -142,15 +146,15 @@ const navStyle = `
     display: flex; align-items: center; gap: 5px;
     padding: 0 14px; height: 56px;
     font-family: 'DM Sans'; font-size: 14px; font-weight: 500;
-    color: #475569; background: none; border: none;
+    color: var(--color-text-secondary); background: none; border: none;
     border-bottom: 2px solid transparent;
     cursor: pointer; transition: all 0.15s; white-space: nowrap;
     text-decoration: none;
   }
-  .fl-tab-btn:hover { color: #1D9E75; border-bottom-color: rgba(29,158,117,0.3); }
-  .fl-tab-btn.tab-active { color: #1D9E75; border-bottom-color: #1D9E75; font-weight: 600; }
+  .fl-tab-btn:hover { color: var(--color-primary); border-bottom-color: rgba(29,158,117,0.3); }
+  .fl-tab-btn.tab-active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
   .fl-tab-btn.tab-disabled {
-    color: #94a3b8; cursor: default; pointer-events: none;
+    color: var(--color-text-muted); cursor: default; pointer-events: none;
   }
 
   .fl-chevron {
@@ -164,14 +168,14 @@ const navStyle = `
   .fl-soon-pill {
     font-family: 'DM Sans'; font-size: 9px; font-weight: 600;
     letter-spacing: 0.04em; text-transform: uppercase;
-    background: #f1f5f9; color: #94a3b8;
-    border: 1px solid #e2e8f0; border-radius: 10px;
+    background: var(--color-surface); color: var(--color-text-muted);
+    border: 1px solid var(--color-border); border-radius: 10px;
     padding: 2px 7px; margin-left: 6px;
   }
 
   .fl-dropdown {
     position: absolute; top: calc(100% + 2px); left: 0; z-index: 300;
-    background: #fff;
+    background: var(--color-bg);
     border: 1px solid rgba(29,158,117,0.12); border-radius: 14px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.1), 0 2px 8px rgba(29,158,117,0.08);
     padding: 12px 0 10px;
@@ -189,16 +193,16 @@ const navStyle = `
   .dd-group-hdr {
     display: flex; align-items: center; gap: 7px;
     padding: 4px 4px 8px; margin-bottom: 2px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--color-surface);
   }
   .dd-group-id {
     font-family: 'DM Mono'; font-size: 9px; letter-spacing: 1px;
-    background: rgba(29,158,117,0.08); color: #1D9E75;
+    background: rgba(29,158,117,0.08); color: var(--color-primary);
     padding: 2px 7px; border-radius: 4px;
   }
   .dd-group-label {
     font-family: 'DM Sans'; font-size: 11px; font-weight: 600;
-    color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em;
   }
 
   .dd-item {
@@ -211,39 +215,39 @@ const navStyle = `
   .dd-item.dd-soon { opacity: 0.38; cursor: default; pointer-events: none; }
 
   .dd-item-code {
-    font-family: 'DM Mono'; font-size: 9px; color: #94a3b8;
+    font-family: 'DM Mono'; font-size: 9px; color: var(--color-text-muted);
     min-width: 20px; flex-shrink: 0;
   }
-  .dd-item.dd-active .dd-item-code { color: #1D9E75; }
+  .dd-item.dd-active .dd-item-code { color: var(--color-primary); }
   .dd-item-name {
-    font-family: 'DM Sans'; font-size: 13px; color: #1e293b; flex: 1;
+    font-family: 'DM Sans'; font-size: 13px; color: var(--color-text-primary); flex: 1;
   }
-  .dd-item.dd-active .dd-item-name { color: #1D9E75; font-weight: 600; }
+  .dd-item.dd-active .dd-item-name { color: var(--color-primary); font-weight: 600; }
 
-  .dd-more { font-family: 'DM Sans'; font-size: 11px; color: #94a3b8; padding: 4px 10px; }
+  .dd-more { font-family: 'DM Sans'; font-size: 11px; color: var(--color-text-muted); padding: 4px 10px; }
 
   .fl-right {
     display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 16px;
   }
 
   .fl-universe-pill, .fl-ia-pill {
-    display: flex; background: #f8fafc; border: 1px solid #e2e8f0;
+    display: flex; background: var(--color-surface); border: 1px solid var(--color-border);
     border-radius: 8px; overflow: hidden;
   }
   .fl-pill-btn {
     padding: 5px 11px; border: none; cursor: pointer;
     font-family: 'DM Sans'; font-size: 11px; font-weight: 500;
-    background: transparent; color: #94a3b8; transition: all 0.15s;
+    background: transparent; color: var(--color-text-muted); transition: all 0.15s;
     white-space: nowrap;
   }
-  .fl-pill-btn.active-direct  { background: #1D9E75; color: #fff; }
-  .fl-pill-btn.active-regular { background: #1D9E75; color: #fff; }
-  .fl-pill-btn.active-investor { background: #1D9E75; color: #fff; }
-  .fl-pill-btn.active-advisor  { background: #0f7a5a; color: #fff; }
+  .fl-pill-btn.active-direct  { background: var(--color-primary); color: #fff; }
+  .fl-pill-btn.active-regular { background: var(--color-primary); color: #fff; }
+  .fl-pill-btn.active-investor { background: var(--color-primary); color: #fff; }
+  .fl-pill-btn.active-advisor  { background: var(--color-primary-dark); color: #fff; }
 
   .fl-signin-btn {
-    padding: 7px 16px; border: 1.5px solid #1D9E75; border-radius: 8px;
-    background: transparent; color: #1D9E75;
+    padding: 7px 16px; border: 1.5px solid var(--color-primary); border-radius: 8px;
+    background: transparent; color: var(--color-primary);
     font-family: 'DM Sans'; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: all 0.15s; white-space: nowrap;
     text-decoration: none; display: inline-flex; align-items: center;
@@ -252,43 +256,43 @@ const navStyle = `
 
   .fl-getstarted-btn {
     padding: 7px 16px; border: none; border-radius: 8px;
-    background: #1D9E75; color: #fff;
+    background: var(--color-primary); color: #fff;
     font-family: 'DM Sans'; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: all 0.15s; white-space: nowrap;
     text-decoration: none; display: inline-flex; align-items: center;
     box-shadow: 0 2px 8px rgba(29,158,117,0.25);
   }
-  .fl-getstarted-btn:hover { background: #0f7a5a; }
+  .fl-getstarted-btn:hover { background: var(--color-primary-dark); }
 
   .fl-user-btn {
     display: flex; align-items: center; gap: 8px;
     padding: 5px 12px 5px 5px;
-    border: 1px solid #e2e8f0; border-radius: 10px;
-    background: #fff; cursor: pointer; transition: all 0.15s;
-    font-family: 'DM Sans'; font-size: 13px; color: #374151;
+    border: 1px solid var(--color-border); border-radius: 10px;
+    background: var(--color-bg); cursor: pointer; transition: all 0.15s;
+    font-family: 'DM Sans'; font-size: 13px; color: var(--color-text-primary);
   }
-  .fl-user-btn:hover { border-color: #1D9E75; }
+  .fl-user-btn:hover { border-color: var(--color-primary); }
   .fl-avatar {
     width: 28px; height: 28px; border-radius: 8px;
-    background: linear-gradient(135deg, #d1fae5, #1D9E75);
+    background: linear-gradient(135deg, #d1fae5, var(--color-primary));
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700; color: #fff;
     flex-shrink: 0;
   }
   .fl-user-dropdown {
     position: absolute; top: calc(100% + 8px); right: 0;
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1); padding: 6px;
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 12px;
+    box-shadow: var(--shadow-card); padding: 6px;
     min-width: 200px; z-index: 300;
   }
   .fl-user-email {
-    font-family: 'DM Sans'; font-size: 11px; color: #94a3b8;
-    padding: 6px 10px 10px; border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+    font-family: 'DM Sans'; font-size: 11px; color: var(--color-text-muted);
+    padding: 6px 10px 10px; border-bottom: 1px solid var(--color-surface); margin-bottom: 4px;
   }
   .fl-signout-btn {
     width: 100%; text-align: left; padding: 8px 10px;
     background: none; border: none; border-radius: 8px;
-    font-family: 'DM Sans'; font-size: 13px; color: #dc2626;
+    font-family: 'DM Sans'; font-size: 13px; color: var(--color-error);
     cursor: pointer; transition: background 0.1s;
   }
   .fl-signout-btn:hover { background: #fff5f5; }
@@ -297,10 +301,10 @@ const navStyle = `
     display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 5px;
     width: 38px; height: 38px; border-radius: 9px;
-    border: 1px solid #e2e8f0; background: #fff;
+    border: 1px solid var(--color-border); background: var(--color-bg);
     cursor: pointer; flex-shrink: 0;
   }
-  .fl-hamburger-line { width: 16px; height: 2px; background: #64748b; border-radius: 1px; }
+  .fl-hamburger-line { width: 16px; height: 2px; background: var(--color-text-secondary); border-radius: 1px; }
 
   @media (max-width: 768px) {
     .fl-main-row { padding: 0 1rem; height: 52px; }
@@ -318,7 +322,7 @@ const navStyle = `
   .fl-drawer {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 401;
     width: min(320px, 85vw);
-    background: #fff;
+    background: var(--color-bg);
     box-shadow: -4px 0 32px rgba(0,0,0,0.12);
     display: flex; flex-direction: column;
     overflow: hidden;
@@ -327,47 +331,52 @@ const navStyle = `
 
   .fl-drawer-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px; border-bottom: 1px solid #f1f5f9; flex-shrink: 0;
+    padding: 16px; border-bottom: 1px solid var(--color-surface); flex-shrink: 0;
   }
-  .fl-drawer-logo { font-family: 'DM Sans'; font-size: 17px; font-weight: 700; color: #0f172a; }
-  .fl-drawer-logo span { color: #1D9E75; }
+  .fl-drawer-logo { font-family: 'DM Sans'; font-size: 17px; font-weight: 700; color: var(--color-text-primary); }
+  .fl-drawer-logo span { color: var(--color-primary); }
   .fl-drawer-close {
     width: 32px; height: 32px; border-radius: 8px;
-    border: 1px solid #e2e8f0; background: #fff;
+    border: 1px solid var(--color-border); background: var(--color-bg);
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: #64748b; font-size: 14px;
+    cursor: pointer; color: var(--color-text-secondary); font-size: 14px;
   }
 
   .fl-drawer-body { flex: 1; overflow-y: auto; padding: 8px 0; }
 
-  .fl-drawer-section { border-bottom: 1px solid #f8fafc; }
+  .fl-drawer-section { border-bottom: 1px solid var(--color-surface); }
   .fl-drawer-tab {
     display: flex; align-items: center; justify-content: space-between;
     width: 100%; padding: 13px 16px;
     background: none; border: none; cursor: pointer;
-    font-family: 'DM Sans'; font-size: 14px; font-weight: 600; color: #0f172a;
+    font-family: 'DM Sans'; font-size: 14px; font-weight: 600; color: var(--color-text-primary);
     text-align: left;
   }
-  .fl-drawer-tab:active { background: #f8fafc; }
-  .fl-drawer-tab.locked-tab { color: #64748b; }
+  .fl-drawer-tab:active { background: var(--color-surface); }
+  .fl-drawer-tab.locked-tab { color: var(--color-text-secondary); }
   .fl-drawer-tab-right { display: flex; align-items: center; gap: 6px; }
 
   .fl-drawer-item {
     display: block; padding: 9px 16px 9px 32px;
-    font-family: 'DM Sans'; font-size: 13px; color: #374151;
+    font-family: 'DM Sans'; font-size: 13px; color: var(--color-text-primary);
     text-decoration: none; border-left: 2px solid transparent;
     transition: all 0.1s;
   }
-  .fl-drawer-item:hover { color: #1D9E75; background: rgba(29,158,117,0.04); border-left-color: rgba(29,158,117,0.3); }
-  .fl-drawer-item.drawer-active { color: #1D9E75; font-weight: 600; border-left-color: #1D9E75; }
-  .fl-drawer-item-soon { color: #94a3b8; font-size: 12px; }
+  .fl-drawer-item:hover { color: var(--color-primary); background: rgba(29,158,117,0.04); border-left-color: rgba(29,158,117,0.3); }
+  .fl-drawer-item.drawer-active { color: var(--color-primary); font-weight: 600; border-left-color: var(--color-primary); }
+  .fl-drawer-item-soon { color: var(--color-text-muted); font-size: 12px; }
 
   .fl-drawer-footer {
-    padding: 12px 16px; border-top: 1px solid #f1f5f9; flex-shrink: 0;
+    padding: 12px 16px; border-top: 1px solid var(--color-surface); flex-shrink: 0;
     display: flex; flex-direction: column; gap: 8px;
   }
   .fl-drawer-universe { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .fl-drawer-universe-label { font-family: 'DM Sans'; font-size: 11px; color: #94a3b8; flex: 1; }
+  .fl-drawer-universe-label { font-family: 'DM Sans'; font-size: 11px; color: var(--color-text-muted); flex: 1; }
+
+  @media (prefers-color-scheme: dark) {
+    .fl-nav-wrap { background: rgba(15,23,42,0.96); }
+    .fl-signout-btn:hover { background: rgba(239,68,68,0.1); }
+  }
 `
 
 // ── HELPER COMPONENTS ─────────────────────────────────────────────────────────
@@ -511,7 +520,7 @@ function UserMenu({ user, onSignOut }) {
         <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {displayName}
         </span>
-        <span style={{ fontSize: 9, color: '#94a3b8', marginLeft: 2 }}>▾</span>
+        <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginLeft: 2 }}>▾</span>
       </button>
       {open && (
         <div className="fl-user-dropdown">
@@ -554,14 +563,14 @@ function DrawerSection({ label, type, isGuest, groupIds, currentPath, onClose })
         className={`fl-drawer-tab${isLocked ? ' locked-tab' : ''}`}
         onClick={handleTap}
         disabled={type === 'disabled'}
-        style={type === 'disabled' ? { color: '#94a3b8', cursor: 'default' } : {}}
+        style={type === 'disabled' ? { color: 'var(--color-text-muted)', cursor: 'default' } : {}}
       >
         <span>{label}</span>
         <span className="fl-drawer-tab-right">
           {isLocked && <LockIcon />}
           {type === 'disabled' && <span className="fl-soon-pill">Soon</span>}
           {isDropdown && !isLocked && (
-            <span style={{ fontSize: 10, color: '#94a3b8' }}>{open ? '▲' : '▼'}</span>
+            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{open ? '▲' : '▼'}</span>
           )}
         </span>
       </button>
@@ -685,10 +694,15 @@ export default function Nav() {
   const { user, signOut } = useAuth()
   const { isGuest, isAdvisor } = useRole()
   const { advisorMode, setAdvisorMode } = useAdvisorMode()
+  const { advisorLogo } = useAdvisorTheme()
   const width      = useWindowWidth()
 
   const [plan, setPlan]             = useState(getStoredPlan)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [logoError, setLogoError]   = useState(false)
+
+  // Reset logo error when advisor logo changes (e.g. on sign-out)
+  useEffect(() => { setLogoError(false) }, [advisorLogo])
 
   const isMobile   = width <= 768
   const currentPath = location.pathname
@@ -716,10 +730,21 @@ export default function Nav() {
       <nav className="fl-nav-wrap">
         <div className="fl-main-row">
 
-          {/* Logo */}
+          {/* Logo — advisor logo when available, FundLens wordmark otherwise */}
           <NavLink to="/" className="fl-logo">
-            <div className="fl-logo-mark">F</div>
-            <div className="fl-logo-text">Fund<span>Lens</span></div>
+            {advisorLogo && !logoError ? (
+              <img
+                src={advisorLogo}
+                alt="FundLens"
+                className="fl-logo-img"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <>
+                <div className="fl-logo-mark">F</div>
+                <div className="fl-logo-text">Fund<span>Lens</span></div>
+              </>
+            )}
           </NavLink>
 
           {/* Centre tabs — hidden on mobile via CSS */}

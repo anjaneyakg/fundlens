@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v23.7
+**Last updated:** 09 May 2026 · v23.8
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -31,6 +31,50 @@ Deleted: `amfi-marketcap.js`, `amfi-schemes.js`, `amfi-schemes-list.js`, `scheme
 Frontend callers updated: `CoverageDashboard.jsx`, `ToolAccessMatrix.jsx`, `AmfiMarketCapUpload.jsx`, `UserManager.jsx`, `SchemeMapping.jsx`. Build: 942 modules, no new errors.
 
 CORS fix: `amfi-schemes.js` used wildcard `*` — corrected to `fundlens-six.vercel.app` in `api/amfi.js`.
+
+---
+
+## PH0-S5 — CSS Theming System ✅ (09 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/theme.css` — single source of truth for all design tokens (brand, surfaces, text, semantic, typography, shape, shadows) | ✅ Done |
+| `src/index.css` — global body reset using theme vars (`--font-body`, `--color-text-primary`, `--color-bg`) | ✅ Done |
+| `src/main.jsx` — import `theme.css` then `index.css` before App (order matters: vars before globals) | ✅ Done |
+| `src/hooks/useAdvisorTheme.jsx` — white-label hook: fetches `advisor_profiles`, injects `<style id="advisor-theme">` with sanitised CSS (only `--color-primary` and `--color-primary-dark` hex values permitted), exposes `advisorLogo` | ✅ Done |
+| `src/components/Nav.jsx` — full rewrite: all hex → CSS vars, advisor logo swap with `onError` fallback to FundLens wordmark, dark mode override | ✅ Done |
+| `src/pages/Home.jsx` — full rewrite: local `--hp-*` CSS var block removed, all vars replaced with direct theme vars, `background: #fff` on cards → `var(--color-surface-raised)` for dark mode | ✅ Done |
+| `src/pages/Login.jsx` — full rewrite: all inline hex → CSS var strings, card bg → `var(--color-surface-raised)`, page bg → `var(--color-bg)` | ✅ Done |
+| `src/pages/Upgrade.jsx` — full rewrite: all inline hex → CSS var strings | ✅ Done |
+| Vite build — 945 modules, no new errors | ✅ Done |
+
+### Theming system design
+
+- **`src/theme.css`** — `:root` block with all design tokens. Dark mode via `@media (prefers-color-scheme: dark)` only — no JS toggle. Never import in components; imported once in `main.jsx`.
+- **White-label override** — `useAdvisorTheme()` hook fetches `advisor_profiles` (Supabase) for signed-in advisors, injects `<style id="advisor-theme">` with regex-sanitised CSS. Only `--color-primary` and `--color-primary-dark` hex values are extracted; all other input is discarded. Tag removed on sign-out or unmount.
+- **Logo swap** — Nav shows advisor `<img>` (`max-height: 32px; max-width: 120px; object-fit: contain`) when `advisorLogo` is set. Falls back to FundLens wordmark on `onError`. State reset via `useEffect` when `advisorLogo` changes.
+- **CSS vars in React inline styles** — works correctly: `style={{ color: 'var(--color-primary)' }}` — browser resolves the custom property.
+- **Dark mode coverage** — `--color-bg`, `--color-surface`, `--color-surface-raised`, `--color-border`, all text vars overridden. Cards use `var(--color-surface-raised)` (not `#fff`) so dark mode renders correctly. `--color-primary`, `--color-primary-light`, `--color-advisor-ria` not overridden in dark (brand colors stay consistent).
+
+### Token mapping (from old Home.jsx local vars)
+
+| Old var | Theme var |
+|---|---|
+| `--hp-accent` | `var(--color-primary)` |
+| `--hp-accent-dk` | `var(--color-primary-dark)` |
+| `--hp-ria` | `var(--color-advisor-ria)` |
+| `--hp-ria-lt` | `#e8f0fe` (inlined — no theme equivalent) |
+| `--hp-text` | `var(--color-text-primary)` |
+| `--hp-text-2` | `var(--color-text-secondary)` |
+| `--hp-text-3` | `var(--color-text-muted)` |
+| `--hp-border` | `var(--color-border)` |
+| `--hp-green-lt` | `var(--color-primary-light)` |
+| `--hp-bg-strip` | `var(--color-surface)` |
+| `--hp-font` | `var(--font-body)` |
+
+### Pending manual actions
+
+None — all code changes complete. Run SQL migrations (001, 002, 003) when Supabase recovers, then populate `advisor_profiles.css_override` and `logo_url` to test white-label path.
 
 ---
 

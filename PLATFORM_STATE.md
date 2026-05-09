@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 08 May 2026
+**Last updated:** 09 May 2026
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -23,7 +23,7 @@ Do not revisit without explicit sign-off.
 | **Data sources** | AMFI direct only. No third-party MF data APIs. |
 | **User roles** | Guest (pre-login, Plan only) \| Individual (Plan + Research + Track) \| Advisor/IFA (all + Promote + multi-client + white-label) |
 | **DPDP** | Files parsed browser-side. PAN/name never sent to server. Folio numbers SHA-256 hashed. Explicit consent gate. Delete-all mandatory. |
-| **Theming** | CSS custom properties file. White-label via per-advisor CSS overrides + logo stored in Supabase. Dark mode: system default with manual toggle. |
+| **Theming** | CSS custom properties in `src/theme.css`. White-label via `useAdvisorTheme` hook — injects `<style id="advisor-theme">` with sanitised hex overrides for `--color-primary` and `--color-primary-dark` only. Advisor logo in `advisor_profiles.logo_url`. Dark mode: system `@media (prefers-color-scheme: dark)` only — no JS toggle. |
 | **SaaS** | Firebase Auth + Supabase RLS = clean multi-tenancy. Advisor white-label via per-advisor CSS + logo. Razorpay for billing (Phase 5). |
 
 ---
@@ -40,7 +40,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH0-S2 | User roles & access control — roles table, Guest/Individual/Advisor claims, Admin UI | ✅ Done — 09 May 2026 |
 | PH0-S3 | New navigation shell — Plan/Research/Track/Save & Invest/Promote, sidebar, vercel.json | ✅ Done — 09 May 2026 |
 | PH0-S4 | Homepage redesign — v3 design, carousel, sticky auth+assistant buttons, Investor/Advisor toggle | ✅ Done — 09 May 2026 |
-| PH0-S5 | CSS theming system — custom properties, white-label override, dark mode, logo swap | ⏳ Pending |
+| PH0-S5 | CSS theming system — custom properties, white-label override, dark mode, logo swap | ✅ Done — 09 May 2026 |
 
 ### Phase 1 — Data Foundation (Weeks 2–3, parallel with Phase 0)
 
