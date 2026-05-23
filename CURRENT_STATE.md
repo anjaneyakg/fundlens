@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 09 May 2026 · v24.0
+**Last updated:** 24 May 2026 · v25.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -277,6 +277,36 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PL-12 — F1 Health Check ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/pages/PortfolioLens/F1HealthCheck.jsx` — 8-rule engine, SVG semicircle score gauge, expandable accordion | ✅ Done |
+| `src/App.jsx` — replaced PLPlaceholder for `/portfolio/f1` with `<F1HealthCheck />` | ✅ Done |
+| Vite build — 946 modules, no new errors | ✅ Done |
+
+### F1 Health Rules (R1–R8)
+
+| Rule | What it checks | Severity bands |
+|---|---|---|
+| R1 | Direct vs Regular plan adoption | PASS/WARN/FAIL |
+| R2 | Growth vs IDCW option discipline | PASS/WARN/FAIL |
+| R3 | Single-AMC concentration (> 35 / 50%) | PASS/WARN/FAIL |
+| R4 | Portfolio complexity (5–12 schemes optimal) | PASS/WARN/FAIL |
+| R5 | Short-term equity holdings (< 12 months = STCG at 20%) | PASS/WARN/FAIL/INFO |
+| R6 | LTCG exemption utilisation (₹1.25L annual limit, tax harvesting) | PASS/WARN/FAIL/INFO |
+| R7 | Dormant folio cleanup (< ₹500 invested residuals) | PASS/WARN/FAIL |
+| R8 | Liquidity buffer (3–15% in liquid/overnight funds) | PASS/WARN |
+
+### F1 Design decisions
+- **Score gauge** — SVG semicircle arc; fills left → right; 0–100 integer; colour bands: ≥85 Excellent (green), 70–84 Good, 50–69 Needs Attention (amber), < 50 Poor (red)
+- **R6** — requires Holdings snapshot for current NAV; shows INFO with prompt if missing
+- **R5** — shows INFO if no equity/hybrid holdings detected
+- **Category inference** — regex on `scheme_name` only; no external API; covers liquid, debt, arbitrage, hybrid, ELSS, passive equity, sector equity, equity
+- **Score** — average of scorable (non-INFO) rules; INFO rules excluded from average so they don't penalise portfolios without Holdings snapshots
+
+---
+
 ## PortfolioLens Build Status
 
 | Session | Deliverable | Status |
@@ -292,9 +322,9 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | PL-9 | E6 Cashflow & Returns | ✅ Done |
 | PL-10 | E7 Capital Gains | ✅ Done |
 | PL-11 | E8 Transaction Report | ✅ Done |
-| PL-12 | F1 Health Check (8 rules) | ⏳ Next |
-| PL-13 | F2 Alerts engine | ⏳ Pending |
-| PL-14 | F3 Rebalance Planner | ⏳ Pending PL-12 |
+| PL-12 | F1 Health Check (8-rule engine, score gauge, accordion) | ✅ Done |
+| PL-13 | F2 Alerts engine | ⏳ Next |
+| PL-14 | F3 Rebalance Planner | ⏳ Pending PL-13 |
 | PL-15 | F4 Model Portfolio | ⏳ Pending |
 | PL-16 | F5 Send Report | ⏳ Pending PL-12 |
 | PL-17 | Advisor mode | ⏳ Pending all E+F |
@@ -316,6 +346,7 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | `src/pages/PortfolioLens/E6CashflowReturns.jsx` | Year-wise cashflow bar chart + FY/CY toggle + annual table |
 | `src/pages/PortfolioLens/E7CapitalGains.jsx` | Unrealised/realised gains · LTCG/STCG · grandfathering (2018) · tax estimates |
 | `src/pages/PortfolioLens/E8TransactionReport.jsx` | Full transaction log · avg-cost P&L on sells · FY/type/search filters · pagination |
+| `src/pages/PortfolioLens/F1HealthCheck.jsx` | 8-rule engine (R1–R8) · semicircle score gauge · expandable accordion · LTCG alert |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
 **localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots)
@@ -329,9 +360,9 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 |---|---|
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
-| P0 | Confirm Vercel deployment `5543556` is live and green at fundlens-six.vercel.app |
+| P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
+| P1 | **PL-13** — F2 Alerts engine (trigger setup · fired / watching states) |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
-| P1 | **PL-12** — F1 Health Check (8-rule engine with confidence scoring) |
 | P2 | Resume NAV backfill — nights/weekends only; monitor Supabase IO budget daily |
 
 ---

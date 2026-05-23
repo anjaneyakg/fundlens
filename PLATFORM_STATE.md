@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 09 May 2026
+**Last updated:** 24 May 2026
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -57,16 +57,16 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 
 | Session | Deliverable | Status |
 |---|---|---|
-| PH2-S1 | PL shell + F6 Data manager (DPDP consent, localStorage schema) | ⏳ Pending |
-| PH2-S2 | Parser engine (CAMS + KFin + Holdings, portfolioEngine.js, XIRR) | ⏳ Pending |
-| PH2-S3 | E1 Dashboard | ⏳ Pending |
-| PH2-S4 | E2 Visual overview | ⏳ Pending |
-| PH2-S5 | E3 Holdings & exposure | ⏳ Pending |
-| PH2-S6 | E4 Overlap analysis | ⏳ Pending |
-| PH2-S7 | E5 Performance matrix | ⏳ Pending |
-| PH2-S8 | E6 + E7 + E8 (Cashflow, Capital gains, Transaction report) | ⏳ Pending |
-| PH2-S9 | F1 Health check (8-rule engine) | ⏳ Pending |
-| PH2-S10 | F2–F5 (Alerts, Rebalance, Model portfolio, PDF report) | ⏳ Pending |
+| PH2-S1 | PL shell + F6 Data manager (DPDP consent, localStorage schema) | ✅ Done |
+| PH2-S2 | Parser engine (CAMS + KFin + Holdings, portfolioEngine.js, XIRR) | ✅ Done |
+| PH2-S3 | E1 Dashboard | ✅ Done |
+| PH2-S4 | E2 Visual overview | ✅ Done |
+| PH2-S5 | E3 Holdings & exposure | ✅ Done |
+| PH2-S6 | E4 Overlap analysis | ✅ Done |
+| PH2-S7 | E5 Performance matrix | ✅ Done |
+| PH2-S8 | E6 + E7 + E8 (Cashflow, Capital gains, Transaction report) | ✅ Done |
+| PH2-S9 | F1 Health check (8-rule engine) | ✅ Done — 24 May 2026 |
+| PH2-S10 | F2–F5 (Alerts, Rebalance, Model portfolio, PDF report) | ⏳ Next |
 
 ### Phase 3 — Advisor Layer (Weeks 7–9)
 
