@@ -7,30 +7,45 @@ Last updated: 24 May 2026
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
 ## Current priority (do this first):
-Task: PL-13 — F2 Alerts engine
-File to create: src/pages/PortfolioLens/F2Alerts.jsx
-Depends on: portfolioEngine.js + portfolioStore.js (already built)
-Route: /portfolio/f2 (currently PLPlaceholder — replace in App.jsx)
+Task: PL-14 — F3 Rebalance Planner
+File to create: src/pages/PortfolioLens/F3RebalancePlanner.jsx
+Depends on: portfolioEngine.js + portfolioStore.js + portfolioEngine's buildHoldings (already built)
+Route: /portfolio/f3 (currently PLPlaceholder — replace in App.jsx)
 
-### F2 Alerts spec
-Alerts are rules that fire when a portfolio condition crosses a threshold.
-Store alerts config in localStorage under key `fundlens_alerts_v1`.
+### F3 Rebalance Planner spec
+Help the user rebalance their portfolio toward a target allocation, showing what to redeem and where to invest, with tax impact per lot.
 
-**Alert types to implement:**
-- **XIRR drop** — portfolio XIRR drops below user-set threshold (e.g. < 8%)
-- **NAV staleness** — Holdings snapshot is > 30 days old
-- **Large unrealised loss** — a holding is > 20% below cost (unrealised_gain_pct < -20)
-- **LTCG harvest window** — total LTCG approaching ₹1.25L (fires when LTCG is ₹80K–₹1.25L)
-- **Regular plan detected** — any holding in Regular plan (fires once, not repeatedly)
-- **Short-term equity** — any equity holding < 180 days old (3-6 month warning before 12-month tax cliff)
+**Step 1 — Current Allocation**
+- Show current portfolio split by category (Equity / Debt / Liquid / Hybrid) as percentages and ₹ values
+- Read from portfolioStore holdings snapshot (or computed from transactions if no snapshot)
 
-**Alert states:** `watching` (not yet triggered) | `fired` (condition met) | `snoozed` (user dismissed, re-checks in 30 days)
+**Step 2 — Target Allocation**
+- User inputs target % per category (must sum to 100)
+- Show gap: current vs target per category (over/under-weight)
+- Preset buttons: Conservative (20/60/10/10), Balanced (50/30/10/10), Aggressive (80/10/5/5)
+
+**Step 3 — Rebalance Plan**
+- For over-weight categories: suggest which schemes to partially/fully redeem
+- Tax-aware lot selection: prefer LTCG lots (held > 12 months for equity, > 36 months for debt) over STCG lots
+- Show per-scheme: units to redeem · estimated ₹ · estimated tax (LTCG/STCG, within/beyond ₹1.25L exemption)
+- For under-weight categories: show target ₹ to invest (user picks schemes separately)
+
+**Step 4 — Summary**
+- Total to redeem · Total tax estimated · Net proceeds to reinvest
+- Printable/copy-able summary table
+- "Save plan" → localStorage key `fundlens_rebalance_plan_v1`
+
+**Tax rules to apply:**
+- Equity STCG: < 12 months → 20%
+- Equity LTCG: ≥ 12 months → 12.5% above ₹1.25L cumulative annual limit
+- Debt STCG: < 36 months → slab rate (show as "per your slab")
+- Debt LTCG: ≥ 36 months → 12.5% (no indexation from 2023)
+- Arbitrage/Liquid: treated as debt for tax
 
 **UI:**
-- Alert card list with status badge (watching/fired/snoozed)
-- "Mark as reviewed" button on fired alerts → moves to snoozed
-- "Add alert" flow — pick type, configure threshold, save
-- No-alerts empty state
+- Stepper (Step 1 / 2 / 3 / 4) with Next / Back navigation
+- Category donut chart updates live as user adjusts targets
+- Mobile responsive (useWindowWidth)
 
 ## Parallel track (separate session):
 NAV backfill — run nightly 11PM-2AM IST until MAX(nav_date) = 2026-04-30
@@ -42,7 +57,8 @@ Stop at: 3 hours or if DB size exceeds 6.5 GB
 - vercel.json (already has catch-all, no changes needed)
 - Firebase auth files (src/firebase.js, src/hooks/useAuth.jsx, src/hooks/useRole.jsx)
 - pipeline scripts (unless NAV session)
-- F1HealthCheck.jsx (just written — do not rewrite)
+- F1HealthCheck.jsx (done — do not rewrite)
+- F2Alerts.jsx (done — do not rewrite)
 
 ## Open issues to keep in mind:
 - Node.js 24 upgrade deadline: June 2026 (PH4-S4)
@@ -52,5 +68,5 @@ Stop at: 3 hours or if DB size exceeds 6.5 GB
 
 ## Phase 2 status at session close:
 - PH2-S1 through PH2-S9 all ✅ Done (PL-1 through PL-12)
-- PH2-S10 (F2–F5) is next
-- Next session: PL-13 = F2 Alerts (first part of PH2-S10)
+- PH2-S10 (F2–F5) in progress: F2 ✅ Done (PL-13), F3–F5 pending
+- Next session: PL-14 = F3 Rebalance Planner

@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v25.0
+**Last updated:** 24 May 2026 · v26.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -307,6 +307,38 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PL-13 — F2 Alerts Engine ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/pages/PortfolioLens/F2Alerts.jsx` — 6 alert types, snooze/dismiss, 3-tab UI | ✅ Done |
+| `src/App.jsx` — replaced PLPlaceholder for `/portfolio/f2` with `<F2Alerts />` | ✅ Done |
+| Vite build — 947 modules, no new errors | ✅ Done |
+
+### F2 Alert Types
+
+| Alert | ID | Trigger | Severity |
+|---|---|---|---|
+| LTCG Window | `LTCG_WINDOW` | Equity holding 335–364 days old with unrealised STCG > ₹10K — hold 1 more month to avoid 20% STCG | High |
+| LTCG Harvest | `LTCG_HARVEST` | Total unrealised LTCG exceeds ₹1.25L — harvest now to avoid exceeding annual exemption | High |
+| Dormant Folio | `DORMANT_FOLIO` | Holding invested < ₹500 and held > 90 days — review and consolidate | Medium |
+| SIP Due | `SIP_DUE` | Monthly SIP pattern detected (25–36 day gaps), next instalment within 7 days | Low |
+| Concentration Risk | `CONCENTRATION_RISK` | Single AMC > 50% of portfolio value | Medium |
+| Underperforming Fund | `UNDERPERFORMING` | Fund XIRR trails portfolio average by ≥ 5 pp AND invested ≥ ₹50K | Medium |
+
+### F2 Design decisions
+- **Alert states** — `watching` (condition unmet) · `fired` (condition met) · `snoozed` (dismissed for 7/30/365 days)
+- **Snooze persistence** — stored in `fundlens_alerts_v1` (localStorage); deterministic alert IDs (`${TYPE}-${pid8}-${safeScheme}`) so snooze survives re-evaluations
+- **Dismiss** — 365-day snooze (no separate dismissed state)
+- **Reactivate** — restores snoozed alert to fired immediately
+- **Tabs** — Active (fired) · Snoozed · All
+- **Re-check button** — increments `checkKey` to force re-evaluation without page reload
+- **Snooze dropdown** — fullscreen transparent backdrop (z-index 98) + dropdown (z-index 99) for outside-click close
+- **`computeHoldingDays(h)`** — recomputes from `first_investment_date` in real-time (never uses stale `holding_period_days`)
+- **UNDERPERFORMING** — uses portfolio average XIRR as benchmark proxy (no external data required)
+
+---
+
 ## PortfolioLens Build Status
 
 | Session | Deliverable | Status |
@@ -323,8 +355,8 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | PL-10 | E7 Capital Gains | ✅ Done |
 | PL-11 | E8 Transaction Report | ✅ Done |
 | PL-12 | F1 Health Check (8-rule engine, score gauge, accordion) | ✅ Done |
-| PL-13 | F2 Alerts engine | ⏳ Next |
-| PL-14 | F3 Rebalance Planner | ⏳ Pending PL-13 |
+| PL-13 | F2 Alerts engine | ✅ Done |
+| PL-14 | F3 Rebalance Planner | ⏳ Next |
 | PL-15 | F4 Model Portfolio | ⏳ Pending |
 | PL-16 | F5 Send Report | ⏳ Pending PL-12 |
 | PL-17 | Advisor mode | ⏳ Pending all E+F |
@@ -347,9 +379,10 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | `src/pages/PortfolioLens/E7CapitalGains.jsx` | Unrealised/realised gains · LTCG/STCG · grandfathering (2018) · tax estimates |
 | `src/pages/PortfolioLens/E8TransactionReport.jsx` | Full transaction log · avg-cost P&L on sells · FY/type/search filters · pagination |
 | `src/pages/PortfolioLens/F1HealthCheck.jsx` | 8-rule engine (R1–R8) · semicircle score gauge · expandable accordion · LTCG alert |
+| `src/pages/PortfolioLens/F2Alerts.jsx` | 6 alert types · watching/fired/snoozed states · snooze/dismiss actions · tabbed filter UI |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
-**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots)
+**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID)
 **SheetJS:** xlsx 0.18.5 added for .xls/.xlsx parsing
 
 ---
@@ -361,7 +394,7 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
-| P1 | **PL-13** — F2 Alerts engine (trigger setup · fired / watching states) |
+| P1 | **PL-14** — F3 Rebalance Planner (redemption + reinvestment plan · tax-aware lot selection · step-by-step wizard) |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P2 | Resume NAV backfill — nights/weekends only; monitor Supabase IO budget daily |
 
