@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v32.0
+**Last updated:** 24 May 2026 · v33.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -498,10 +498,9 @@ features never activated.
 - **`refreshRole()`**: new export — call after an admin changes another user's role so their session picks up the new role immediately
 
 ### Action required (manual)
-- **Add `VITE_SUPABASE_ANON_KEY` to Vercel env vars** — missing from prod deployment (present in local `.env`)
-  Without this, all `sbFetch` calls return 401 in production (apikey header is undefined)
-- **Add `SUPABASE_SERVICE_KEY` to Vercel env vars** — `api/admin.js` uses `SUPABASE_SERVICE_KEY`;
-  local `.env` has `SUPABASE_KEY` (different name). Set `SUPABASE_SERVICE_KEY` in Vercel to the service-role key.
+- ✅ **`VITE_SUPABASE_ANON_KEY`** — added to Vercel env vars (24 May 2026)
+- ✅ **`SUPABASE_SERVICE_KEY`** — added to Vercel env vars (24 May 2026)
+- ✅ **`SUPABASE_SERVICE_ROLE_KEY`** — added to Vercel env vars (24 May 2026)
 
 ---
 
@@ -509,15 +508,14 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Set `VITE_SUPABASE_ANON_KEY` in Vercel** — missing from prod; without it role detection fails in production |
-| P0 | **Set `SUPABASE_SERVICE_KEY` in Vercel** — `api/admin.js` uses this name; local `.env` has `SUPABASE_KEY` |
-| P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
-| P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
-| P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
-| P1 | **PH3-S1** — Multi-client advisor dashboard (`/advisor/clients`, localStorage-based, Phase 3 start) |
-| P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
+| P0 | **PH3-S1** — Multi-client advisor dashboard (`/advisor/clients`, localStorage-based, Phase 3 start) |
+| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies in PH3-S1 or PH3-S2 |
+| P0 | **Node.js 24 upgrade** ⚠ DEADLINE June 2026 (PH4-S4) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
+| P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
+| P4 | **Build warning: FDvsMF.jsx line 533** — duplicate `style` attribute on JSX element (Phase 4 fix) |
+| P4 | **Build warning: CompareSchemes.jsx lines 775, 823** — duplicate `border` key in object literal (Phase 4 fix) |
 
 ---
 
@@ -525,9 +523,11 @@ features never activated.
 
 | # | Action | Blocked by | Notes |
 |---|---|---|---|
-| 1 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod | Supabase IO timeout | advisor_profiles table + admin RLS policies |
-| 2 | Run `migrations/003_promo_messages.sql` in fundlens-prod | Supabase IO timeout | promo_messages table + public read RLS; populate with 3 STATIC_PROMOS rows |
-| 3 | Vercel redeploy — promote commit `5543556` to Production | Manual trigger | Required for theme.css / useAdvisorTheme to go live |
+| 1 | ✅ Run `migrations/002_advisor_profiles.sql` in fundlens-prod | ~~Supabase IO timeout~~ | Done 24 May 2026 |
+| 2 | ✅ Run `migrations/003_promo_messages.sql` in fundlens-prod | ~~Supabase IO timeout~~ | Done 24 May 2026; populate STATIC_PROMOS rows when content is ready |
+| 3 | ✅ Vercel env vars (`VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) | ~~Missing~~ | All three set 24 May 2026 |
+| 4 | Tighten `advisor_profiles` RLS policies (currently `USING true`) | Phase 3 scope | Do in PH3-S1 or PH3-S2 |
+| 5 | Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` | None | Recovers ~1–1.5 GB index bloat |
 
 ---
 
@@ -552,7 +552,7 @@ features never activated.
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
 
-**Storage:** ~5–6 GB estimated (index bloated — run `REINDEX INDEX CONCURRENTLY nav_history_pkey` after gap repair)
+**Storage:** 12 GB autoscaled · ~6.3 GB used · Supabase key migrated to sb_secret format (legacy JWT disabled)
 **Supabase tier:** Pro ($25/mo) ✅ approved
 
 ### Supabase Instances

@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 24 May 2026 (Auth fix — role detection, profiles table, onIdTokenChanged)
+**Last updated:** 24 May 2026 (Phase 2 complete — auth end-to-end, migrations done, Vercel env vars set)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -67,12 +67,13 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH2-S8 | E6 + E7 + E8 (Cashflow, Capital gains, Transaction report) | ✅ Done |
 | PH2-S9 | F1 Health check (8-rule engine) | ✅ Done — 24 May 2026 |
 | PH2-S10 | F2–F5 (Alerts, Rebalance, Model portfolio, PDF report) | ✅ Done — 24 May 2026 (F2 ✅ F3 ✅ F4 ✅ F5 ✅) |
+| Auth fix | Role detection: profiles table, onIdTokenChanged, refreshRole(), Nav Admin Console link | ✅ Done — 24 May 2026 |
 
 ### Phase 3 — Advisor Layer (Weeks 7–9)
 
 | Session | Deliverable | Status |
 |---|---|---|
-| PH3-S1 | Multi-client dashboard | ⏳ Pending |
+| PH3-S1 | Multi-client dashboard (`/advisor/clients`) | ⏳ **NEXT** |
 | PH3-S2 | White-label system (logo + firm name on nav, PDFs, emails) | ⏳ Pending |
 | PH3-S3 | Promote module (leaflets, email drafts, WhatsApp templates) | ⏳ Pending |
 | PH3-S4 | Advisor onboarding flow | ⏳ Pending |
@@ -145,8 +146,8 @@ Plan | Research | Track | Save & Invest | [Promote — advisor only]
 | Table | Status | Migration | Notes |
 |---|---|---|---|
 | `profiles` | ✅ RLS live | `migrations/001_users_table.sql` | id TEXT (Firebase UID), email, role, plan_tier; RLS on SELECT/INSERT/UPDATE by sub claim |
-| `advisor_profiles` | ⚠ Pending run | `migrations/002_advisor_profiles.sql` | user_id → profiles.id; logo_url, css_override, max_clients; admin RLS policies |
-| `promo_messages` | ⚠ Pending run | `migrations/003_promo_messages.sql` | id UUID, text, is_active, display_order; public RLS read policy |
+| `advisor_profiles` | ✅ RLS live (open — tighten Phase 3) | `migrations/002_advisor_profiles.sql` | user_id → profiles.id; logo_url, css_override, max_clients; RLS currently `USING true` — tighten in PH3-S1 |
+| `promo_messages` | ✅ RLS live | `migrations/003_promo_messages.sql` | id UUID, text, is_active, display_order; public RLS read policy; populate rows when content ready |
 
 ```sql
 -- profiles (Firebase UID as primary key) — RLS live in fundlens-prod
@@ -218,14 +219,16 @@ Full spec: `FundLens_Master_Reference_v23.docx`
 
 | # | Issue | Detail | Status |
 |---|---|---|---|
-| 1 | Firebase + Supabase JWT wiring | Third-Party Auth configured. `useAuth.jsx` now queries `profiles` (not `users`). Token kept fresh via `onIdTokenChanged`. | ✅ Fixed 24 May 2026 |
-| 2 | Supabase RLS policies | profiles table RLS live. advisor_profiles migration pending (002). | ⚠ 002 pending |
-| 3 | VITE_SUPABASE_ANON_KEY missing from Vercel | Present in local `.env`; not set in Vercel env vars — all sbFetch calls return 401 in production. **Must set in Vercel dashboard.** | ⚠ Manual action |
-| 4 | SUPABASE_SERVICE_KEY missing from Vercel | `api/admin.js` uses `process.env.SUPABASE_SERVICE_KEY`; local `.env` has `SUPABASE_KEY`. Set `SUPABASE_SERVICE_KEY` in Vercel. | ⚠ Manual action |
-| 5 | SchemeMapping autocomplete | Axis and others showing wrong AMC schemes in dropdown. | ⚠ Pending |
-| 6 | SchemeBasket slug bug | "Children's" → children_s not childrens | ⚠ Pending |
-| 7 | SIPCalculator mfapi migration | Migrate away from api.mfapi.in | ⚠ Pending |
+| 1 | Firebase + Supabase JWT wiring | Third-Party Auth configured. `useAuth.jsx` queries `profiles`, `onIdTokenChanged` for token freshness, `refreshRole()` exported, retry-SELECT on INSERT conflict. | ✅ Fixed 24 May 2026 |
+| 2 | Supabase RLS policies | `profiles` RLS live. `advisor_profiles` + `promo_messages` migrations run (24 May 2026). `advisor_profiles` RLS currently open — tighten in Phase 3. | ⚠ RLS open — tighten |
+| 3 | VITE_SUPABASE_ANON_KEY | Added to Vercel env vars 24 May 2026. | ✅ Done |
+| 4 | SUPABASE_SERVICE_KEY + SUPABASE_SERVICE_ROLE_KEY | Both added to Vercel env vars 24 May 2026. | ✅ Done |
+| 5 | SchemeMapping autocomplete | Axis and others showing wrong AMC schemes in dropdown. | ⚠ Pending — Phase 4 |
+| 6 | SchemeBasket slug bug | "Children's" → children_s not childrens | ⚠ Pending — Phase 4 |
+| 7 | SIPCalculator mfapi migration | Migrate away from api.mfapi.in | ⚠ Pending — Phase 4 |
 | 8 | Online assistant scope | Pre-login: promotional/helpful. Post-login individual: portfolio Q&A. Post-login advisor: premium. | 🔲 Phase 4 |
+| 9 | Build warnings — FDvsMF.jsx line 533 | Duplicate `style` attribute on JSX element | ⚠ Pending — Phase 4 |
+| 10 | Build warnings — CompareSchemes.jsx lines 775, 823 | Duplicate `border` key in object literal | ⚠ Pending — Phase 4 |
 
 ---
 

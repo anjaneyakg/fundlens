@@ -1,28 +1,16 @@
 # NEXT SESSION — FundLens
-Last updated: 24 May 2026 (Auth fix complete — role detection, profiles table, onIdTokenChanged)
+Last updated: 24 May 2026 (Phase 2 complete — auth working, env vars set, migrations run)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
-## ⚠ BEFORE CODING — Manual actions required in Vercel dashboard
-
-These are NOT code changes. Do them in the Vercel project settings → Environment Variables:
-
-1. **Add `VITE_SUPABASE_ANON_KEY`** = (the Supabase anon/public key from Supabase dashboard → Project Settings → API)
-   - Without this, all `sbFetch` calls return 401 in production — role detection fails for everyone
-2. **Add `SUPABASE_SERVICE_KEY`** = (the Supabase service_role key — keep secret)
-   - `api/admin.js` uses `process.env.SUPABASE_SERVICE_KEY`; local `.env` had `SUPABASE_KEY` (different name)
-   - Without this, get-users and set-role admin API calls fail with 500
-
-After setting both, trigger a new Vercel deployment. Then verify:
-- `/api/v1/health` returns 200
-- Log in as admin user → role shows as 'admin' in browser console
-- `/admin/users` loads the user list
-
 ## Phase 2 status: ✅ COMPLETE
 All sessions PH2-S1 through PH2-S10 done. PL-1 → PL-16 all delivered.
+Auth working end-to-end: Google login → Firebase JWT → Supabase profiles → role loaded → Admin Console visible.
+Vercel env vars: `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` all set ✅
+Supabase migrations 002 + 003 run in fundlens-prod ✅
 
 ---
 
@@ -88,11 +76,16 @@ Stop at: 3 hours or if DB size exceeds 6.5 GB
 - Node.js 24 upgrade deadline: June 2026 (PH4-S4) ⚠ URGENT
 - ✅ User Manager bug — FIXED (useAuth.jsx + api/admin.js now use profiles table)
 - ✅ Role detection bug — FIXED (profiles table, onIdTokenChanged, fresh token)
-- ⚠ VITE_SUPABASE_ANON_KEY — still needs to be added to Vercel (see manual actions above)
-- ⚠ SUPABASE_SERVICE_KEY — still needs to be added to Vercel (see manual actions above)
-- Supabase migrations 002 + 003 still pending (Supabase IO issues)
+- ✅ VITE_SUPABASE_ANON_KEY — added to Vercel 24 May 2026
+- ✅ SUPABASE_SERVICE_KEY + SUPABASE_SERVICE_ROLE_KEY — added to Vercel 24 May 2026
+- ✅ Migrations 002 + 003 — run in fundlens-prod 24 May 2026
+- ⚠ advisor_profiles RLS — currently open (USING true); tighten in PH3-S1 or PH3-S2
+- ⚠ REINDEX needed: `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor
+- Phase 4 build warnings: FDvsMF.jsx line 533 (duplicate style), CompareSchemes.jsx lines 775/823 (duplicate border)
+- Supabase disk: 12 GB autoscaled · ~6.3 GB used · key migrated to sb_secret format
 
 ## Session history:
 - Phase 2 (PL-1 → PL-16): all ✅ Done
 - Auth fix (24 May 2026): useAuth.jsx + api/admin.js + AdminLayout.jsx + migrations 001/002 ✅
+- Nav Admin Console link fix (24 May 2026): surgical 3-edit fix to Nav.jsx ✅
 - Next: Phase 3 — Advisor Layer (PH3-S1 through PH3-S5)
