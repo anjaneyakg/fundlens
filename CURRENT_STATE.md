@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v30.0
+**Last updated:** 24 May 2026 · v31.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -460,10 +460,44 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## Auth Fix — Role Detection ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/hooks/useAuth.jsx` — rewrite: `profiles` table (not `users`), `onIdTokenChanged` for token refresh, fresh `getIdToken()` in profile loader, retry SELECT on INSERT conflict, `refreshRole()` export | ✅ Done |
+| `api/admin.js` — rewrite: `profiles` table (not `users`) for all admin role checks and user listings, extracted `requireAdmin()` helper | ✅ Done |
+| `src/pages/AdminLayout.jsx` — rewrite: user email + role badge in sidebar footer, Sign Out button via `useAuth()`, "FundLens" branding | ✅ Done |
+| `migrations/001_users_table.sql` — fix: table name `users` → `profiles`; all RLS policies renamed to `profiles_*` | ✅ Done |
+| `migrations/002_advisor_profiles.sql` — fix: `REFERENCES public.profiles(id)` (was `users`); admin policy references `profiles` | ✅ Done |
+| Vite build — 950 modules, no new errors | ✅ Done |
+
+### Root cause
+`useAuth.jsx` queried the `users` REST endpoint but the live Supabase table is `public.profiles`.
+Every `sbFetch` call returned an error → `null` → code fell into the "create row" branch →
+INSERT also failed (row already exists) → `setRole('individual')` fallback → admin/advisor
+features never activated.
+
+### Key fixes
+- **Table name**: `users` → `profiles` in both `useAuth.jsx` and `api/admin.js`
+- **Token freshness**: replaced `onAuthStateChanged` with `onIdTokenChanged` — fires on the ~1h automatic token refresh, keeping the stored JWT current
+- **INSERT result**: changed `Prefer: return=minimal` → `return=representation` so the created row's role is read back directly (avoids a second SELECT on first sign-in)
+- **Conflict safety**: added retry-SELECT after a failed INSERT (handles concurrent logins / row already exists)
+- **`refreshRole()`**: new export — call after an admin changes another user's role so their session picks up the new role immediately
+
+### Action required (manual)
+- **Add `VITE_SUPABASE_ANON_KEY` to Vercel env vars** — missing from prod deployment (present in local `.env`)
+  Without this, all `sbFetch` calls return 401 in production (apikey header is undefined)
+- **Add `SUPABASE_SERVICE_KEY` to Vercel env vars** — `api/admin.js` uses `SUPABASE_SERVICE_KEY`;
+  local `.env` has `SUPABASE_KEY` (different name). Set `SUPABASE_SERVICE_KEY` in Vercel to the service-role key.
+
+---
+
 ## Immediate Next Session Priorities
 
 | Priority | Task |
 |---|---|
+| P0 | **Set `VITE_SUPABASE_ANON_KEY` in Vercel** — missing from prod; without it role detection fails in production |
+| P0 | **Set `SUPABASE_SERVICE_KEY` in Vercel** — `api/admin.js` uses this name; local `.env` has `SUPABASE_KEY` |
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |

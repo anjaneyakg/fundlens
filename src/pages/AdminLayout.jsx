@@ -1,34 +1,56 @@
 // src/pages/AdminLayout.jsx
-import { NavLink, Outlet } from "react-router-dom";
+// Admin console shell. Route is already gated by ProtectedRoute requiredRole="admin".
+// Shows current user email + role in sidebar footer, with a Sign Out button.
+
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const NAV_ITEMS = [
   {
-    group: "Data Pipeline",
+    group: 'Data Pipeline',
     items: [
-      { to: "/admin/portfolio-upload", label: "Portfolio Upload",    icon: "⬆", live: true  },
-      { to: "/admin/coverage",         label: "Coverage",            icon: "◈", live: true  },
-      { to: "/admin/scheme-mapping",   label: "Scheme Mapping",      icon: "◈", live: true  },
-      { to: "/admin/amfi-marketcap",   label: "AMFI Market Cap",     icon: "◉", live: true  },
-      { to: "/admin/amc-directory",    label: "AMC Directory",       icon: "◎", live: false },
+      { to: '/admin/portfolio-upload', label: 'Portfolio Upload',  icon: '⬆', live: true  },
+      { to: '/admin/coverage',         label: 'Coverage',          icon: '◈', live: true  },
+      { to: '/admin/scheme-mapping',   label: 'Scheme Mapping',    icon: '◈', live: true  },
+      { to: '/admin/amfi-marketcap',   label: 'AMFI Market Cap',   icon: '◉', live: true  },
+      { to: '/admin/amc-directory',    label: 'AMC Directory',     icon: '◎', live: false },
     ],
   },
   {
-    group: "Access Control",
+    group: 'Access Control',
     items: [
-      { to: "/admin/users",            label: "User Manager",        icon: "◈", live: true  },
-      { to: "/admin/tool-access",      label: "Tool Access Matrix",  icon: "◈", live: true  },
+      { to: '/admin/users',       label: 'User Manager',      icon: '◈', live: true  },
+      { to: '/admin/tool-access', label: 'Tool Access Matrix', icon: '◈', live: true  },
     ],
   },
   {
-    group: "System",
+    group: 'System',
     items: [
-      { to: "/admin/security-master",  label: "Security Master",     icon: "◆", live: false },
-      { to: "/admin/settings",         label: "Settings",            icon: "◇", live: false },
+      { to: '/admin/security-master', label: 'Security Master', icon: '◆', live: false },
+      { to: '/admin/settings',        label: 'Settings',        icon: '◇', live: false },
     ],
   },
 ];
 
+const ROLE_COLOR = {
+  admin:      '#7e22ce',
+  advisor:    '#15803d',
+  individual: '#1d4ed8',
+};
+
 export default function AdminLayout() {
+  const navigate = useNavigate();
+  const { user, role, signOut } = useAuth();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate('/login', { replace: true });
+  }
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : '??';
+
   return (
     <div style={s.shell}>
       <style>{`
@@ -50,8 +72,9 @@ export default function AdminLayout() {
         .al-link.active .al-icon { color: #7c3aed; }
       `}</style>
 
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
+        {/* Logo */}
         <div style={s.logoWrap}>
           <div style={s.logoBox}><span style={s.logoText}>FL</span></div>
           <div>
@@ -60,7 +83,8 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <nav style={{ flex: 1, padding: "0 0.75rem" }}>
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '0 0.75rem' }}>
           {NAV_ITEMS.map((group) => (
             <div key={group.group} style={s.group}>
               <span style={s.groupLabel}>{group.group}</span>
@@ -69,7 +93,7 @@ export default function AdminLayout() {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    className={({ isActive }) => isActive ? "al-link active" : "al-link"}
+                    className={({ isActive }) => isActive ? 'al-link active' : 'al-link'}
                   >
                     <div className="al-inner">
                       <span className="al-icon" style={s.icon}>{item.icon}</span>
@@ -89,15 +113,38 @@ export default function AdminLayout() {
           ))}
         </nav>
 
+        {/* Footer — user info + sign-out */}
         <div style={s.footerWrap}>
-          <div style={s.footerCard}>
-            <div style={s.footerTitle}>FundInsight v1.0</div>
-            <div style={s.footerSub}>● Pipeline live · Feb 2026</div>
+          <div style={s.userCard}>
+            {/* Avatar */}
+            <div style={s.avatar}>{initials}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={s.userEmail} title={user?.email || ''}>
+                {user?.email || '—'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                <span style={{
+                  ...s.roleBadge,
+                  color:      ROLE_COLOR[role] || '#475569',
+                  background: ROLE_COLOR[role] ? ROLE_COLOR[role] + '18' : '#f1f5f9',
+                }}>
+                  {role || 'loading…'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              style={s.signOutBtn}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              ⎋
+            </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* ── Main content ── */}
       <main style={s.main}>
         <Outlet />
       </main>
@@ -107,62 +154,84 @@ export default function AdminLayout() {
 
 const s = {
   shell: {
-    display: "flex", minHeight: "100vh",
-    background: "linear-gradient(140deg, #f8f7ff 0%, #f0f9ff 50%, #f0fdf4 100%)",
+    display: 'flex', minHeight: '100vh',
+    background: 'linear-gradient(140deg, #f8f7ff 0%, #f0f9ff 50%, #f0fdf4 100%)',
     fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   sidebar: {
-    width: 252, minHeight: "100vh", flexShrink: 0,
-    background: "rgba(255,255,255,0.8)",
-    backdropFilter: "blur(16px)",
-    borderRight: "1px solid rgba(99,102,241,0.1)",
-    boxShadow: "2px 0 20px rgba(99,102,241,0.07)",
-    display: "flex", flexDirection: "column",
-    padding: "1.5rem 0",
+    width: 252, minHeight: '100vh', flexShrink: 0,
+    background: 'rgba(255,255,255,0.85)',
+    backdropFilter: 'blur(16px)',
+    borderRight: '1px solid rgba(99,102,241,0.1)',
+    boxShadow: '2px 0 20px rgba(99,102,241,0.07)',
+    display: 'flex', flexDirection: 'column',
+    padding: '1.5rem 0',
   },
   logoWrap: {
-    display: "flex", alignItems: "center", gap: 12,
-    padding: "0 1.25rem 1.5rem",
-    borderBottom: "1px solid rgba(99,102,241,0.08)",
-    marginBottom: "1.25rem",
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '0 1.25rem 1.5rem',
+    borderBottom: '1px solid rgba(99,102,241,0.08)',
+    marginBottom: '1.25rem',
   },
   logoBox: {
     width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    boxShadow: "0 4px 14px rgba(99,102,241,0.35)",
+    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
   },
-  logoText: { fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px" },
-  logoName: { fontSize: 15, fontWeight: 700, color: "#1e1b4b", lineHeight: 1.2 },
-  logoTag:  { fontSize: 11, fontWeight: 600, color: "#8b5cf6", letterSpacing: "0.04em" },
-  group:    { marginBottom: "1.5rem" },
+  logoText: { fontSize: 15, fontWeight: 700, color: '#fff', letterSpacing: '-0.5px' },
+  logoName: { fontSize: 15, fontWeight: 700, color: '#1e1b4b', lineHeight: 1.2 },
+  logoTag:  { fontSize: 11, fontWeight: 600, color: '#8b5cf6', letterSpacing: '0.04em' },
+  group:    { marginBottom: '1.5rem' },
   groupLabel: {
-    display: "block", fontSize: 10, fontWeight: 700,
-    letterSpacing: "0.1em", textTransform: "uppercase",
-    color: "#c4b5fd", padding: "0 12px", marginBottom: "0.35rem",
+    display: 'block', fontSize: 10, fontWeight: 700,
+    letterSpacing: '0.1em', textTransform: 'uppercase',
+    color: '#c4b5fd', padding: '0 12px', marginBottom: '0.35rem',
   },
-  icon: { fontSize: 12, width: 16, textAlign: "center", flexShrink: 0 },
+  icon:      { fontSize: 12, width: 16, textAlign: 'center', flexShrink: 0 },
   liveDot: {
-    width: 6, height: 6, borderRadius: "50%",
-    background: "#10b981", boxShadow: "0 0 0 2px #d1fae5",
-    display: "inline-block", flexShrink: 0,
+    width: 6, height: 6, borderRadius: '50%',
+    background: '#10b981', boxShadow: '0 0 0 2px #d1fae5',
+    display: 'inline-block', flexShrink: 0,
   },
   disabledItem: {
-    display: "flex", alignItems: "center", gap: 9,
-    padding: "9px 12px", borderRadius: 10,
-    fontSize: 13.5, fontWeight: 500, color: "#d1d5db", cursor: "default",
+    display: 'flex', alignItems: 'center', gap: 9,
+    padding: '9px 12px', borderRadius: 10,
+    fontSize: 13.5, fontWeight: 500, color: '#d1d5db', cursor: 'default',
   },
   soonPill: {
-    fontSize: 10, fontWeight: 600, color: "#c4b5fd",
-    background: "#f5f3ff", border: "1px solid #e9d5ff",
-    borderRadius: 20, padding: "2px 8px",
+    fontSize: 10, fontWeight: 600, color: '#c4b5fd',
+    background: '#f5f3ff', border: '1px solid #e9d5ff',
+    borderRadius: 20, padding: '2px 8px',
   },
-  footerWrap: { padding: "0 0.75rem", marginTop: "auto" },
-  footerCard: {
-    background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
-    border: "1px solid #ddd6fe", borderRadius: 12, padding: "12px 14px",
+  // Footer
+  footerWrap: { padding: '0 0.75rem', marginTop: 'auto', paddingTop: '0.75rem' },
+  userCard: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)',
+    border: '1px solid #ddd6fe', borderRadius: 12, padding: '10px 12px',
   },
-  footerTitle: { fontSize: 12, fontWeight: 700, color: "#5b21b6" },
-  footerSub:   { fontSize: 11, color: "#8b5cf6", marginTop: 3 },
-  main: { flex: 1, padding: "2.5rem 3rem", overflowY: "auto" },
+  avatar: {
+    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.02em',
+  },
+  userEmail: {
+    fontSize: 11, fontWeight: 600, color: '#3730a3',
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    maxWidth: 130,
+  },
+  roleBadge: {
+    fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+    textTransform: 'uppercase', padding: '2px 7px',
+    borderRadius: 20, display: 'inline-block',
+  },
+  signOutBtn: {
+    background: 'none', border: 'none', cursor: 'pointer',
+    fontSize: 16, color: '#94a3b8', padding: '2px 4px',
+    borderRadius: 6, transition: 'color 0.15s',
+    flexShrink: 0,
+  },
+  main: { flex: 1, padding: '2.5rem 3rem', overflowY: 'auto' },
 };

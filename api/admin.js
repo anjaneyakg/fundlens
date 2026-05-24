@@ -1,13 +1,15 @@
 // api/admin.js
 // Consolidated admin endpoint — 4 actions:
-//   ?action=get-users     — list all users paginated (was api/get-users.js)
-//   ?action=set-role      — change a user's role (was api/set-role.js)
-//   ?action=set-flag      — toggle a feature flag (was api/admin/set-flag.js)
-//   ?action=set-user-tier — change a user's tier (was api/admin/set-user-tier.js)
+//   ?action=get-users     — list all profiles paginated
+//   ?action=set-role      — change a user's role
+//   ?action=set-flag      — toggle a feature flag
+//   ?action=set-user-tier — change a user's tier (legacy schema)
+//
+// Table: public.profiles (id TEXT = Firebase UID, email, role, plan_tier)
 
-const SUPABASE_URL   = process.env.SUPABASE_URL;
-const SERVICE_KEY    = process.env.SUPABASE_SERVICE_KEY;
-const CORS_ORIGIN    = 'https://fundlens-six.vercel.app';
+const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY;
+const CORS_ORIGIN   = 'https://fundlens-six.vercel.app';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  CORS_ORIGIN,
@@ -44,6 +46,7 @@ function decodeJwtPayload(token) {
   }
 }
 
+// Service-role Supabase client — bypasses RLS (admin operations only)
 async function sb(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...opts,
@@ -60,38 +63,46 @@ async function sb(path, opts = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+// Verify caller is an admin by checking public.profiles
+async function requireAdmin(authHeader) {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const payload = decodeJwtPayload(authHeader.slice(7));
+  if (!payload?.sub) return null;
+  try {
+    const rows = await sb(
+      `profiles?id=eq.${encodeURIComponent(payload.sub)}&select=role`,
+      { headers: { Prefer: '' } },
+    );
+    if (rows?.[0]?.role !== 'admin') return null;
+    return payload.sub;
+  } catch (err) {
+    console.error('[admin] requireAdmin error:', err);
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// action=get-users — list all users from public.users (paginated)
+// action=get-users — list all profiles paginated
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleGetUsers(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer '))
-    return res.status(401).json({ error: 'Missing authorization header' });
-
-  const payload = decodeJwtPayload(authHeader.slice(7));
-  if (!payload?.sub)
-    return res.status(401).json({ error: 'Invalid token' });
+  const callerId = await requireAdmin(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   try {
-    const caller = await sb(`users?id=eq.${encodeURIComponent(payload.sub)}&select=role`, {
-      headers: { Prefer: '' },
-    });
-    if (!caller?.[0] || caller[0].role !== 'admin')
-      return res.status(403).json({ error: 'Admin access required' });
-
     const page   = Math.max(0, parseInt(req.query.page || '0', 10));
     const limit  = 20;
     const offset = page * limit;
 
     const users = await sb(
-      `users?select=id,email,role,plan_tier,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
-      { headers: { Prefer: '' } }
+      `profiles?select=id,email,role,plan_tier,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
+      { headers: { Prefer: '' } },
     );
 
-    const countRes = await fetch(`${SUPABASE_URL}/rest/v1/users?select=id`, {
+    // Exact count via Content-Range header
+    const countRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id`, {
       headers: {
         apikey:         SERVICE_KEY,
         Authorization:  `Bearer ${SERVICE_KEY}`,
@@ -110,7 +121,7 @@ async function handleGetUsers(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// action=set-role — change a user's role in public.users
+// action=set-role — change a user's role in public.profiles
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VALID_ROLES = ['individual', 'advisor', 'admin'];
@@ -118,13 +129,8 @@ const VALID_ROLES = ['individual', 'advisor', 'admin'];
 async function handleSetRole(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer '))
-    return res.status(401).json({ error: 'Missing authorization header' });
-
-  const payload = decodeJwtPayload(authHeader.slice(7));
-  if (!payload?.sub)
-    return res.status(401).json({ error: 'Invalid token' });
+  const callerId = await requireAdmin(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { targetUserId, newRole } = req.body || {};
   if (!targetUserId || !newRole)
@@ -133,18 +139,11 @@ async function handleSetRole(req, res) {
     return res.status(400).json({ error: `newRole must be one of: ${VALID_ROLES.join(', ')}` });
 
   try {
-    const caller = await sb(`users?id=eq.${encodeURIComponent(payload.sub)}&select=role`, {
-      headers: { Prefer: '' },
-    });
-    if (!caller?.[0] || caller[0].role !== 'admin')
-      return res.status(403).json({ error: 'Admin access required' });
-
-    await sb(`users?id=eq.${encodeURIComponent(targetUserId)}`, {
+    await sb(`profiles?id=eq.${encodeURIComponent(targetUserId)}`, {
       method:  'PATCH',
       headers: { Prefer: 'return=minimal' },
       body:    JSON.stringify({ role: newRole }),
     });
-
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('[admin?action=set-role] error:', err);
@@ -160,9 +159,8 @@ async function handleSetFlag(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { flagId, enabled } = req.body || {};
-  if (!flagId || typeof enabled !== 'boolean') {
+  if (!flagId || typeof enabled !== 'boolean')
     return res.status(400).json({ error: 'flagId (uuid) and enabled (boolean) required' });
-  }
 
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/feature_flags?id=eq.${flagId}`, {
@@ -175,12 +173,10 @@ async function handleSetFlag(req, res) {
       },
       body: JSON.stringify({ enabled }),
     });
-
     if (!r.ok) {
       const txt = await r.text();
       throw new Error(`Supabase error: ${txt}`);
     }
-
     return res.status(200).json({ success: true, flagId, enabled });
   } catch (err) {
     console.error('[admin?action=set-flag] error:', err);
@@ -210,9 +206,8 @@ async function handleSetUserTier(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, tier } = req.body || {};
-  if (!userId || !TIER_IDS[tier]) {
+  if (!userId || !TIER_IDS[tier])
     return res.status(400).json({ error: 'userId and valid tier required' });
-  }
 
   try {
     const existing = await sb(`user_roles?user_id=eq.${userId}&select=id`, {

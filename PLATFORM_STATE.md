@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 24 May 2026 (PL-16 / F5 Send Report — Phase 2 complete)
+**Last updated:** 24 May 2026 (Auth fix — role detection, profiles table, onIdTokenChanged)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -138,7 +138,7 @@ Plan | Research | Track | Save & Invest | [Promote — advisor only]
 2. React app holds JWT in memory (never localStorage)
 3. Every Supabase query passes JWT in `Authorization` header
 4. Supabase RLS verifies JWT using Firebase's public key (one-time config in Supabase dashboard)
-5. RLS policies use `auth.uid()` — each user sees only their own data
+5. RLS policies use `auth.jwt() ->> 'sub'` (Firebase UID) — each user sees only their own data
 
 ### Supabase Tables — Live & Pending
 
@@ -218,12 +218,14 @@ Full spec: `FundLens_Master_Reference_v23.docx`
 
 | # | Issue | Detail | Status |
 |---|---|---|---|
-| 1 | Firebase + Supabase JWT wiring | Third-Party Auth configured in Supabase dashboard. | ✅ Complete |
+| 1 | Firebase + Supabase JWT wiring | Third-Party Auth configured. `useAuth.jsx` now queries `profiles` (not `users`). Token kept fresh via `onIdTokenChanged`. | ✅ Fixed 24 May 2026 |
 | 2 | Supabase RLS policies | profiles table RLS live. advisor_profiles migration pending (002). | ⚠ 002 pending |
-| 3 | SchemeMapping autocomplete | Axis and others showing wrong AMC schemes in dropdown. | ⚠ Pending |
-| 4 | SchemeBasket slug bug | "Children's" → children_s not childrens | ⚠ Pending |
-| 5 | SIPCalculator mfapi migration | Migrate away from api.mfapi.in | ⚠ Pending |
-| 6 | Online assistant scope | Pre-login: promotional/helpful. Post-login individual: portfolio Q&A. Post-login advisor: premium. | 🔲 Phase 4 |
+| 3 | VITE_SUPABASE_ANON_KEY missing from Vercel | Present in local `.env`; not set in Vercel env vars — all sbFetch calls return 401 in production. **Must set in Vercel dashboard.** | ⚠ Manual action |
+| 4 | SUPABASE_SERVICE_KEY missing from Vercel | `api/admin.js` uses `process.env.SUPABASE_SERVICE_KEY`; local `.env` has `SUPABASE_KEY`. Set `SUPABASE_SERVICE_KEY` in Vercel. | ⚠ Manual action |
+| 5 | SchemeMapping autocomplete | Axis and others showing wrong AMC schemes in dropdown. | ⚠ Pending |
+| 6 | SchemeBasket slug bug | "Children's" → children_s not childrens | ⚠ Pending |
+| 7 | SIPCalculator mfapi migration | Migrate away from api.mfapi.in | ⚠ Pending |
+| 8 | Online assistant scope | Pre-login: promotional/helpful. Post-login individual: portfolio Q&A. Post-login advisor: premium. | 🔲 Phase 4 |
 
 ---
 
