@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v28.0
+**Last updated:** 24 May 2026 · v29.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -339,6 +339,29 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PL-15 — F4 Model Portfolio ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/pages/PortfolioLens/F4ModelPortfolio.jsx` — 3×3 risk × horizon grid, editable cells, Apply to F3 handoff | ✅ Done |
+| `src/pages/PortfolioLens/F3RebalancePlanner.jsx` — minimal targeted edit: `useState` reads `fundlens_rebalance_target_v1` handoff key on mount | ✅ Done |
+| `src/App.jsx` — replaced PLPlaceholder for `/portfolio/f4` with `<F4ModelPortfolio />` | ✅ Done |
+| Vite build — 949 modules, no new errors | ✅ Done |
+
+### F4 Design decisions
+- **Grid** — 3×3: rows = Conservative/Moderate/Aggressive; columns = Short (< 3Y) / Medium (3–7Y) / Long (> 7Y)
+- **Defaults** — 9 pre-populated cells with Indian MF allocations (E/H/D/L summing to 100); Hybrid=0 in all defaults per spec
+- **Cell data** — `{ alloc: { Equity, Hybrid, Debt, Liquid }, categories: [...], returnRange }`
+- **Edit modal** — 4 allocation inputs (E/H/D/L), fund category text (comma-separated), return range; live sum validator; Reset to default per cell
+- **Selection** — risk + horizon pill buttons (desktop) / dropdowns (mobile); selected cell highlighted with ACC border; gap vs current portfolio shown on selected cell only
+- **Apply to F3** — writes `fundlens_rebalance_target_v1` to localStorage then navigates to `/portfolio/f3`; F3 consumes on mount and removes the key
+- **Save model** — `fundlens_model_portfolio_v1` (version 1.0); auto-saved on each edit + explicit Save button
+- **Advisor stub** — "Client default" button shown when `isAdvisor`; toast only (Phase 3: will write to advisor_profiles)
+- **Mobile** — `isMobile = width < 640`; dropdowns instead of pills; 1-column stacked card list; desktop shows structured grid with axis labels
+- **Toast** — fixed bottom-right; 2.5s auto-dismiss; manual dismiss
+
+---
+
 ## PL-14 — F3 Rebalance Planner ✅ (24 May 2026)
 
 | Item | Status |
@@ -384,8 +407,8 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | PL-12 | F1 Health Check (8-rule engine, score gauge, accordion) | ✅ Done |
 | PL-13 | F2 Alerts engine | ✅ Done |
 | PL-14 | F3 Rebalance Planner | ✅ Done |
-| PL-15 | F4 Model Portfolio | ⏳ Next |
-| PL-16 | F5 Send Report | ⏳ Pending PL-12 |
+| PL-15 | F4 Model Portfolio | ✅ Done |
+| PL-16 | F5 Send Report | ⏳ Next |
 | PL-17 | Advisor mode | ⏳ Pending all E+F |
 
 ### PortfolioLens Key Files
@@ -408,9 +431,10 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | `src/pages/PortfolioLens/F1HealthCheck.jsx` | 8-rule engine (R1–R8) · semicircle score gauge · expandable accordion · LTCG alert |
 | `src/pages/PortfolioLens/F2Alerts.jsx` | 6 alert types · watching/fired/snoozed states · snooze/dismiss actions · tabbed filter UI |
 | `src/pages/PortfolioLens/F3RebalancePlanner.jsx` | 4-step wizard · current/target allocation · tax-aware lot selection · LTCG exemption · save plan |
+| `src/pages/PortfolioLens/F4ModelPortfolio.jsx` | 3×3 model grid · editable E/H/D/L allocations · fund category chips · Apply-to-F3 handoff · advisor stub |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
-**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID), `fundlens_rebalance_plan_v1` (free-form — last saved rebalance plan with redemption list + tax estimates)
+**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID), `fundlens_rebalance_plan_v1` (free-form — last saved rebalance plan with redemption list + tax estimates), `fundlens_model_portfolio_v1` (version: "1.0" — 9-cell model grid with alloc/categories/returnRange per cell + selected profile), `fundlens_rebalance_target_v1` (transient handoff — F4 writes E/H/D/L targets; F3 reads + deletes on mount)
 **SheetJS:** xlsx 0.18.5 added for .xls/.xlsx parsing
 
 ---
@@ -422,7 +446,7 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
-| P1 | **PL-15** — F4 Model Portfolio (3×3 risk × horizon grid · editable target allocations · advisor defaults) |
+| P1 | **PL-16** — F5 Send Report (PDF with section toggles · DPDP-safe · email to client) |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |

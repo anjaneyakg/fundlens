@@ -793,7 +793,19 @@ export default function F3RebalancePlanner() {
 
   const [step,       setStep]       = useState(1)
   const [selectedId, setSelectedId] = useState(() => portfolios[0]?.portfolio_id ?? null)
-  const [targets,    setTargets]    = useState({ Equity: 50, Hybrid: 15, Debt: 25, Liquid: 10 })
+  const [targets,    setTargets]    = useState(() => {
+    // Read pre-filled targets written by F4 Model Portfolio "Apply to F3" handoff
+    try {
+      const t = JSON.parse(localStorage.getItem('fundlens_rebalance_target_v1') || 'null')
+      if (t && MACROS.every(m => typeof t[m] === 'number')) {
+        localStorage.removeItem('fundlens_rebalance_target_v1')  // consume once
+        return t
+      }
+    } catch (e) {
+      console.error('F3RebalancePlanner: failed to read F4 handoff target', e)
+    }
+    return { Equity: 50, Hybrid: 15, Debt: 25, Liquid: 10 }
+  })
   const [planSaved,  setPlanSaved]  = useState(false)
 
   const portfolio     = useMemo(() => portfolios.find(p => p.portfolio_id === selectedId) ?? null, [portfolios, selectedId])

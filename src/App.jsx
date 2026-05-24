@@ -25,6 +25,7 @@ import PLPlaceholder           from './pages/PortfolioLens/PLPlaceholder.jsx';
 import F1HealthCheck           from './pages/PortfolioLens/F1HealthCheck.jsx';
 import F2Alerts               from './pages/PortfolioLens/F2Alerts.jsx'
 import F3RebalancePlanner     from './pages/PortfolioLens/F3RebalancePlanner.jsx';
+import F4ModelPortfolio       from './pages/PortfolioLens/F4ModelPortfolio.jsx';
 import F6DataManager           from './pages/PortfolioLens/F6DataManager.jsx';
 import E1Dashboard             from './pages/PortfolioLens/E1Dashboard.jsx';
 import E2Overview              from './pages/PortfolioLens/E2Overview.jsx';
@@ -117,7 +118,7 @@ export default function App() {
             <Route path="f1"    element={<F1HealthCheck />} />
             <Route path="f2"    element={<F2Alerts />} />
             <Route path="f3"    element={<F3RebalancePlanner />} />
-            <Route path="f4"    element={<PLPlaceholder code="F4" name="Model Portfolio"   tagline="Editable 3×3 risk × horizon grid · HO defaults · advisor overrides" />} />
+            <Route path="f4"    element={<F4ModelPortfolio />} />
             <Route path="f5"    element={<PLPlaceholder code="F5" name="Send Report"       tagline="PDF report with section toggles · email to client · DPDP-safe" />} />
             <Route path="f6"    element={<F6DataManager />} />
           </Route>
