@@ -1,5 +1,5 @@
 """
-backfill_nav_history.py  —  v1.2.0
+backfill_nav_history.py  —  v1.4.0
 
 Fetches NAV history from AMFI and inserts into Supabase nav_history table.
 
@@ -16,10 +16,24 @@ AMFI response columns (semicolon-delimited):
 Usage:
     python backfill_nav_history.py --test-mode --months 12
     python backfill_nav_history.py --full
+    python backfill_nav_history.py --from 2006-01-01 --to 2006-12-31
     python backfill_nav_history.py --start-date 2015-01-01 --end-date 2020-12-31
     python backfill_nav_history.py --full --dry-run
     python backfill_nav_history.py --auto-resume
     python backfill_nav_history.py --auto-resume --dry-run
+
+Changelog:
+  v1.4.0  Add --from / --to as aliases for --start-date / --end-date.
+          Supports year-by-year gap repair runs:
+            python backfill_nav_history.py --from 2006-01-01 --to 2006-12-31
+  v1.3.0  Fix: end date is always T-1 (yesterday) for --auto-resume and --full.
+          Previously FULL_END_DATE (hardcoded) caused start > end once the DB
+          caught up to that date, producing 0 windows and immediate exit.
+          FULL_END_DATE constant removed. All auto end-dates use date.today()-1.
+  v1.2.0  --auto-resume flag, 300s timeout, 3-attempt retry on load_scheme_map,
+          BATCH_UPSERT_SIZE=400, INTER_BATCH_SLEEP=0.0
+  v1.1.0  Retry logic on AMFI fetch, BATCH_UPSERT_SIZE, INTER_BATCH_SLEEP
+  v1.0.0  Initial release
 
 Requires env vars: SUPABASE_URL, SUPABASE_KEY
 """
@@ -46,11 +60,12 @@ NAV_HISTORY_TIMEOUT  = 60      # seconds per HTTP request
 MAX_RETRIES          = 5
 RETRY_BACKOFF_BASE   = 10      # seconds; doubles each retry
 LOG_EVERY_N_WINDOWS  = 5
-BATCH_UPSERT_SIZE    = 100     # rows per Supabase upsert call (keep under statement timeout)
-INTER_BATCH_SLEEP    = 1.0     # seconds between batches within a window
+BATCH_UPSERT_SIZE    = 400     # rows per Supabase upsert call (keep under statement timeout)
+INTER_BATCH_SLEEP    = 0.0     # seconds between batches within a window
 
 FULL_START_DATE      = date(1994, 1, 1)
-FULL_END_DATE        = date(2026, 4, 30)
+# No FULL_END_DATE constant — end is always date.today() - timedelta(days=1) (T-1)
+# so the script stays current without code changes.
 
 RETRYABLE_STATUS     = {429, 500, 502, 503, 504}
 UPSERT_RETRY_LIMIT   = 4
@@ -134,8 +149,6 @@ def upsert_nav_rows(client: Client, rows: list[dict]) -> int:
     Upsert rows into nav_history in batches with retry on connection errors.
     Returns the number of rows submitted (duplicates silently skipped by DB).
     """
-    import httpx
-
     for i in range(0, len(rows), BATCH_UPSERT_SIZE):
         batch = rows[i : i + BATCH_UPSERT_SIZE]
 
@@ -148,8 +161,6 @@ def upsert_nav_rows(client: Client, rows: list[dict]) -> int:
                 ).execute()
                 break  # success
             except Exception as exc:
-                # Catch postgrest APIError (statement timeout 57014) and httpx
-                # connection errors; both are transient and safe to retry.
                 exc_str = str(exc)
                 wait = UPSERT_RETRY_BACKOFF * (2 ** (attempt - 1))
                 if attempt == UPSERT_RETRY_LIMIT:
@@ -214,7 +225,7 @@ def fetch_window(from_date: date, to_date: date) -> list[dict]:
             if attempt == MAX_RETRIES:
                 raise RuntimeError(
                     f"AMFI fetch failed after {MAX_RETRIES} attempts "
-                    f"for window {from_date} ->{to_date}: {exc}"
+                    f"for window {from_date} -> {to_date}: {exc}"
                 ) from exc
             log.warning(
                 "AMFI error (attempt %d/%d): %s — retry in %ds",
@@ -275,7 +286,8 @@ def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
     client = get_supabase_client()
 
     if auto_resume:
-        max_date = fetch_max_nav_date(client)
+        yesterday = date.today() - timedelta(days=1)
+        max_date  = fetch_max_nav_date(client)
         if max_date is None:
             start = FULL_START_DATE
             log.info("nav_history is empty — auto-resuming from full start %s", FULL_START_DATE)
@@ -285,14 +297,22 @@ def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
                 "Auto-resuming from %s  (last loaded date was %s)",
                 start, max_date,
             )
-        end = FULL_END_DATE
+        end = yesterday   # T-1: always yesterday, never a hardcoded constant
+        log.info("Auto-resume end date set to yesterday: %s", end)
+
+        if start > end:
+            log.info(
+                "Nothing to do — nav_history is already current through %s (yesterday is %s).",
+                max_date, end,
+            )
+            return
 
     scheme_map = load_scheme_map(client)
 
     windows = date_windows(start, end)
     total   = len(windows)
     log.info(
-        "Backfill range: %s ->%s  |  %d windows × %d days",
+        "Backfill range: %s -> %s  |  %d windows × %d days",
         start, end, total, WINDOW_DAYS,
     )
     if dry_run:
@@ -308,7 +328,7 @@ def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
         try:
             raw_rows = fetch_window(w_start, w_end)
         except RuntimeError as exc:
-            log.error("[Window %d/%d] %s ->%s  FAILED: %s", idx, total, w_start, w_end, exc)
+            log.error("[Window %d/%d] %s -> %s  FAILED: %s", idx, total, w_start, w_end, exc)
             failed_windows += 1
             time.sleep(REQUEST_DELAY_SEC)
             continue
@@ -338,7 +358,7 @@ def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
 
         if idx % LOG_EVERY_N_WINDOWS == 0 or idx == total:
             log.info(
-                "[Window %d/%d] %s ->%s  fetched %d / matched %d / inserted %d",
+                "[Window %d/%d] %s -> %s  fetched %d / matched %d / inserted %d",
                 idx, total, w_start, w_end,
                 total_fetched, total_matched,
                 total_inserted if not dry_run else 0,
@@ -377,8 +397,11 @@ def parse_args() -> argparse.Namespace:
 Examples:
   python backfill_nav_history.py --test-mode --months 12
   python backfill_nav_history.py --full
+  python backfill_nav_history.py --from 2006-01-01 --to 2006-12-31
   python backfill_nav_history.py --start-date 2015-01-01 --end-date 2020-12-31
   python backfill_nav_history.py --full --dry-run
+  python backfill_nav_history.py --auto-resume
+  python backfill_nav_history.py --auto-resume --dry-run
         """,
     )
 
@@ -391,24 +414,26 @@ Examples:
     mode.add_argument(
         "--full",
         action="store_true",
-        help=f"Full 30-year backfill: {FULL_START_DATE} ->{FULL_END_DATE}.",
+        help=f"Full backfill from {FULL_START_DATE} to yesterday (T-1, computed at runtime).",
     )
     mode.add_argument(
-        "--start-date",
+        "--start-date", "--from",
+        dest="start_date",
         metavar="YYYY-MM-DD",
-        help="Custom start date (requires --end-date or defaults to today).",
+        help="Custom start date. Aliases: --from. Pair with --end-date/--to, or defaults to yesterday.",
     )
     mode.add_argument(
         "--auto-resume",
         action="store_true",
-        help="Query MAX(nav_date) from nav_history and resume from the next day. "
+        help="Query MAX(nav_date) from nav_history, resume from next day through yesterday (T-1). "
              f"Falls back to {FULL_START_DATE} if the table is empty.",
     )
 
     parser.add_argument(
-        "--end-date",
+        "--end-date", "--to",
+        dest="end_date",
         metavar="YYYY-MM-DD",
-        help="Custom end date (used with --start-date).",
+        help="Custom end date. Aliases: --to. Used with --start-date/--from.",
     )
     parser.add_argument(
         "--months",
@@ -432,30 +457,32 @@ Examples:
 
 
 def resolve_date_range(args: argparse.Namespace) -> tuple[date, date]:
-    today = date.today()
+    today     = date.today()
+    yesterday = today - timedelta(days=1)
 
     if args.full:
-        return FULL_START_DATE, FULL_END_DATE
+        # End is always T-1 so --full stays current without code changes.
+        return FULL_START_DATE, yesterday
 
     if args.test_mode:
         start = today - relativedelta(months=args.months)
-        return start, today
+        return start, yesterday
 
-    # --start-date mode
+    # --start-date / --from mode: user controls end; default to yesterday if not supplied.
     try:
         start = date.fromisoformat(args.start_date)
     except ValueError:
-        log.error("Invalid --start-date: use YYYY-MM-DD.")
+        log.error("Invalid --start-date/--from: use YYYY-MM-DD.")
         sys.exit(1)
 
     if args.end_date:
         try:
             end = date.fromisoformat(args.end_date)
         except ValueError:
-            log.error("Invalid --end-date: use YYYY-MM-DD.")
+            log.error("Invalid --end-date/--to: use YYYY-MM-DD.")
             sys.exit(1)
     else:
-        end = today
+        end = yesterday
 
     if start > end:
         log.error("--start-date must be before --end-date.")
@@ -475,16 +502,16 @@ def main() -> None:
     else:
         start, end = resolve_date_range(args)
 
-    log.info("backfill_nav_history.py  v1.2.0  starting")
+    log.info("backfill_nav_history.py  v1.4.0  starting")
     log.info(
         "  Mode     : %s",
         "auto-resume" if args.auto_resume
         else "full" if args.full
         else f"test ({args.months}m)" if args.test_mode
-        else "custom",
+        else "custom range",
     )
     if not args.auto_resume:
-        log.info("  Range    : %s ->%s", start, end)
+        log.info("  Range    : %s -> %s", start, end)
     log.info("  Dry run  : %s", args.dry_run)
     log.info("  Window   : %d days  |  delay: %.1fs between requests", WINDOW_DAYS, REQUEST_DELAY_SEC)
 

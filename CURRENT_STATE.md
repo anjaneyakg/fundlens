@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v26.0
+**Last updated:** 24 May 2026 · v28.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -339,6 +339,33 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PL-14 — F3 Rebalance Planner ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/pages/PortfolioLens/F3RebalancePlanner.jsx` — 4-step wizard, SVG donut, tax-aware redemption plan | ✅ Done |
+| `src/App.jsx` — replaced PLPlaceholder for `/portfolio/f3` with `<F3RebalancePlanner />` | ✅ Done |
+| Vite build — 948 modules, no new errors | ✅ Done |
+
+### F3 Wizard Steps
+
+| Step | Content |
+|---|---|
+| 1 — Current | Current allocation by macro-category (Equity/Hybrid/Debt/Liquid) — value, %, scheme count; live SVG donut |
+| 2 — Target | User sets target %; presets (Conservative/Balanced/Aggressive); live donut pair; % total validator |
+| 3 — Plan | Tax-efficient redemption list (LTCG-eligible lots first); buy-side target amounts; LTCG exemption note |
+| 4 — Summary | Stat cards (redeem/tax/net/invest); full redemption table; Save plan to localStorage |
+
+### F3 Design decisions
+- **Macro categories** — Equity (equity + elss + equity_passive + equity_sector), Hybrid, Debt (debt + arbitrage), Liquid (liquid + overnight + money market)
+- **Tax-efficient ordering** — LTCG-eligible lots first: equity/hybrid 365d; debt 1095d (3 years)
+- **Tax calculation** — Equity STCG 20%, Equity/Hybrid LTCG 12.5% above 1.25L exemption, Debt LTCG 12.5%, Debt STCG slab rate
+- **No Holdings snapshot required** — falls back to invested_amount; note shown
+- **Save plan** — fundlens_rebalance_plan_v1 in localStorage
+- **SVG donut** — stroke-dasharray on concentric circles; rotate(-90deg); 2.5px gap between segments
+
+---
+
 ## PortfolioLens Build Status
 
 | Session | Deliverable | Status |
@@ -356,8 +383,8 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | PL-11 | E8 Transaction Report | ✅ Done |
 | PL-12 | F1 Health Check (8-rule engine, score gauge, accordion) | ✅ Done |
 | PL-13 | F2 Alerts engine | ✅ Done |
-| PL-14 | F3 Rebalance Planner | ⏳ Next |
-| PL-15 | F4 Model Portfolio | ⏳ Pending |
+| PL-14 | F3 Rebalance Planner | ✅ Done |
+| PL-15 | F4 Model Portfolio | ⏳ Next |
 | PL-16 | F5 Send Report | ⏳ Pending PL-12 |
 | PL-17 | Advisor mode | ⏳ Pending all E+F |
 
@@ -380,9 +407,10 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | `src/pages/PortfolioLens/E8TransactionReport.jsx` | Full transaction log · avg-cost P&L on sells · FY/type/search filters · pagination |
 | `src/pages/PortfolioLens/F1HealthCheck.jsx` | 8-rule engine (R1–R8) · semicircle score gauge · expandable accordion · LTCG alert |
 | `src/pages/PortfolioLens/F2Alerts.jsx` | 6 alert types · watching/fired/snoozed states · snooze/dismiss actions · tabbed filter UI |
+| `src/pages/PortfolioLens/F3RebalancePlanner.jsx` | 4-step wizard · current/target allocation · tax-aware lot selection · LTCG exemption · save plan |
 | `src/hooks/useWindowWidth.js` | Responsive width hook |
 
-**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID)
+**localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID), `fundlens_rebalance_plan_v1` (free-form — last saved rebalance plan with redemption list + tax estimates)
 **SheetJS:** xlsx 0.18.5 added for .xls/.xlsx parsing
 
 ---
@@ -394,9 +422,10 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
-| P1 | **PL-14** — F3 Rebalance Planner (redemption + reinvestment plan · tax-aware lot selection · step-by-step wizard) |
+| P1 | **PL-15** — F4 Model Portfolio (3×3 risk × horizon grid · editable target allocations · advisor defaults) |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
-| P2 | Resume NAV backfill — nights/weekends only; monitor Supabase IO budget daily |
+| P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
+| P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
 
 ---
 
@@ -427,11 +456,11 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
-| `nav_history` | 8.5M+ (backfill run 5 in progress, resuming from 2018-04-19) | ⏳ Backfill in progress | Script validated at 99.5% match rate. |
+| `nav_history` | ~25.2M (gap repair complete — 11.66M new rows added 24 May 2026) | ✅ Gap repair complete | 2006-01-01 → 2026-04-30 · 0 windows failed · REINDEX recommended |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
 
-**Storage:** ~16MB current · ~6.3GB projected after full backfill
+**Storage:** ~5–6 GB estimated (index bloated — run `REINDEX INDEX CONCURRENTLY nav_history_pkey` after gap repair)
 **Supabase tier:** Pro ($25/mo) ✅ approved
 
 ### Supabase Instances
@@ -452,7 +481,8 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | `cell_4d_v2.py` | v2.4 | ✅ Live | All 50 AMCs configured. Nippon 110/110. All P0 issues resolved. Ready to commit. |
 | `backfill_amc_map.py` | v3 | ✅ Live | One-time per historical month. |
 | `bulk_upload.py` | v1 | ✅ Live | Emergency batch upload only. |
-| `backfill_nav_history.py` | v1.2.0 | ✅ Live | --auto-resume flag added. 300s timeout. 3-attempt retry on load_scheme_map. Run 5 in progress. |
+| `backfill_nav_history.py` | v1.4.0 | ✅ Live | T-1 auto end-date fix · --from/--to aliases · BATCH_UPSERT_SIZE=400 · INTER_BATCH_SLEEP=0.0 |
+| `gap_repair.sh` | v1.0 | ✅ Done | Year-by-year gap repair 2006-2026 — run once. Pre-2006 dry-run: AMFI returns 0 rows (no data before 2006). |
 | `sync_amc_master.py` | v2.0 | ✅ Ready | Sync AMCs from FundInsight → amcs table. |
 | `populate_schemes_table.py` | v2.0 | ✅ Ready | Load scheme master from AMFI. |
 | `uti_fetch.py` | v1.0 | ⛔ Retired | Replaced by cell_a_fetcher. |
@@ -461,22 +491,45 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
-## NAV Backfill — Next Run Command
+## NAV Backfill — Status ✅ Gap Repair Complete (24 May 2026)
 
+Gap repair ran 23:28–00:48 IST (1h 20m). All 21 years 2006–2026 completed with 0 failures.
+
+| Year | New rows | Year | New rows |
+|---|---|---|---|
+| 2006 | 146,236 | 2014 | 1,039,036 |
+| 2007 | 225,516 | 2015 | 1,258,422 |
+| 2008 | 274,098 | 2016 | 1,402,692 |
+| 2009 | 311,951 | 2017 | 1,468,438 |
+| 2010 | 355,066 | 2018 | 1,552,363 |
+| 2011 | 378,096 | 2019 | 1,771,784 |
+| 2012 | 405,655 | 2020–2025 | 270,135 |
+| 2013 | 799,665 | 2026 | 0 (already current) |
+| **Total new** | **11,659,153** | **Est. total** | **~25.2M rows** |
+
+Pre-2006 dry-run: AMFI returns 0 rows — data starts from 2006. No backfill needed before 2006.
+
+**Next nightly top-up (daily maintenance):**
 ```bash
 cd ~/Documents/fundlens
-export SUPABASE_URL="https://sewywgatxkiulbrhwpyh.supabase.co"
-export SUPABASE_KEY="[service_role_key]"
-python pipeline/backfill_nav_history.py --full
+set -a && source .env && set +a
+python pipeline/backfill_nav_history.py --auto-resume
 ```
 
-Resume from 2018-01-01 when Supabase is confirmed stable.
-
-**Verification SQL:**
+**REINDEX (run once in Supabase SQL editor — recovers ~1–1.5 GB of index bloat):**
 ```sql
-SELECT COUNT(*) FROM nav_history;                     -- ~145M-150M
-SELECT COUNT(DISTINCT scheme_id) FROM nav_history;    -- ~16,000
-SELECT MIN(nav_date), MAX(nav_date) FROM nav_history; -- 1994-01-03, 2026-04-30
+REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;
+```
+
+**Verification SQL (run in Supabase SQL editor):**
+```sql
+SELECT EXTRACT(YEAR FROM nav_date) AS year, COUNT(*) AS rows
+FROM nav_history GROUP BY year ORDER BY year;
+
+SELECT COUNT(*) AS total_rows,
+       MIN(nav_date) AS earliest,
+       MAX(nav_date) AS latest
+FROM nav_history;
 ```
 
 ---
