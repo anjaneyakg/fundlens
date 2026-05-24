@@ -500,7 +500,7 @@ function NavTab({ label, type, isGuest, currentPath, children, isActive: propAct
   )
 }
 
-function UserMenu({ user, onSignOut }) {
+function UserMenu({ user, onSignOut, isAdmin }) {
   const [open, setOpen] = useState(false)
   const ref             = useRef(null)
 
@@ -525,6 +525,19 @@ function UserMenu({ user, onSignOut }) {
       {open && (
         <div className="fl-user-dropdown">
           <div className="fl-user-email">{user.email}</div>
+          {isAdmin && (
+            <a
+              href="/admin"
+              style={{
+                display: 'block', padding: '8px 10px', borderRadius: 8,
+                textDecoration: 'none', fontSize: 13, fontFamily: 'DM Sans',
+                color: 'var(--color-primary)', fontWeight: 600,
+              }}
+              onClick={() => setOpen(false)}
+            >
+              ⚙ Admin Console
+            </a>
+          )}
           <button className="fl-signout-btn" onClick={async () => { setOpen(false); await onSignOut() }}>
             Sign out
           </button>
@@ -692,7 +705,7 @@ export default function Nav() {
   const location   = useLocation()
   const navigate   = useNavigate()
   const { user, signOut } = useAuth()
-  const { isGuest, isAdvisor } = useRole()
+  const { isGuest, isAdvisor, isAdmin } = useRole()
   const { advisorMode, setAdvisorMode } = useAdvisorMode()
   const { advisorLogo } = useAdvisorTheme()
   const width      = useWindowWidth()
@@ -825,7 +838,7 @@ export default function Nav() {
 
             {/* Auth: sign in buttons OR user menu */}
             {user ? (
-              <UserMenu user={user} onSignOut={handleSignOut} />
+              <UserMenu user={user} onSignOut={handleSignOut} isAdmin={isAdmin} />
             ) : (
               <>
                 <NavLink to="/login" className="fl-signin-btn">Sign in</NavLink>

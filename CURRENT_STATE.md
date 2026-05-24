@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v31.0
+**Last updated:** 24 May 2026 · v32.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -457,6 +457,19 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 **localStorage keys:** `fundlens_pl_consent`, `fundlens_portfolios` (schema_version: "2.0" — portfolio is investor-level with raw.cams/kfin/holdings slots), `fundlens_alerts_v1` (schema_version: "1.0" — alert snooze map keyed by deterministic alert ID), `fundlens_rebalance_plan_v1` (free-form — last saved rebalance plan with redemption list + tax estimates), `fundlens_model_portfolio_v1` (version: "1.0" — 9-cell model grid with alloc/categories/returnRange per cell + selected profile), `fundlens_rebalance_target_v1` (transient handoff — F4 writes E/H/D/L targets; F3 reads + deletes on mount)
 **SheetJS:** xlsx 0.18.5 added for .xls/.xlsx parsing
+
+---
+
+## Nav Admin Link Fix ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/components/Nav.jsx` — 3 surgical edits: add `isAdmin` to `useRole()` destructure; add `isAdmin` prop to `UserMenu`; render "⚙ Admin Console" link in user dropdown when `isAdmin` is true | ✅ Done |
+| `useRole.jsx` — already exports `isAdmin: effectiveRole === 'admin'`; no change needed | ✅ Confirmed |
+| Vite build — 950 modules, no new errors | ✅ Done |
+
+### Root cause
+`useRole()` already exported `isAdmin` correctly, but `Nav.jsx` only destructured `{ isGuest, isAdvisor }` — `isAdmin` was never pulled out. The `UserMenu` component also never received `isAdmin` as a prop, so no Admin Console link was ever rendered. Three targeted edits (no full rewrite) fixed it.
 
 ---
 
