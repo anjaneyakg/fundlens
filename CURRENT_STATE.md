@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v29.0
+**Last updated:** 24 May 2026 · v30.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -362,6 +362,27 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PL-16 — F5 Send Report ✅ (24 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/pages/PortfolioLens/F5SendReport.jsx` — section toggles, print CSS visibility trick, window.print(), mailto: email draft | ✅ Done |
+| `src/App.jsx` — replaced PLPlaceholder for `/portfolio/f5` with `<F5SendReport />` | ✅ Done |
+| Vite build — 950 modules, no new errors | ✅ Done |
+
+### F5 Design decisions
+- **Print isolation** — `body * { visibility: hidden }` + `.f5-print-report * { visibility: visible }` + `position:absolute;left:0;top:0` — hides nav/sidebar/toggles without needing class names on them
+- **Print CSS** — `@page { size: A4 portrait; margin: 12mm 18mm }` · `page-break-before: always` between sections · stat grid 4-column · tables with header rule
+- **Section toggles** — E1 (Portfolio Summary) always enabled; E2/E3/E7/F1/F3 user-toggleable; sections with no data shown greyed out with "no data" label
+- **Email draft** — `mailto:` link (no server call) with plain-text summary — DPDP-safe; opens OS email client
+- **Health score** — 6 rules (R1–R5, R8); R6/R7 skipped (need NAV/folio data); score = average of per-rule scores (PASS=100, WARN=60, FAIL=20)
+- **F3 plan** — reads `fundlens_rebalance_plan_v1` from localStorage; shows redemptions/investments table
+- **Advisor mode** — checks `role === 'advisor'` via `useRole()`; reads `fundlens_advisor_profile.firm_name` from localStorage for header; falls back to "FundLens"
+- **DPDP** — no PAN/name/folio in report; all processing browser-side; mailto body is plain-text summary only
+- **New localStorage keys read (read-only):** `fundlens_portfolios`, `fundlens_rebalance_plan_v1`, `fundlens_advisor_profile`
+
+---
+
 ## PL-14 — F3 Rebalance Planner ✅ (24 May 2026)
 
 | Item | Status |
@@ -408,8 +429,8 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | PL-13 | F2 Alerts engine | ✅ Done |
 | PL-14 | F3 Rebalance Planner | ✅ Done |
 | PL-15 | F4 Model Portfolio | ✅ Done |
-| PL-16 | F5 Send Report | ⏳ Next |
-| PL-17 | Advisor mode | ⏳ Pending all E+F |
+| PL-16 | F5 Send Report | ✅ Done — 24 May 2026 |
+| PL-17 | Advisor mode | ⏳ Pending (Phase 3) |
 
 ### PortfolioLens Key Files
 
@@ -446,7 +467,7 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 | P0 | Run `migrations/002_advisor_profiles.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Run `migrations/003_promo_messages.sql` in fundlens-prod SQL editor when Supabase IO recovers |
 | P0 | Confirm Vercel deployment is live and green at fundlens-six.vercel.app |
-| P1 | **PL-16** — F5 Send Report (PDF with section toggles · DPDP-safe · email to client) |
+| P1 | **PH3-S1** — Multi-client advisor dashboard (`/advisor/clients`, localStorage-based, Phase 3 start) |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |

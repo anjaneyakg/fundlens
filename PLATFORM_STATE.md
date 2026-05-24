@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 24 May 2026
+**Last updated:** 24 May 2026 (PL-16 / F5 Send Report — Phase 2 complete)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -66,7 +66,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH2-S7 | E5 Performance matrix | ✅ Done |
 | PH2-S8 | E6 + E7 + E8 (Cashflow, Capital gains, Transaction report) | ✅ Done |
 | PH2-S9 | F1 Health check (8-rule engine) | ✅ Done — 24 May 2026 |
-| PH2-S10 | F2–F5 (Alerts, Rebalance, Model portfolio, PDF report) | 🔄 In progress — F2 ✅ F3 ✅ F4 ✅ (24 May 2026); F5 pending |
+| PH2-S10 | F2–F5 (Alerts, Rebalance, Model portfolio, PDF report) | ✅ Done — 24 May 2026 (F2 ✅ F3 ✅ F4 ✅ F5 ✅) |
 
 ### Phase 3 — Advisor Layer (Weeks 7–9)
 
