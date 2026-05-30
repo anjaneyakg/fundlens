@@ -3,6 +3,13 @@
 // Uses onIdTokenChanged (fires on sign-in, sign-out, AND ~1h token refresh)
 // so the stored JWT is always current.
 // Table: public.profiles (id TEXT = Firebase UID, email, role, plan_tier)
+//
+// profileExists:
+//   null  → loading / not yet determined
+//   true  → profiles row exists (user is registered)
+//   false → no profiles row yet (user must go through /register wizard)
+//
+// The profiles row is NO LONGER auto-created here. /register is responsible.
 
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import {
@@ -18,8 +25,6 @@ const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ── Supabase REST helper ──────────────────────────────────────────────────────
-// Always requires apikey (anon key) + Authorization (Firebase JWT).
-// Returns parsed JSON on success, null on any error.
 async function sbFetch(path, token, options = {}) {
   const { headers: extraHeaders, ...rest } = options
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -39,23 +44,23 @@ async function sbFetch(path, token, options = {}) {
   return text ? JSON.parse(text) : null
 }
 
-// ── Profile loader (module-level — no stale-closure risk) ────────────────────
-// Fetches or creates the user's row in public.profiles.
-// Always calls getIdToken() fresh (Firebase auto-refreshes if near expiry).
-async function loadProfile(firebaseUser, setRole, setPlanTier) {
+// ── Profile loader ────────────────────────────────────────────────────────────
+// Reads the profiles row. Sets profileExists=true if found, false if not.
+// Does NOT create the row — that is /register's job.
+async function loadProfile(firebaseUser, setRole, setPlanTier, setProfileExists) {
   const uid = firebaseUser.uid
   let idToken
   try {
     idToken = await firebaseUser.getIdToken()
   } catch (err) {
     console.error('[useAuth] getIdToken failed during profile load:', err)
-    setRole('individual')
-    setPlanTier('free')
+    setRole(null)
+    setPlanTier(null)
+    setProfileExists(false)
     return
   }
 
   try {
-    // ── Fetch existing profile row ────────────────────────────────────────────
     const rows = await sbFetch(
       `profiles?id=eq.${encodeURIComponent(uid)}&select=id,email,role,plan_tier`,
       idToken,
@@ -64,46 +69,19 @@ async function loadProfile(firebaseUser, setRole, setPlanTier) {
     if (rows && rows.length > 0) {
       setRole(rows[0].role || 'individual')
       setPlanTier(rows[0].plan_tier || 'free')
+      setProfileExists(true)
       return
     }
 
-    // ── Row missing — first sign-in — create the profile ─────────────────────
-    // Prefer: return=representation so we can read the server-assigned defaults
-    const created = await sbFetch('profiles', idToken, {
-      method:  'POST',
-      headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({
-        id:        uid,
-        email:     firebaseUser.email,
-        role:      'individual',
-        plan_tier: 'free',
-      }),
-    })
-
-    if (created && created.length > 0) {
-      setRole(created[0].role || 'individual')
-      setPlanTier(created[0].plan_tier || 'free')
-      return
-    }
-
-    // ── INSERT returned nothing — row may already exist (concurrent login) ────
-    // Retry the SELECT
-    const retry = await sbFetch(
-      `profiles?id=eq.${encodeURIComponent(uid)}&select=id,email,role,plan_tier`,
-      idToken,
-    )
-    if (retry && retry.length > 0) {
-      setRole(retry[0].role || 'individual')
-      setPlanTier(retry[0].plan_tier || 'free')
-    } else {
-      console.error('[useAuth] loadProfile: could not fetch or create profile for', uid)
-      setRole('individual')
-      setPlanTier('free')
-    }
+    // Row missing — user needs to complete /register wizard
+    setRole(null)
+    setPlanTier(null)
+    setProfileExists(false)
   } catch (err) {
     console.error('[useAuth] loadProfile unexpected error:', err)
-    setRole('individual')
-    setPlanTier('free')
+    setRole(null)
+    setPlanTier(null)
+    setProfileExists(false)
   }
 }
 
@@ -111,27 +89,24 @@ async function loadProfile(firebaseUser, setRole, setPlanTier) {
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]         = useState(null)
-  const [token, setToken]       = useState(null)
-  const [role, setRole]         = useState(null)
-  const [planTier, setPlanTier] = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const [user,           setUser]           = useState(null)
+  const [token,          setToken]          = useState(null)
+  const [role,           setRole]           = useState(null)
+  const [planTier,       setPlanTier]       = useState(null)
+  const [profileExists,  setProfileExists]  = useState(null) // null=loading, true/false
+  const [loading,        setLoading]        = useState(true)
 
-  // Tracks the uid whose profile has been loaded.
-  // Prevents re-fetching the profile on every ~1h token refresh.
+  // Prevents re-fetching the profile on every ~1h token refresh for the same uid.
   const loadedUidRef = useRef(null)
 
   useEffect(() => {
-    // onIdTokenChanged fires on: sign-in, sign-out, AND every ~1h token refresh.
-    // This keeps `token` state current so all downstream Supabase calls always
-    // carry a valid (non-expired) Firebase JWT.
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
-        // Signed out
         setUser(null)
         setToken(null)
         setRole(null)
         setPlanTier(null)
+        setProfileExists(null)
         loadedUidRef.current = null
         setLoading(false)
         return
@@ -142,10 +117,9 @@ export function AuthProvider({ children }) {
         setUser(firebaseUser)
         setToken(idToken)
 
-        // Load profile only once per uid.
-        // Token refreshes for the same uid skip the Supabase round-trip.
+        // Load profile only once per uid — skip on token refreshes.
         if (loadedUidRef.current !== firebaseUser.uid) {
-          await loadProfile(firebaseUser, setRole, setPlanTier)
+          await loadProfile(firebaseUser, setRole, setPlanTier, setProfileExists)
           loadedUidRef.current = firebaseUser.uid
         }
       } catch (err) {
@@ -154,6 +128,7 @@ export function AuthProvider({ children }) {
         setToken(null)
         setRole(null)
         setPlanTier(null)
+        setProfileExists(null)
         loadedUidRef.current = null
       }
 
@@ -162,8 +137,7 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
-  // ── Auth actions ─────────────────────────────────────────────────────────────
-  // onIdTokenChanged handles all state updates after sign-in.
+  // ── Auth actions ──────────────────────────────────────────────────────────
 
   async function signIn(email, password) {
     return signInWithEmailAndPassword(auth, email, password)
@@ -176,21 +150,21 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     await firebaseSignOut(auth)
-    // Clear state immediately for instant UI response.
-    // onIdTokenChanged will also fire with null and do the same.
     setUser(null)
     setToken(null)
     setRole(null)
     setPlanTier(null)
+    setProfileExists(null)
     loadedUidRef.current = null
   }
 
-  // Force-reload the profile from Supabase (e.g., after an admin changes your role)
+  // Force-reload the profile (e.g., after /register wizard creates the row,
+  // or after an admin changes a user's role).
   async function refreshRole() {
     if (!user) return
     try {
       loadedUidRef.current = null
-      await loadProfile(user, setRole, setPlanTier)
+      await loadProfile(user, setRole, setPlanTier, setProfileExists)
       loadedUidRef.current = user.uid
     } catch (err) {
       console.error('[useAuth] refreshRole error:', err)
@@ -203,6 +177,7 @@ export function AuthProvider({ children }) {
       token,
       role,
       planTier,
+      profileExists,
       loading,
       isAuthenticated: !!user,
       accessToken: token,   // alias — some components use accessToken

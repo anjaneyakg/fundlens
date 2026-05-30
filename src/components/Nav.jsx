@@ -743,7 +743,7 @@ function MobileDrawer({
 export default function Nav() {
   const location   = useLocation()
   const navigate   = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, signOut, profileExists } = useAuth()
   const { isGuest, isAdvisor, isAdmin } = useRole()
   const { advisorMode, setAdvisorMode } = useAdvisorMode()
   const { advisorLogo } = useAdvisorTheme()
@@ -877,7 +877,22 @@ export default function Nav() {
             )}
 
             {/* Auth: sign in buttons OR user menu */}
-            {user ? (
+            {user && profileExists === false ? (
+              /* Firebase auth but no profile row — prompt to complete registration */
+              <NavLink
+                to="/register"
+                style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '7px 16px', borderRadius: 8,
+                  background: 'var(--color-primary)', color: '#fff',
+                  fontFamily: 'DM Sans', fontSize: 13, fontWeight: 700,
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(29,158,117,0.25)',
+                }}
+              >
+                Complete registration →
+              </NavLink>
+            ) : user ? (
               <UserMenu
                 user={user}
                 onSignOut={handleSignOut}

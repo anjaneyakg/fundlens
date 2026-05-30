@@ -1,26 +1,37 @@
 // src/pages/AdminLayout.jsx
 // Admin console shell. Route is already gated by ProtectedRoute requiredRole="admin".
-// Shows current user email + role in sidebar footer, with a Sign Out button.
+// PH3-S4: Added notification bell to sidebar header. Polls every 60s for unread count.
 
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { createSupabaseClient } from '../lib/supabaseClient';
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+function fmtDate(s) {
+  if (!s) return '—'
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return String(s)
+  return `${String(d.getDate()).padStart(2,'0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+}
 
 const NAV_ITEMS = [
   {
     group: 'Data Pipeline',
     items: [
-      { to: '/admin/portfolio-upload', label: 'Portfolio Upload',  icon: '⬆', live: true  },
-      { to: '/admin/coverage',         label: 'Coverage',          icon: '◈', live: true  },
-      { to: '/admin/scheme-mapping',   label: 'Scheme Mapping',    icon: '◈', live: true  },
-      { to: '/admin/amfi-marketcap',   label: 'AMFI Market Cap',   icon: '◉', live: true  },
-      { to: '/admin/amc-directory',    label: 'AMC Directory',     icon: '◎', live: false },
+      { to: '/admin/portfolio-upload', label: 'Portfolio Upload', icon: '⬆', live: true  },
+      { to: '/admin/coverage',         label: 'Coverage',         icon: '◈', live: true  },
+      { to: '/admin/scheme-mapping',   label: 'Scheme Mapping',   icon: '◈', live: true  },
+      { to: '/admin/amfi-marketcap',   label: 'AMFI Market Cap',  icon: '◉', live: true  },
+      { to: '/admin/amc-directory',    label: 'AMC Directory',    icon: '◎', live: false },
     ],
   },
   {
     group: 'Access Control',
     items: [
-      { to: '/admin/users',       label: 'User Manager',      icon: '◈', live: true  },
-      { to: '/admin/tool-access', label: 'Tool Access Matrix', icon: '◈', live: true  },
+      { to: '/admin/users',        label: 'User Manager',       icon: '◈', live: true  },
+      { to: '/admin/applications', label: 'Advisor Applications', icon: '◈', live: true },
+      { to: '/admin/tool-access',  label: 'Tool Access Matrix', icon: '◈', live: true  },
     ],
   },
   {
@@ -38,9 +49,230 @@ const ROLE_COLOR = {
   individual: '#1d4ed8',
 };
 
+const NOTIF_TYPE_ICON = {
+  new_advisor_application:     '👤',
+  new_investor_registration:   '🆕',
+  advisor_approved:            '✅',
+  advisor_rejected:            '❌',
+  admin_registered_advisor:    '🔧',
+};
+
+// ── Bell SVG ─────────────────────────────────────────────────────────────────
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      />
+      <path
+        d="M13.73 21a2 2 0 0 1-3.46 0"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ── Notification Bell ─────────────────────────────────────────────────────────
+function NotificationBell({ token }) {
+  const [unread,       setUnread]       = useState(0)
+  const [notifs,       setNotifs]       = useState([])
+  const [dropOpen,     setDropOpen]     = useState(false)
+  const [loadingNotifs,setLoadingNotifs]= useState(false)
+  const dropRef = useRef(null)
+
+  async function fetchCount() {
+    if (!token) return
+    try {
+      const sb = createSupabaseClient(token)
+      const { count, error } = await sb
+        .from('admin_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('read', false)
+      if (!error && count !== null) setUnread(count)
+    } catch (err) {
+      console.error('[AdminLayout] fetchCount error:', err)
+    }
+  }
+
+  async function fetchNotifs() {
+    if (!token) return
+    setLoadingNotifs(true)
+    try {
+      const sb = createSupabaseClient(token)
+      const { data, error } = await sb
+        .from('admin_notifications')
+        .select('id,type,message,read,metadata,created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (!error) setNotifs(data || [])
+    } catch (err) {
+      console.error('[AdminLayout] fetchNotifs error:', err)
+    } finally {
+      setLoadingNotifs(false)
+    }
+  }
+
+  async function markRead(id) {
+    if (!token) return
+    try {
+      const sb = createSupabaseClient(token)
+      await sb.from('admin_notifications').update({ read: true }).eq('id', id)
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+      setUnread(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('[AdminLayout] markRead error:', err)
+    }
+  }
+
+  async function markAllRead() {
+    if (!token) return
+    try {
+      const sb = createSupabaseClient(token)
+      await sb.from('admin_notifications').update({ read: true }).eq('read', false)
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+      setUnread(0)
+    } catch (err) {
+      console.error('[AdminLayout] markAllRead error:', err)
+    }
+  }
+
+  // Initial fetch + 60s polling
+  useEffect(() => {
+    fetchCount()
+    const id = setInterval(fetchCount, 60000)
+    return () => clearInterval(id)
+  }, [token])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const h = e => { if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  function handleBellClick() {
+    const next = !dropOpen
+    setDropOpen(next)
+    if (next) fetchNotifs()
+  }
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }} ref={dropRef}>
+      <button
+        onClick={handleBellClick}
+        style={{
+          width: 34, height: 34, borderRadius: 8,
+          border: '1px solid rgba(99,102,241,0.2)',
+          background: 'rgba(99,102,241,0.06)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: '#6366f1',
+          position: 'relative',
+        }}
+        title="Admin notifications"
+        aria-label="Admin notifications"
+      >
+        <BellIcon />
+        {unread > 0 && (
+          <span style={{
+            position: 'absolute', top: -4, right: -4,
+            width: 18, height: 18, borderRadius: '50%',
+            background: '#dc2626', color: '#fff',
+            fontSize: 10, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 0 2px #fff',
+          }}>
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+
+      {dropOpen && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 500,
+          width: 320, background: '#fff',
+          border: '1px solid rgba(99,102,241,0.15)',
+          borderRadius: 14,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          overflow: 'hidden',
+        }}>
+          {/* Dropdown header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 14px', borderBottom: '1px solid #f1f5f9',
+            background: '#faf5ff',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1e1b4b' }}>Notifications</span>
+            {unread > 0 && (
+              <button
+                onClick={markAllRead}
+                style={{
+                  fontSize: 11, fontWeight: 600, color: '#6366f1',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '2px 6px',
+                }}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {/* List */}
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {loadingNotifs && (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                Loading…
+              </div>
+            )}
+            {!loadingNotifs && notifs.length === 0 && (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                No notifications
+              </div>
+            )}
+            {!loadingNotifs && notifs.map(n => (
+              <div
+                key={n.id}
+                style={{
+                  padding: '11px 14px',
+                  borderBottom: '1px solid #f8fafc',
+                  background: n.read ? '#fff' : '#faf5ff',
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                }}
+              >
+                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>
+                  {NOTIF_TYPE_ICON[n.type] || '🔔'}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.45, marginBottom: 3 }}>
+                    {n.message}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9ca3af' }}>{fmtDate(n.created_at)}</div>
+                </div>
+                {!n.read && (
+                  <button
+                    onClick={() => markRead(n.id)}
+                    style={{
+                      fontSize: 10, fontWeight: 600, color: '#6366f1',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '2px 4px', flexShrink: 0, whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Mark read
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AdminLayout ───────────────────────────────────────────────────────────────
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const { user, role, signOut } = useAuth();
+  const { user, role, token, signOut } = useAuth();
 
   async function handleSignOut() {
     await signOut();
@@ -74,13 +306,14 @@ export default function AdminLayout() {
 
       {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
-        {/* Logo */}
+        {/* Logo + bell */}
         <div style={s.logoWrap}>
           <div style={s.logoBox}><span style={s.logoText}>FL</span></div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={s.logoName}>FundLens</div>
             <div style={s.logoTag}>Admin Console</div>
           </div>
+          <NotificationBell token={token} />
         </div>
 
         {/* Nav */}
@@ -116,7 +349,6 @@ export default function AdminLayout() {
         {/* Footer — user info + sign-out */}
         <div style={s.footerWrap}>
           <div style={s.userCard}>
-            {/* Avatar */}
             <div style={s.avatar}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={s.userEmail} title={user?.email || ''}>
@@ -168,7 +400,7 @@ const s = {
     padding: '1.5rem 0',
   },
   logoWrap: {
-    display: 'flex', alignItems: 'center', gap: 12,
+    display: 'flex', alignItems: 'center', gap: 10,
     padding: '0 1.25rem 1.5rem',
     borderBottom: '1px solid rgba(99,102,241,0.08)',
     marginBottom: '1.25rem',
@@ -204,7 +436,6 @@ const s = {
     background: '#f5f3ff', border: '1px solid #e9d5ff',
     borderRadius: 20, padding: '2px 8px',
   },
-  // Footer
   footerWrap: { padding: '0 0.75rem', marginTop: 'auto', paddingTop: '0.75rem' },
   userCard: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -220,7 +451,7 @@ const s = {
   userEmail: {
     fontSize: 11, fontWeight: 600, color: '#3730a3',
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-    maxWidth: 130,
+    maxWidth: 110,
   },
   roleBadge: {
     fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',

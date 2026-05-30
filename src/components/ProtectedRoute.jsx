@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 const ROLE_ORDER = { guest: 0, individual: 1, advisor: 2, admin: 3 };
 
 export default function ProtectedRoute({ children, requiredRole = 'individual' }) {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, profileExists } = useAuth();
   const location = useLocation();
 
   if (loading) return (
@@ -21,6 +21,12 @@ export default function ProtectedRoute({ children, requiredRole = 'individual' }
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  // Authenticated but no profiles row — send to registration wizard.
+  // Skip if already on /register to avoid loops.
+  if (profileExists === false && location.pathname !== '/register') {
+    return <Navigate to="/register" replace />;
   }
 
   const effectiveRole = role || 'individual';

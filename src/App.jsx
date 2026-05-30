@@ -50,9 +50,11 @@ import SchemeMapping           from './pages/SchemeMapping.jsx';
 import AmfiMarketCapUpload     from './pages/admin/AmfiMarketCapUpload.jsx';
 import Login                   from './pages/Login';
 import Upgrade                 from './pages/Upgrade';
+import Register                from './pages/Register';
 import ProtectedRoute          from './components/ProtectedRoute';
 import UserManager             from './pages/admin/UserManager';
 import ToolAccessMatrix        from './pages/admin/ToolAccessMatrix';
+import AdvisorApplications     from './pages/admin/AdvisorApplications.jsx';
 import { AdvisorModeProvider } from './context/AdvisorModeContext';
 import AdvisorDashboard        from './advisor/AdvisorDashboard.jsx';
 import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
@@ -75,6 +77,9 @@ export default function App() {
           <Route path="/upgrade"                element={<Upgrade />} />
           <Route path="/tools/market-gauge"     element={<MarketGauge />} />
           <Route path="/embed/market-gauge"     element={<MarketGaugeEmbed />} />
+
+          {/* /register — public but self-redirects if already registered */}
+          <Route path="/register"               element={<Register />} />
 
           {/* Plan tools — public, no login required */}
           <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
@@ -156,6 +161,7 @@ export default function App() {
             <Route path="scheme-mapping"   element={<SchemeMapping />} />
             <Route path="amfi-marketcap"   element={<AmfiMarketCapUpload />} />
             <Route path="users"            element={<UserManager />} />
+            <Route path="applications"     element={<AdvisorApplications />} />
             <Route path="tool-access"      element={<ToolAccessMatrix />} />
           </Route>
 

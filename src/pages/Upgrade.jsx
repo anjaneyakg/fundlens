@@ -103,6 +103,43 @@ export default function Upgrade() {
           </div>
         </div>
 
+        {/* Advisor CTA */}
+        <div style={{
+          marginTop: 20,
+          background: 'var(--color-surface-raised)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 16,
+          padding: '22px 28px',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+              Are you a financial advisor or distributor?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              MFD/IFD or SEBI RIA — apply for advisor access.
+            </div>
+          </div>
+          <Link
+            to="/register?type=advisor"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '10px 20px', borderRadius: 9,
+              border: '1.5px solid var(--color-primary)',
+              color: 'var(--color-primary)', fontWeight: 700,
+              fontSize: 14, textDecoration: 'none', whiteSpace: 'nowrap',
+              transition: 'all 0.15s',
+            }}
+          >
+            Apply for Advisor Access →
+          </Link>
+        </div>
+
         <p style={{ marginTop: 20, fontSize: 12, color: 'var(--color-text-muted)' }}>
           Questions?{' '}
           <a href="mailto:support@fundlens.in" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>

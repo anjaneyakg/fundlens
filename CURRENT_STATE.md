@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 30 May 2026 · v36.0
+**Last updated:** 31 May 2026 · v37.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -498,6 +498,79 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PH3-S4 — Advisor Onboarding Flow ✅ (31 May 2026)
+
+| Item | Status |
+|---|---|
+| `migrations/004_registration.sql` — promo_codes, regulatory_debarred, admin_notifications tables; ALTER advisor_profiles with registration/application fields; tighten advisor_profiles RLS | ✅ Written — run manually in Supabase fundlens-prod |
+| `src/pages/Register.jsx` — 4-step registration wizard: choose path, details, promo code, declaration + submit | ✅ Done |
+| `src/hooks/useAuth.jsx` — added `profileExists` state; removed auto-create of profiles row; `loadProfile` sets profileExists true/false | ✅ Done |
+| `src/components/ProtectedRoute.jsx` — added profileExists check; redirects to /register when authenticated user has no profile row | ✅ Done |
+| `src/pages/admin/AdvisorApplications.jsx` — pending applications table, approve/reject actions, admin-direct registration form | ✅ Done |
+| `src/pages/AdminLayout.jsx` — notification bell with unread badge, dropdown with last 10 notifications, mark read, mark all read, 60s polling; Advisor Applications nav item | ✅ Done |
+| `api/admin.js` — 6 new actions: notify-registration, approve-advisor, reject-advisor, get-notifications, mark-notification-read, admin-register-advisor | ✅ Done |
+| `src/App.jsx` — /register route (public), /admin/applications route (admin) | ✅ Done |
+| `src/pages/Upgrade.jsx` — "Are you a financial advisor?" CTA → /register?type=advisor | ✅ Done |
+| `src/components/Nav.jsx` — shows "Complete registration →" button when user has no profile row | ✅ Done |
+| Vite build — 958 modules, 0 new errors | ✅ Done |
+
+### Registration wizard flow
+
+| Step | Content |
+|---|---|
+| 1 — Choose path | Investor card vs Advisor / Distributor card; URL param `?type=advisor` or `?type=investor` auto-selects and advances |
+| 2 — Details | Investor: just name. Advisor: sub-type (MFD/IFD or SEBI RIA), ARN/SEBI# (required), EUIN (optional + pending checkbox), firm name, applicant name, phone, city |
+| 3 — Promo code | Optional; validates against `promo_codes` table (used_count < max_uses, not expired, registration_type matches); skip button always visible |
+| 4 — Declaration + submit | Review summary, mandatory checkboxes, debarred check, profiles row creation, advisor_profiles row creation, admin notification |
+
+### Key design decisions
+
+- **No auto-create**: `useAuth.jsx` no longer creates a profiles row on first sign-in. `profileExists` (true/false/null) is exported from auth context. Registration wizard creates the row.
+- **ProtectedRoute gate**: Any authenticated user without a profiles row is redirected to /register before accessing any protected route.
+- **Debarred check**: Client-side via anon Supabase client on `regulatory_debarred` table; blocks gracefully without specifying the reason.
+- **Admin notifications**: Created via `api/admin.js?action=notify-registration` (non-admin auth required) using service role — bypasses RLS on `admin_notifications`.
+- **Promo code**: Validated client-side (anon client); used_count increment via API (service role) — non-fatal if it fails.
+- **Advisor approval flow**: Advisors get `role=individual` at registration; `role=advisor` is set only after admin approves via AdvisorApplications page.
+- **advisor_profiles RLS tightened**: Migration 004 drops the open `USING true` policy and replaces with self-only + admin-read/update/insert policies.
+- **Notification bell**: Uses `createSupabaseClient(token)` directly (no API round-trip); polls every 60 seconds; unread count badge.
+
+### New/modified files
+
+| File | Action |
+|---|---|
+| `migrations/004_registration.sql` | Created |
+| `src/pages/Register.jsx` | Created |
+| `src/hooks/useAuth.jsx` | Modified — profileExists, no auto-create |
+| `src/components/ProtectedRoute.jsx` | Modified — profileExists redirect |
+| `src/pages/admin/AdvisorApplications.jsx` | Created |
+| `src/pages/AdminLayout.jsx` | Modified — notification bell, Advisor Applications nav |
+| `api/admin.js` | Modified — 6 new actions |
+| `src/App.jsx` | Modified — /register, /admin/applications |
+| `src/pages/Upgrade.jsx` | Modified — advisor CTA |
+| `src/components/Nav.jsx` | Modified — profileExists banner |
+
+### Supabase tables added / altered (run migration 004 before testing)
+
+| Table | Change |
+|---|---|
+| `promo_codes` | New — promo code validation |
+| `regulatory_debarred` | New — debarred list for registration blocking |
+| `admin_notifications` | New — bell notifications for admin |
+| `advisor_profiles` | Altered — 12 new application fields + status + RLS tightened |
+
+### api/admin.js new actions
+
+| Action | Auth required | Purpose |
+|---|---|---|
+| `notify-registration` | Any authenticated user | Insert admin_notifications + increment promo code |
+| `approve-advisor` | Admin only | Set role=advisor, plan_tier, update advisor_profiles status |
+| `reject-advisor` | Admin only | Update advisor_profiles status=rejected, save reason |
+| `get-notifications` | Admin only | Fetch last N admin_notifications |
+| `mark-notification-read` | Admin only | Mark one or all notifications as read |
+| `admin-register-advisor` | Admin only | Admin-direct registration with debarred check |
+
+---
+
 ## PH3-S3 — Promote Module ✅ (30 May 2026)
 
 | Item | Status |
@@ -634,15 +707,16 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **PH3-S4** — Advisor onboarding flow |
-| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies (SQL in NEXT_SESSION.md) |
-| P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026 — FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all workflows) |
+| P0 | **Run migrations/004_registration.sql** in Supabase fundlens-prod SQL editor before testing PH3-S4 |
+| P0 | **PH3-S5** — Client invitation flow |
+| P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
+| P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
-| P2 | **Test advisor_client_links** — Run manual test INSERT (see test SQL below) to verify ClientListWidget populates |
-| P4 | **Build warning: FDvsMF.jsx line 533** — duplicate `style` attribute on JSX element (Phase 4 fix) |
-| P4 | **Build warning: CompareSchemes.jsx lines 775, 823** — duplicate `border` key in object literal (Phase 4 fix) |
+| P2 | **Test advisor_client_links** — Run manual test INSERT to verify ClientListWidget populates |
+| P4 | **Build warning: FDvsMF.jsx line 533** — duplicate `style` attribute (Phase 4 fix) |
+| P4 | **Build warning: CompareSchemes.jsx lines 775, 823** — duplicate `border` key (Phase 4 fix) |
 
 ---
 
