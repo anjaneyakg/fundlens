@@ -1,12 +1,17 @@
 /* ─────────────────────────────────────────────────────────────
-   F5SendReport.jsx  —  PDF report generator (PL-16)
+   F5SendReport.jsx  —  PDF report generator (PL-16, PH3-S2)
    Print via window.print() + @media print CSS visibility trick.
    No server calls. DPDP-safe: PAN/name never included.
+   PH3-S2: advisor branding (logo, firm name, colour, font,
+           registration numbers, disclaimer) injected into print
+           when logged-in user has an advisor_firm_profiles row.
    ───────────────────────────────────────────────────────────── */
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import useWindowWidth from '../../hooks/useWindowWidth'
+import { useAuth } from '../../hooks/useAuth'
 import { useRole } from '../../hooks/useRole'
+import { createSupabaseClient } from '../../lib/supabaseClient'
 
 /* ── Constants ───────────────────────────────────────────────── */
 const PORTFOLIO_KEY = 'fundlens_portfolios'
@@ -25,15 +30,25 @@ const SECTION_LIST = [
 const MACROS = ['Equity', 'Hybrid', 'Debt', 'Liquid']
 const MACRO_COLORS = { Equity: '#1D9E75', Hybrid: '#3b82f6', Debt: '#f59e0b', Liquid: '#94a3b8' }
 
-/* ── Print CSS (injected into DOM; applies on window.print()) ── */
-const PRINT_CSS = `
+/* ── Print CSS builder — brand-colour and brand-font injected ── */
+function buildPrintCSS(branding) {
+  const colour = (branding?.brand_colour_hex && /^#[0-9A-Fa-f]{6}$/.test(branding.brand_colour_hex))
+    ? branding.brand_colour_hex
+    : '#111'
+  const fontFamily = branding?.brand_font
+    ? (branding.brand_font === 'Source Sans Pro'
+        ? "'Source Sans 3', Arial, sans-serif"
+        : `'${branding.brand_font}', Arial, sans-serif`)
+    : "Arial, 'Helvetica Neue', sans-serif"
+
+  return `
 @media print {
   body * { visibility: hidden; }
   .f5-print-report, .f5-print-report * { visibility: visible; }
   .f5-print-report {
     position: absolute; left: 0; top: 0;
     width: 100%; padding: 20px 32px;
-    font-family: Arial, 'Helvetica Neue', sans-serif;
+    font-family: ${fontFamily};
     font-size: 10pt; color: #111; background: white;
     box-shadow: none !important; border: none !important;
   }
@@ -42,8 +57,9 @@ const PRINT_CSS = `
   .f5-rpt-section + .f5-rpt-section { page-break-before: always; }
   .f5-rpt-h2 {
     font-size: 12pt; font-weight: bold;
-    border-bottom: 1.5px solid #111; padding-bottom: 5px; margin-bottom: 10px;
+    border-bottom: 1.5px solid ${colour}; padding-bottom: 5px; margin-bottom: 10px;
     text-transform: uppercase; letter-spacing: 0.04em;
+    color: ${colour};
   }
   .f5-rpt-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
   .f5-rpt-table th {
@@ -55,21 +71,21 @@ const PRINT_CSS = `
     display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 14px;
   }
   .f5-stat-box { border: 1px solid #ddd; padding: 7px 10px; border-radius: 3px; }
-  .f5-stat-val { font-size: 13pt; font-weight: bold; line-height: 1.2; }
+  .f5-stat-val { font-size: 13pt; font-weight: bold; line-height: 1.2; color: ${colour}; }
   .f5-stat-lbl { font-size: 8pt; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
   .f5-rpt-header {
-    border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 18px;
+    border-bottom: 2px solid ${colour}; padding-bottom: 10px; margin-bottom: 18px;
     display: flex; justify-content: space-between; align-items: flex-start;
   }
   .f5-rpt-footer {
-    border-top: 1px solid #ccc; padding-top: 8px; margin-top: 20px;
+    border-top: 1px solid ${colour}; padding-top: 8px; margin-top: 20px;
     font-size: 8pt; color: #888;
   }
   .f5-alloc-bar { height: 8px; display: flex; border-radius: 2px; overflow: hidden; }
   .f5-score-circle {
     width: 64px; height: 64px; border-radius: 50%;
-    border: 3px solid #111; display: flex; align-items: center; justify-content: center;
-    font-size: 18pt; font-weight: bold;
+    border: 3px solid ${colour}; display: flex; align-items: center; justify-content: center;
+    font-size: 18pt; font-weight: bold; color: ${colour};
   }
   .f5-badge-pass { color: #15803d; font-weight: bold; }
   .f5-badge-warn { color: #b45309; font-weight: bold; }
@@ -77,6 +93,7 @@ const PRINT_CSS = `
   @page { margin: 12mm 18mm; size: A4 portrait; }
 }
 `
+}
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 function fmtDate(d) {
@@ -185,27 +202,22 @@ function computeHealth(active) {
   if (totalInvested === 0) return null
   const scored = []
 
-  // R1: Direct plans
   const regularAmt = active.filter(h => h.plan === 'Regular').reduce((s, h) => s + (h.invested_amount || 0), 0)
   const r1pct = (regularAmt / totalInvested) * 100
   scored.push({ code: 'R1', name: 'Direct Plans',    status: r1pct === 0 ? 'PASS' : r1pct < 30 ? 'WARN' : 'FAIL', score: r1pct === 0 ? 100 : r1pct < 30 ? 60 : 20 })
 
-  // R2: Growth option
   const idcwAmt = active.filter(h => h.option === 'IDCW').reduce((s, h) => s + (h.invested_amount || 0), 0)
   const r2pct = (idcwAmt / totalInvested) * 100
   scored.push({ code: 'R2', name: 'Growth Option',   status: r2pct === 0 ? 'PASS' : r2pct < 20 ? 'WARN' : 'FAIL', score: r2pct === 0 ? 100 : r2pct < 20 ? 60 : 20 })
 
-  // R3: AMC spread
   const amcMap = {}
   for (const h of active) { const amc = (h.amc || 'Unknown').trim() || 'Unknown'; amcMap[amc] = (amcMap[amc] || 0) + (h.invested_amount || 0) }
   const topAMCPct = Object.values(amcMap).length > 0 ? (Math.max(...Object.values(amcMap)) / totalInvested) * 100 : 0
   scored.push({ code: 'R3', name: 'AMC Spread',      status: topAMCPct <= 35 ? 'PASS' : topAMCPct <= 50 ? 'WARN' : 'FAIL', score: topAMCPct <= 35 ? 100 : topAMCPct <= 50 ? 60 : 20 })
 
-  // R4: Complexity
   const n = active.length
   scored.push({ code: 'R4', name: 'Scheme Count',    status: n >= 5 && n <= 12 ? 'PASS' : n >= 3 ? 'WARN' : 'FAIL', score: n >= 5 && n <= 12 ? 100 : n >= 3 ? 60 : 20 })
 
-  // R5: Equity holding period
   const eqHoldings = active.filter(h => ['equity','elss','equity_passive','equity_sector','hybrid'].includes(inferCategory(h.scheme_name)))
   if (eqHoldings.length > 0) {
     const eqInvested = eqHoldings.reduce((s, h) => s + (h.invested_amount || 0), 0)
@@ -214,7 +226,6 @@ function computeHealth(active) {
     scored.push({ code: 'R5', name: 'Holding Period', status: stPct === 0 ? 'PASS' : stPct < 15 ? 'WARN' : 'FAIL', score: stPct === 0 ? 100 : stPct < 15 ? 60 : 20 })
   }
 
-  // R8: Liquid buffer
   const liqAmt = active.filter(h => inferCategory(h.scheme_name) === 'liquid').reduce((s, h) => s + (h.invested_amount || 0), 0)
   const liqPct = (liqAmt / totalInvested) * 100
   scored.push({ code: 'R8', name: 'Liquid Buffer',   status: liqPct >= 3 && liqPct <= 15 ? 'PASS' : 'WARN', score: liqPct >= 3 && liqPct <= 15 ? 100 : 60 })
@@ -236,29 +247,99 @@ function loadSavedPlan() {
   }
 }
 
-/* ── Sub-components (print report sections) ─────────────────── */
-function ReportHeader({ portfolio, generatedAt, firmName }) {
+/* ── Report header — with advisor branding if available ──────── */
+function ReportHeader({ portfolio, generatedAt, branding, firmName }) {
+  const colour  = branding?.brand_colour_hex
+  const font    = branding?.brand_font
+  const logoUrl = branding?.logo_url
+  const tagline = branding?.tagline
+
+  const displayFirm = branding?.firm_name || firmName || 'FundLens'
+  const fontFamily  = font
+    ? (font === 'Source Sans Pro' ? "'Source Sans 3', sans-serif" : `'${font}', sans-serif`)
+    : undefined
+
   return (
     <div className="f5-rpt-header">
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '0.02em' }}>
-          {firmName || 'FundLens'}
-        </div>
-        <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>Portfolio Report</div>
-        {portfolio?.name && (
-          <div style={{ fontSize: 11, color: '#333', marginTop: 4 }}>
-            Portfolio: <strong>{portfolio.name}</strong>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt={displayFirm}
+            style={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain' }}
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
         )}
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '0.02em', fontFamily, color: colour || undefined }}>
+            {displayFirm}
+          </div>
+          {tagline && (
+            <div style={{ fontSize: 10, color: '#555', marginTop: 2, fontFamily }}>
+              {tagline}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: '#555', marginTop: tagline ? 3 : 2 }}>
+            Portfolio Report
+          </div>
+          {portfolio?.name && (
+            <div style={{ fontSize: 11, color: '#333', marginTop: 3 }}>
+              Portfolio: <strong>{portfolio.name}</strong>
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ textAlign: 'right', fontSize: 10, color: '#555' }}>
         <div>Generated: {fmtDate(generatedAt)}</div>
-        {!firmName && <div style={{ marginTop: 4 }}>fundlens.in</div>}
+        {branding ? (
+          <div style={{ marginTop: 4, fontSize: 9, color: '#888' }}>Powered by FundLens</div>
+        ) : (
+          <div style={{ marginTop: 4 }}>fundlens.in</div>
+        )}
       </div>
     </div>
   )
 }
 
+/* ── Report footer — with advisor branding if available ──────── */
+function ReportFooter({ branding }) {
+  if (!branding) {
+    return (
+      <div className="f5-rpt-footer">
+        Generated by FundLens · fundlens.in · Data is indicative only · Not investment advice · All data processed locally
+      </div>
+    )
+  }
+
+  const font = branding.brand_font
+  const fontFamily = font
+    ? (font === 'Source Sans Pro' ? "'Source Sans 3', sans-serif" : `'${font}', sans-serif`)
+    : undefined
+
+  const regNums = (branding.registration_numbers || [])
+    .filter(r => r.number)
+    .map(r => r.number.trim())
+    .join(' · ')
+
+  const contact = [branding.helpdesk_phone, branding.helpdesk_email, branding.website_url]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <div className="f5-rpt-footer" style={{ fontFamily }}>
+      {regNums      && <div style={{ marginBottom: 2 }}>{regNums}</div>}
+      {branding.disclaimer_text && (
+        <div style={{ marginBottom: 2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          {branding.disclaimer_text}
+        </div>
+      )}
+      {contact      && <div style={{ marginBottom: 3 }}>{contact}</div>}
+      <div style={{ marginTop: 4 }}>Powered by FundLens · fundlens.in · Data is indicative only · Not investment advice</div>
+    </div>
+  )
+}
+
+/* ── Report sections (unchanged from PL-16) ─────────────────── */
 function SectionE1({ summary }) {
   if (!summary) return null
   const gainColor = summary.gain >= 0 ? '#15803d' : '#b91c1c'
@@ -309,9 +390,7 @@ function SectionE1({ summary }) {
                     <td>{h.scheme_name || '—'}</td>
                     <td style={{ textAlign: 'right' }}>{fmtINR(h.current_value)}</td>
                     <td style={{ textAlign: 'right' }}>{fmtINR(h.invested_amount)}</td>
-                    <td style={{ textAlign: 'right', color: xirrColor }}>
-                      {xirr ? fmtPct(h.xirr) : '—'}
-                    </td>
+                    <td style={{ textAlign: 'right', color: xirrColor }}>{xirr ? fmtPct(h.xirr) : '—'}</td>
                   </tr>
                 )
               })}
@@ -350,13 +429,7 @@ function SectionE2({ alloc }) {
       </div>
       <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>AMC Breakdown</div>
       <table className="f5-rpt-table">
-        <thead>
-          <tr>
-            <th>AMC</th>
-            <th style={{ textAlign: 'right' }}>Value</th>
-            <th style={{ textAlign: 'right' }}>Share</th>
-          </tr>
-        </thead>
+        <thead><tr><th>AMC</th><th style={{ textAlign: 'right' }}>Value</th><th style={{ textAlign: 'right' }}>Share</th></tr></thead>
         <tbody>
           {alloc.topAMCs.map((a, i) => (
             <tr key={i}>
@@ -380,8 +453,7 @@ function SectionE3({ active }) {
       <table className="f5-rpt-table">
         <thead>
           <tr>
-            <th>Scheme</th>
-            <th>AMC</th>
+            <th>Scheme</th><th>AMC</th>
             <th style={{ textAlign: 'right' }}>Invested</th>
             <th style={{ textAlign: 'right' }}>Current</th>
             <th style={{ textAlign: 'right' }}>XIRR</th>
@@ -413,9 +485,7 @@ function SectionE7({ gains }) {
     <div className="f5-rpt-section">
       <div className="f5-rpt-h2">Capital Gains (Unrealised Estimate)</div>
       <table className="f5-rpt-table">
-        <thead>
-          <tr><th>Category</th><th style={{ textAlign: 'right' }}>Gain</th><th style={{ textAlign: 'right' }}>Est. Tax</th></tr>
-        </thead>
+        <thead><tr><th>Category</th><th style={{ textAlign: 'right' }}>Gain</th><th style={{ textAlign: 'right' }}>Est. Tax</th></tr></thead>
         <tbody>
           <tr>
             <td>Equity LTCG (≥1 yr)</td>
@@ -460,9 +530,7 @@ function SectionF1({ health }) {
         </div>
       </div>
       <table className="f5-rpt-table">
-        <thead>
-          <tr><th>Rule</th><th>Check</th><th style={{ textAlign: 'center' }}>Result</th></tr>
-        </thead>
+        <thead><tr><th>Rule</th><th>Check</th><th style={{ textAlign: 'center' }}>Result</th></tr></thead>
         <tbody>
           {health.rules.map(r => (
             <tr key={r.code}>
@@ -493,9 +561,7 @@ function SectionF3({ plan }) {
         <>
           <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Redemptions</div>
           <table className="f5-rpt-table" style={{ marginBottom: 14 }}>
-            <thead>
-              <tr><th>Scheme</th><th style={{ textAlign: 'right' }}>Amount</th></tr>
-            </thead>
+            <thead><tr><th>Scheme</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
             <tbody>
               {plan.redemptions.map((r, i) => (
                 <tr key={i}>
@@ -511,9 +577,7 @@ function SectionF3({ plan }) {
         <>
           <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Investments</div>
           <table className="f5-rpt-table">
-            <thead>
-              <tr><th>Scheme</th><th style={{ textAlign: 'right' }}>Amount</th></tr>
-            </thead>
+            <thead><tr><th>Scheme</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
             <tbody>
               {plan.investments.map((r, i) => (
                 <tr key={i}>
@@ -536,19 +600,50 @@ function SectionF3({ plan }) {
   )
 }
 
-function ReportFooter() {
-  return (
-    <div className="f5-rpt-footer">
-      Generated by FundLens · fundlens.in · Data is indicative only · Not investment advice · All data processed locally
-    </div>
-  )
-}
-
 /* ── Main Component ──────────────────────────────────────────── */
 export default function F5SendReport() {
   const width    = useWindowWidth()
+  const { user, token } = useAuth()
   const { role } = useRole()
   const isMobile = width < 768
+
+  // ── Advisor branding ────────────────────────────────────────
+  const [advisorBranding, setAdvisorBranding] = useState(null)
+
+  useEffect(() => {
+    if (!user || !token || (role !== 'advisor' && role !== 'admin')) return
+
+    let cancelled = false
+    const sb = createSupabaseClient(token)
+
+    sb.from('advisor_firm_profiles')
+      .select('firm_name, tagline, logo_url, brand_colour_hex, brand_font, disclaimer_text, registration_numbers, helpdesk_phone, helpdesk_email, website_url')
+      .eq('advisor_id', user.uid)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[F5SendReport] advisor branding fetch error:', error)
+          return
+        }
+        if (!cancelled && data) setAdvisorBranding(data)
+      })
+
+    return () => { cancelled = true }
+  }, [user, token, role])
+
+  // Inject Google Font link if brand_font is set
+  useEffect(() => {
+    const font = advisorBranding?.brand_font
+    if (!font) return
+    const id = `adv-print-font-${font.replace(/\s+/g, '-').toLowerCase()}`
+    if (document.getElementById(id)) return
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    const param = font === 'Source Sans Pro' ? 'Source+Sans+3' : font.replace(/ /g, '+')
+    link.href = `https://fonts.googleapis.com/css2?family=${param}:wght@400;600;700&display=swap`
+    document.head.appendChild(link)
+  }, [advisorBranding?.brand_font])
 
   /* Load portfolios from localStorage */
   const portfolios = useMemo(() => {
@@ -566,7 +661,6 @@ export default function F5SendReport() {
   const [selectedId, setSelectedId] = useState(() => portfolios[0]?.id ?? portfolios[0]?.name ?? null)
   const [enabled, setEnabled]       = useState(new Set(['e1', 'e2', 'e3', 'e7', 'f1', 'f3']))
 
-  /* Resolve active portfolio */
   const portfolio = useMemo(() => {
     if (!portfolios.length) return null
     if (!selectedId) return portfolios[0]
@@ -579,7 +673,6 @@ export default function F5SendReport() {
     return holdings.filter(h => (h.current_value || 0) > 0 || (h.units || 0) > 0)
   }, [portfolio])
 
-  /* Compute report data */
   const summary = useMemo(() => computeSummary(active), [active])
   const alloc   = useMemo(() => computeAlloc(active),   [active])
   const gains   = useMemo(() => computeGains(active),   [active])
@@ -588,8 +681,8 @@ export default function F5SendReport() {
 
   const generatedAt = new Date()
 
-  /* Advisor firm name (reads from localStorage advisor profile stub) */
-  const firmName = useMemo(() => {
+  /* Advisor firm name fallback: localStorage stub (pre-Supabase) */
+  const firmNameFallback = useMemo(() => {
     if (role !== 'advisor') return null
     try {
       const raw = localStorage.getItem('fundlens_advisor_profile')
@@ -597,7 +690,6 @@ export default function F5SendReport() {
     } catch { return null }
   }, [role])
 
-  /* Toggle section */
   function toggleSection(id) {
     const sec = SECTION_LIST.find(s => s.id === id)
     if (sec?.required) return
@@ -608,15 +700,14 @@ export default function F5SendReport() {
     })
   }
 
-  /* Download PDF */
   function handlePrint() {
     window.print()
   }
 
-  /* Email draft */
   function handleEmail() {
     if (!summary) return
-    const subject = encodeURIComponent(`FundLens Portfolio Report — ${fmtDate(generatedAt)}`)
+    const subject = encodeURIComponent(`Portfolio Report — ${fmtDate(generatedAt)}`)
+    const firmLine = advisorBranding?.firm_name || firmNameFallback || 'FundLens'
     const lines = [
       'Portfolio Report Summary',
       '──────────────────────────',
@@ -630,8 +721,8 @@ export default function F5SendReport() {
       `Schemes: ${summary.schemeCount} · AMCs: ${summary.amcs.length}`,
       '',
       '──────────────────────────',
-      'Generated by FundLens · fundlens.in',
-      'Data is indicative only · Not investment advice',
+      `Generated by ${firmLine}${firmLine !== 'FundLens' ? ' · Powered by FundLens' : ''}`,
+      'fundlens.in · Data is indicative only · Not investment advice',
       'All calculations performed locally on your device.',
     ].filter(l => l !== undefined)
     const body = encodeURIComponent(lines.join('\n'))
@@ -661,49 +752,16 @@ export default function F5SendReport() {
   }
 
   /* ── Layout ────────────────────────────────────────────────── */
-  const containerStyle = {
-    display: 'flex',
-    flexDirection: isMobile ? 'column' : 'row',
-    gap: 24,
-    padding: isMobile ? 12 : 28,
-    alignItems: 'flex-start',
-  }
-
-  const panelStyle = {
-    flex: '0 0 260px',
-    background: 'var(--color-surface)',
-    borderRadius: 10,
-    padding: 20,
-    border: '1px solid var(--color-border)',
-  }
-
-  const previewStyle = {
-    flex: 1,
-    minWidth: 0,
-    background: '#fff',
-    borderRadius: 10,
-    border: '1px solid var(--color-border)',
-    padding: isMobile ? 16 : 28,
-    overflowX: 'auto',
-  }
-
-  const btnPrimary = {
-    display: 'block', width: '100%', padding: '10px 16px',
-    background: 'var(--color-primary)', color: '#fff',
-    border: 'none', borderRadius: 8, fontWeight: 700,
-    fontSize: 14, cursor: 'pointer', marginBottom: 10,
-  }
-  const btnSecondary = {
-    display: 'block', width: '100%', padding: '9px 16px',
-    background: 'transparent', color: 'var(--color-primary)',
-    border: '1.5px solid var(--color-primary)', borderRadius: 8, fontWeight: 600,
-    fontSize: 14, cursor: 'pointer', marginBottom: 10,
-  }
+  const containerStyle = { display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 24, padding: isMobile ? 12 : 28, alignItems: 'flex-start' }
+  const panelStyle     = { flex: '0 0 260px', background: 'var(--color-surface)', borderRadius: 10, padding: 20, border: '1px solid var(--color-border)' }
+  const previewStyle   = { flex: 1, minWidth: 0, background: '#fff', borderRadius: 10, border: '1px solid var(--color-border)', padding: isMobile ? 16 : 28, overflowX: 'auto' }
+  const btnPrimary     = { display: 'block', width: '100%', padding: '10px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 10 }
+  const btnSecondary   = { display: 'block', width: '100%', padding: '9px 16px', background: 'transparent', color: 'var(--color-primary)', border: '1.5px solid var(--color-primary)', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', marginBottom: 10 }
 
   return (
     <>
-      {/* Inject print CSS */}
-      <style>{PRINT_CSS}</style>
+      {/* Dynamic print CSS — brand colour + font applied */}
+      <style>{buildPrintCSS(advisorBranding)}</style>
 
       <div style={containerStyle}>
         {/* ── Left panel: controls (hidden in print) ── */}
@@ -713,32 +771,24 @@ export default function F5SendReport() {
             Select sections, preview, download or email.
           </div>
 
-          {/* Portfolio selector */}
           {portfolios.length > 1 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Portfolio</div>
               <select
                 value={selectedId ?? ''}
                 onChange={e => setSelectedId(e.target.value)}
-                style={{
-                  width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 13,
-                  border: '1px solid var(--color-border)', background: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                }}
+                style={{ width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 13, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
               >
                 {portfolios.map(p => (
-                  <option key={p.id ?? p.name} value={p.id ?? p.name}>
-                    {p.name || 'Portfolio'}
-                  </option>
+                  <option key={p.id ?? p.name} value={p.id ?? p.name}>{p.name || 'Portfolio'}</option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Section toggles */}
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Sections</div>
           {SECTION_LIST.map(sec => {
-            const isOn = enabled.has(sec.id)
+            const isOn  = enabled.has(sec.id)
             const isReq = sec.required
             const noData =
               (sec.id === 'f3' && !f3plan) ||
@@ -746,25 +796,12 @@ export default function F5SendReport() {
               (sec.id === 'f1' && !health)  ||
               (sec.id === 'e2' && !alloc)
             return (
-              <label
-                key={sec.id}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10,
-                  marginBottom: 12, cursor: isReq ? 'default' : 'pointer',
-                  opacity: noData ? 0.45 : 1,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={isOn}
-                  disabled={isReq || noData}
-                  onChange={() => toggleSection(sec.id)}
-                  style={{ marginTop: 3, accentColor: 'var(--color-primary)' }}
-                />
+              <label key={sec.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, cursor: isReq ? 'default' : 'pointer', opacity: noData ? 0.45 : 1 }}>
+                <input type="checkbox" checked={isOn} disabled={isReq || noData} onChange={() => toggleSection(sec.id)} style={{ marginTop: 3, accentColor: 'var(--color-primary)' }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
                     {sec.label}
-                    {isReq && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 6 }}>always</span>}
+                    {isReq   && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 6 }}>always</span>}
                     {noData && !isReq && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 6 }}>no data</span>}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{sec.desc}</div>
@@ -774,12 +811,8 @@ export default function F5SendReport() {
           })}
 
           <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 8 }}>
-            <button style={btnPrimary} onClick={handlePrint}>
-              ↓ Download PDF
-            </button>
-            <button style={btnSecondary} onClick={handleEmail} disabled={!summary}>
-              ✉ Email Draft
-            </button>
+            <button style={btnPrimary} onClick={handlePrint}>↓ Download PDF</button>
+            <button style={btnSecondary} onClick={handleEmail} disabled={!summary}>✉ Email Draft</button>
           </div>
 
           <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 12, lineHeight: 1.5 }}>
@@ -790,24 +823,19 @@ export default function F5SendReport() {
         {/* ── Right panel: live preview + print target ── */}
         <div style={previewStyle}>
           <div className="f5-print-report">
-
-            {/* Header */}
             <ReportHeader
               portfolio={portfolio}
               generatedAt={generatedAt}
-              firmName={firmName}
+              branding={advisorBranding}
+              firmName={firmNameFallback}
             />
-
-            {/* Enabled sections */}
             {enabled.has('e1') && <SectionE1 summary={summary} />}
             {enabled.has('e2') && alloc  && <SectionE2 alloc={alloc} />}
             {enabled.has('e3') && active.length > 0 && <SectionE3 active={active} />}
             {enabled.has('e7') && gains  && <SectionE7 gains={gains} />}
             {enabled.has('f1') && health && <SectionF1 health={health} />}
             {enabled.has('f3') && f3plan && <SectionF3 plan={f3plan} />}
-
-            {/* Footer */}
-            <ReportFooter />
+            <ReportFooter branding={advisorBranding} />
           </div>
         </div>
       </div>

@@ -544,6 +544,17 @@ function UserMenu({ user, onSignOut, isAdmin, isAdvisor }) {
             </a>
           )}
 
+          {/* Advisor Settings — shown for advisor AND admin roles */}
+          {(isAdvisor || isAdmin) && (
+            <a
+              href="/advisor/settings"
+              style={menuLinkStyle}
+              onClick={() => setOpen(false)}
+            >
+              ⚙ Advisor Settings
+            </a>
+          )}
+
           {/* Admin Console — shown for admin role only */}
           {isAdmin && (
             <a
