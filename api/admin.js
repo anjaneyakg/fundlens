@@ -79,13 +79,12 @@ async function sb(path, opts = {}) {
 async function requireAdmin(authHeader) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const payload = decodeJwtPayload(authHeader.slice(7));
-  console.log('[requireAdmin] payload.sub:', payload?.sub);
   if (!payload?.sub) return null;
   try {
-    const url = `profiles?id=eq.${encodeURIComponent(payload.sub)}&select=role`;
-    console.log('[requireAdmin] querying:', url);
-    const rows = await sb(url, { headers: { Prefer: '' } });
-    console.log('[requireAdmin] rows:', JSON.stringify(rows));
+    const rows = await sb(
+      `profiles?id=eq.${encodeURIComponent(payload.sub)}&select=role`,
+      { headers: { Prefer: '' } },
+    );
     if (rows?.[0]?.role !== 'admin') return null;
     return payload.sub;
   } catch (err) {
