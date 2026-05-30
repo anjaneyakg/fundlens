@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 24 May 2026 (Phase 2 complete — auth end-to-end, migrations done, Vercel env vars set)
+**Last updated:** 30 May 2026 (PH3-S1 Advisor Dashboard done; Node.js 24 upgrade done)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -73,8 +73,8 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 
 | Session | Deliverable | Status |
 |---|---|---|
-| PH3-S1 | Multi-client dashboard (`/advisor/clients`) | ⏳ **NEXT** |
-| PH3-S2 | White-label system (logo + firm name on nav, PDFs, emails) | ⏳ Pending |
+| PH3-S1 | Advisor Dashboard (`/advisor`) — 5 widgets, widget prefs, BSE/AIrrow market data, client list from advisor_client_links | ✅ Done — 30 May 2026 |
+| PH3-S2 | White-label system (logo + firm name on nav, PDFs, emails) | ⏳ **NEXT** |
 | PH3-S3 | Promote module (leaflets, email drafts, WhatsApp templates) | ⏳ Pending |
 | PH3-S4 | Advisor onboarding flow | ⏳ Pending |
 | PH3-S5 | Client invitation flow | ⏳ Pending |
@@ -86,7 +86,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH4-S1 | Online assistant — pre-login | ⏳ Pending |
 | PH4-S2 | Online assistant — post-login | ⏳ Pending |
 | PH4-S3 | Admin module upgrades (carousel mgmt, role mgmt, advisor approval) | ⏳ Pending |
-| PH4-S4 | Node.js 24 upgrade ⚠ DEADLINE June 2026 | ⚠ Urgent |
+| PH4-S4 | Node.js 24 upgrade ⚠ DEADLINE June 2026 | ✅ Done — 30 May 2026 (FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all GHA workflows) |
 | PH4-S5 | Bug fixes (SchemeMapping autocomplete, SchemeBasket slug, SIPCalculator) | ⏳ Pending |
 | PH4-S6 | Mobile responsive audit (375px, useWindowWidth() everywhere) | ⏳ Pending |
 | PH4-S7 | Performance & SEO (lazy loading, code splitting, meta tags, sitemap) | ⏳ Pending |

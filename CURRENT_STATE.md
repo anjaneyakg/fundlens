@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 24 May 2026 · v33.0
+**Last updated:** 30 May 2026 · v34.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -460,6 +460,44 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PH3-S1 — Advisor Dashboard ✅ (30 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/advisor/AdvisorDashboard.jsx` — widget-based dashboard at `/advisor`: 5 widgets, per-uid localStorage prefs, slide-out Manage Widgets drawer, greeting header, auth gate, upgrade prompt | ✅ Done |
+| `src/advisor/AdvisorClientView.jsx` — stub placeholder at `/advisor/client/:id` (PH3-S5 scope) | ✅ Done |
+| `src/App.jsx` — added `/advisor` and `/advisor/client/:id` routes (ProtectedRoute requiredRole="advisor") | ✅ Done |
+| `src/components/Nav.jsx` — "📊 Advisor Dashboard" link in user dropdown for advisor + admin roles | ✅ Done |
+| Vite build — 952 modules, 0 new errors | ✅ Done |
+
+### Widgets delivered
+
+| Widget ID | Display name | Data source |
+|---|---|---|
+| `my_assets` | My Assets | advisor_client_links COUNT + AUM placeholder |
+| `client_list` | Client List | advisor_client_links JOIN profiles!client_id — sortable table, row click → /advisor/client/:id |
+| `health_snapshot` | Health Snapshot | same links query — green/amber/red tiles, clicking filters client_list |
+| `alerts` | Alerts | empty state only — TODO PH4: per-client alerts |
+| `market_indicators` | Market Indicators | bse_index_data (latest per index) + airrow_sentiment_archive (latest row) |
+
+### Design decisions
+
+- **Widget prefs** — `advisor_widget_prefs_[uid]` in localStorage; default all visible; eye-off icon hides; Manage Widgets drawer toggles; Reset to defaults restores all
+- **Auth gate** — loading → Navigate to /login → upgrade prompt (not advisor/admin) → dashboard
+- **Client join** — `profiles!client_id(id, email)` FK hint for disambiguation (both advisor_id and client_id FK to profiles); graceful fallback to client_label → client_id prefix if profiles RLS blocks
+- **Market Indicators** — anon client used for bse_index_data and airrow_sentiment_archive (no RLS on those tables); authenticated client for advisor_client_links
+- **HealthFilter** — state shared between HealthSnapshotWidget (sets) and ClientListWidget (reads); clear-filter button on snapshot widget
+
+### Supabase tables queried (all live in fundlens-prod)
+
+| Table | Query | Notes |
+|---|---|---|
+| `advisor_client_links` | SELECT client_id, client_label, relationship_since, updated_at, profiles!client_id(id, email) WHERE advisor_id = uid AND status = 'active' | Firebase JWT client |
+| `bse_index_data` | SELECT index_name, date, close, points_change, change_pct IN ('NIFTY 50', 'SENSEX', 'NIFTY MID 150') ORDER BY date DESC LIMIT 15 | Anon client |
+| `airrow_sentiment_archive` | SELECT archive_date, large_cap_score, mid_cap_score, gold_score ORDER BY archive_date DESC LIMIT 1 | Anon client |
+
+---
+
 ## Nav Admin Link Fix ✅ (24 May 2026)
 
 | Item | Status |
@@ -508,12 +546,13 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **PH3-S1** — Multi-client advisor dashboard (`/advisor/clients`, localStorage-based, Phase 3 start) |
-| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies in PH3-S1 or PH3-S2 |
-| P0 | **Node.js 24 upgrade** ⚠ DEADLINE June 2026 (PH4-S4) |
+| P0 | **PH3-S2** — White-label system (logo + firm name on nav, PDFs, emails) |
+| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies in PH3-S2 |
+| P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026 — FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all workflows) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
+| P2 | **Test advisor_client_links** — Run manual test INSERT (see test SQL below) to verify ClientListWidget populates |
 | P4 | **Build warning: FDvsMF.jsx line 533** — duplicate `style` attribute on JSX element (Phase 4 fix) |
 | P4 | **Build warning: CompareSchemes.jsx lines 775, 823** — duplicate `border` key in object literal (Phase 4 fix) |
 

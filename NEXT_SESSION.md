@@ -1,91 +1,96 @@
 # NEXT SESSION — FundLens
-Last updated: 24 May 2026 (Phase 2 complete — auth working, env vars set, migrations run)
+Last updated: 30 May 2026 (PH3-S1 Advisor Dashboard done · Node.js 24 done)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
-## Phase 2 status: ✅ COMPLETE
-All sessions PH2-S1 through PH2-S10 done. PL-1 → PL-16 all delivered.
-Auth working end-to-end: Google login → Firebase JWT → Supabase profiles → role loaded → Admin Console visible.
-Vercel env vars: `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` all set ✅
-Supabase migrations 002 + 003 run in fundlens-prod ✅
+## Phase 3 status: PH3-S1 ✅ DONE
+Advisor Dashboard live at /advisor (commit 07e15f1).
+5 widgets: My Assets, Client List, Health Snapshot, Alerts, Market Indicators.
+advisor_client_links + bse_index_data + airrow_sentiment_archive all queried.
+Nav user dropdown shows "📊 Advisor Dashboard" for advisor + admin roles.
+Build: 952 modules, 0 errors.
 
 ---
 
 ## Current priority (do this first):
-Task: PH3-S1 — Multi-client dashboard
-File to create: src/pages/PortfolioLens/AdvisorClientList.jsx
-Route: /advisor/clients (new top-level route, advisor-only)
+Task: PH3-S2 — White-label system
+Route: /advisor (existing dashboard) + Nav.jsx + advisor_profiles table
 
-### PH3-S1 Multi-client dashboard spec
+### PH3-S2 White-label spec
 
-An advisor dashboard showing all clients' portfolios in a single view.
+Show advisor firm name and logo throughout the experience when advisor is logged in.
 
-**Data model:**
-- In this phase: client portfolios stored in localStorage (one per browser profile)
-- Advisor sees their own portfolio + can demo with test data
-- Real multi-client via Supabase will come in Phase 3 later sessions (PH3-S3+)
+**Deliverables:**
+1. Tighten `advisor_profiles` RLS — currently `USING true` (open). Update to allow:
+   - Advisor reads/updates their own row: `auth.jwt() ->> 'sub' = user_id`
+   - Admin reads all rows
+   Write the migration SQL and run it in Supabase SQL editor.
+2. `useAdvisorTheme.jsx` already injects CSS and logo — verify it uses `profiles!client_id` correctly
+3. AdvisorDashboard.jsx header — show `advisor_profiles.firm_name` below greeting when set
+4. F5SendReport.jsx — uses `fundlens_advisor_profile` from localStorage; update to also try Supabase `advisor_profiles`
+5. Add "Firm Settings" stub page at `/advisor/settings` — form to set firm_name, logo_url, css_override
 
-**Sections:**
-1. Client list table: client name (masked per DPDP), portfolio value, XIRR, health score, last updated, action buttons (View, Send Report)
-2. Summary strip: total AUM across clients, avg health score, # schemes, # clients
-3. "Add client" stub: shows "Coming soon — client invitation flow planned for PH3-S5"
+**Do NOT touch:**
+- All E1–E8, F1–F6 pages (Phase 2 done)
+- /admin routes
+- vercel.json
 
-**Behaviour:**
-- Reads from localStorage key `fundlens_advisor_clients` (array of { id, name, portfolioId })
-- Each portfolioId maps to a portfolio in `fundlens_portfolios`
-- If no clients found: show empty state with CTA to upload portfolio via F6
-- "View" button: navigate to /portfolio/e1 with portfolioId as query param (or state)
-- "Send Report" button: navigate to /portfolio/f5 with portfolioId pre-selected
-- Advisor mode: checks useRole() → role === 'advisor' or role === 'admin'
+## Manual test SQL for advisor_client_links (run in Supabase SQL editor):
 
-**DPDP compliance:**
-- Client names shown as initials only (e.g. "A.K.") or user-chosen alias
-- No PAN / folio numbers in this view
+```sql
+-- Populate ClientListWidget with a test client for visual verification.
+-- Replace YOUR_FIREBASE_UID with your actual UID (visible in Supabase profiles table or browser console).
 
-**UI:**
-- Full-width table layout
-- Responsive: stacked cards on mobile (< 768px)
-- Health score coloured: green ≥75, amber 50–74, red <50
-- Summary strip at top with 4 stat boxes (ACC green theme)
-
-**Route wiring (App.jsx):**
-```jsx
-<Route path="/advisor" element={<ProtectedRoute requiredRole="advisor"><AdvisorLayout /></ProtectedRoute>}>
-  <Route path="clients" element={<AdvisorClientList />} />
-</Route>
+INSERT INTO advisor_client_links (
+  advisor_id,
+  client_id,
+  link_origin,
+  status,
+  can_view_portfolio, can_view_goals, can_view_family,
+  can_view_health, can_view_reports,
+  can_send_alerts, can_send_reports, can_add_to_cart,
+  client_label
+) VALUES (
+  'YOUR_FIREBASE_UID',
+  'TEST_CLIENT_UID_00001',
+  'manual',
+  'active',
+  true, true, false, true, true, true, true, false,
+  'Test Client — Ramesh K.'
+)
+ON CONFLICT DO NOTHING;
 ```
-- Create AdvisorLayout.jsx (thin wrapper — just `<Outlet />` or light sidebar)
-- Add "My Clients" link in Nav.jsx under Promote tab (advisor mode only)
 
-## Parallel track (separate session):
-NAV top-up — run nightly 11PM-2AM IST to maintain T-1 currency
-Command: cd fundlens && set -a && source .env && set +a &&
-python pipeline/backfill_nav_history.py --auto-resume
-Stop at: 3 hours or if DB size exceeds 6.5 GB
+After running: visit /advisor → Client List widget should show 1 row.
 
 ## Do NOT touch in next session:
-- vercel.json (already has catch-all, no changes needed)
+- vercel.json (catch-all in place — do not change)
 - Firebase auth files (src/firebase.js, src/hooks/useAuth.jsx, src/hooks/useRole.jsx)
 - pipeline scripts (unless NAV session)
-- All E1–E8, F1–F6 pages (Phase 2 done — do not modify)
+- All E1–E8, F1–F6 pages (Phase 2 done)
+- src/advisor/AdvisorDashboard.jsx (unless PH3-S2 spec requires it)
 
 ## Open issues to keep in mind:
-- Node.js 24 upgrade deadline: June 2026 (PH4-S4) ⚠ URGENT
+- ✅ Node.js 24 upgrade — DONE (30 May 2026, FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all GHA workflows)
+- ✅ PH3-S1 Advisor Dashboard — DONE (30 May 2026, commit 07e15f1)
 - ✅ User Manager bug — FIXED (useAuth.jsx + api/admin.js now use profiles table)
 - ✅ Role detection bug — FIXED (profiles table, onIdTokenChanged, fresh token)
 - ✅ VITE_SUPABASE_ANON_KEY — added to Vercel 24 May 2026
 - ✅ SUPABASE_SERVICE_KEY + SUPABASE_SERVICE_ROLE_KEY — added to Vercel 24 May 2026
 - ✅ Migrations 002 + 003 — run in fundlens-prod 24 May 2026
-- ⚠ advisor_profiles RLS — currently open (USING true); tighten in PH3-S1 or PH3-S2
+- ⚠ advisor_profiles RLS — currently open (USING true); tighten in PH3-S2
 - ⚠ REINDEX needed: `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor
+- ⚠ advisor_client_links test INSERT — run manual SQL above before PH3-S2 to verify ClientListWidget
 - Phase 4 build warnings: FDvsMF.jsx line 533 (duplicate style), CompareSchemes.jsx lines 775/823 (duplicate border)
 - Supabase disk: 12 GB autoscaled · ~6.3 GB used · key migrated to sb_secret format
 
 ## Session history:
-- Phase 2 (PL-1 → PL-16): all ✅ Done
+- Phase 2 (PL-1 → PL-16): all ✅ Done — 24 May 2026
 - Auth fix (24 May 2026): useAuth.jsx + api/admin.js + AdminLayout.jsx + migrations 001/002 ✅
 - Nav Admin Console link fix (24 May 2026): surgical 3-edit fix to Nav.jsx ✅
-- Next: Phase 3 — Advisor Layer (PH3-S1 through PH3-S5)
+- Node.js 24 upgrade (30 May 2026): FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in 4 GHA workflow files ✅
+- PH3-S1 Advisor Dashboard (30 May 2026): 5-widget dashboard, client list, market indicators, AIrrow sentiment ✅
+- Next: PH3-S2 — White-label system
