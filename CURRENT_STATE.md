@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 30 May 2026 · v34.0
+**Last updated:** 30 May 2026 · v35.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -498,6 +498,54 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PH3-S2 — White-label Branding System ✅ (30 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/advisor/AdvisorSettings.jsx` — /advisor/settings with 4 tabs; Branding tab has 6 sections + 3-panel live preview | ✅ Done |
+| `src/pages/PortfolioLens/F5SendReport.jsx` — advisor branding injected into print CSS, report header/footer | ✅ Done |
+| `src/App.jsx` — /advisor/settings route added | ✅ Done |
+| `src/components/Nav.jsx` — "⚙ Advisor Settings" link in user dropdown | ✅ Done |
+| Vite build — 953 modules, 0 new errors | ✅ Done |
+
+### Branding tab sections
+
+| Section | Details |
+|---|---|
+| Firm Identity | firm_name (required), tagline (100-char counter), website_url, helpdesk_phone, helpdesk_email, registered_address |
+| Logo Upload | Drag-drop or click; PNG/JPG/WEBP/SVG ≤ 2MB; uploads to `advisor-logos` Storage bucket as `[uid]_logo.[ext]` with upsert; thumbnail + Replace/Remove buttons when logo set |
+| Brand Colour | HTML color picker + hex text input synced; live swatch; default #1A3C6E |
+| Brand Font | Custom dropdown with 16 Google Fonts rendered in own face; single @import; Source Sans Pro mapped to Source Sans 3 in API |
+| Registration Numbers | Repeatable rows; type/number/display_label/expiry_date; amber badge ≤90 days; red badge if expired; fmtDate() for all display |
+| Disclaimer | 5-row textarea; char counter; shown in PDF footer |
+
+### Live preview panels (update as you type, no save needed)
+
+| Panel | Content |
+|---|---|
+| Nav bar mock | brand_colour_hex background, logo, firm_name in brand_font, 3 placeholder links |
+| PDF header mock | 4px colour top strip, logo, firm_name (coloured), tagline, "Powered by FundLens" |
+| PDF footer mock | 1px colour top strip, reg numbers · separated, disclaimer (2-line truncate), contact info |
+
+### F5SendReport branding changes
+
+- `buildPrintCSS(branding)` generates dynamic `@media print` block with brand colour on headings, borders, score circle; brand font as font-family
+- `ReportHeader` — shows logo (max 48px height), firm_name in brand colour + font, tagline; "Powered by FundLens" replaces "fundlens.in" when advisor branding exists
+- `ReportFooter` — reg numbers line, disclaimer line (2-line truncate), contact line; "Powered by FundLens" added
+- Google Font `<link>` injected into document.head on mount when brand_font is set; Source Sans Pro → Source Sans 3 API mapping
+- Individual users (role !== 'advisor'/'admin'): no Supabase fetch, FundLens defaults unchanged
+
+### Supabase interaction
+
+| Operation | Details |
+|---|---|
+| Fetch | `advisor_firm_profiles` .maybeSingle() via authenticated client; no error on empty row (PGRST116) |
+| Save | `.upsert(payload, { onConflict: 'advisor_id' })` — inserts first row or updates existing |
+| Logo upload | `storage.from('advisor-logos').upload(fileName, file, { upsert: true })` then `.getPublicUrl()` |
+| Logo removal | `storage.from('advisor-logos').remove([fileName])` + null in logo_url payload |
+
+---
+
 ## Nav Admin Link Fix ✅ (24 May 2026)
 
 | Item | Status |
@@ -546,8 +594,8 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **PH3-S2** — White-label system (logo + firm name on nav, PDFs, emails) |
-| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies in PH3-S2 |
+| P0 | **PH3-S3** — Promote module (leaflets, email drafts, WhatsApp templates) |
+| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies before PH3-S3 |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026 — FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all workflows) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |

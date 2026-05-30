@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 30 May 2026 (PH3-S1 Advisor Dashboard done; Node.js 24 upgrade done)
+**Last updated:** 30 May 2026 (PH3-S2 White-label branding system done)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -74,8 +74,8 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | Session | Deliverable | Status |
 |---|---|---|
 | PH3-S1 | Advisor Dashboard (`/advisor`) — 5 widgets, widget prefs, BSE/AIrrow market data, client list from advisor_client_links | ✅ Done — 30 May 2026 |
-| PH3-S2 | White-label system (logo + firm name on nav, PDFs, emails) | ⏳ **NEXT** |
-| PH3-S3 | Promote module (leaflets, email drafts, WhatsApp templates) | ⏳ Pending |
+| PH3-S2 | White-label branding system — AdvisorSettings /advisor/settings, F5 PDF branding, 16 Google Fonts, Storage logo upload | ✅ Done — 30 May 2026 |
+| PH3-S3 | Promote module (leaflets, email drafts, WhatsApp templates) | ⏳ **NEXT** |
 | PH3-S4 | Advisor onboarding flow | ⏳ Pending |
 | PH3-S5 | Client invitation flow | ⏳ Pending |
 
