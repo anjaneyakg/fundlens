@@ -500,7 +500,8 @@ function NavTab({ label, type, isGuest, currentPath, children, isActive: propAct
   )
 }
 
-function UserMenu({ user, onSignOut, isAdmin }) {
+// UserMenu — shows Advisor Dashboard link for advisor/admin, Admin Console for admin
+function UserMenu({ user, onSignOut, isAdmin, isAdvisor }) {
   const [open, setOpen] = useState(false)
   const ref             = useRef(null)
 
@@ -512,6 +513,12 @@ function UserMenu({ user, onSignOut, isAdmin }) {
 
   const initials    = (user.displayName || user.email || '?').charAt(0).toUpperCase()
   const displayName = user.displayName || user.email?.split('@')[0] || 'User'
+
+  const menuLinkStyle = {
+    display: 'block', padding: '8px 10px', borderRadius: 8,
+    textDecoration: 'none', fontSize: 13, fontFamily: 'DM Sans',
+    color: 'var(--color-primary)', fontWeight: 600,
+  }
 
   return (
     <div style={{ position: 'relative' }} ref={ref}>
@@ -525,19 +532,29 @@ function UserMenu({ user, onSignOut, isAdmin }) {
       {open && (
         <div className="fl-user-dropdown">
           <div className="fl-user-email">{user.email}</div>
+
+          {/* Advisor Dashboard — shown for advisor AND admin roles */}
+          {(isAdvisor || isAdmin) && (
+            <a
+              href="/advisor"
+              style={menuLinkStyle}
+              onClick={() => setOpen(false)}
+            >
+              📊 Advisor Dashboard
+            </a>
+          )}
+
+          {/* Admin Console — shown for admin role only */}
           {isAdmin && (
             <a
               href="/admin"
-              style={{
-                display: 'block', padding: '8px 10px', borderRadius: 8,
-                textDecoration: 'none', fontSize: 13, fontFamily: 'DM Sans',
-                color: 'var(--color-primary)', fontWeight: 600,
-              }}
+              style={menuLinkStyle}
               onClick={() => setOpen(false)}
             >
               ⚙ Admin Console
             </a>
           )}
+
           <button className="fl-signout-btn" onClick={async () => { setOpen(false); await onSignOut() }}>
             Sign out
           </button>
@@ -838,7 +855,12 @@ export default function Nav() {
 
             {/* Auth: sign in buttons OR user menu */}
             {user ? (
-              <UserMenu user={user} onSignOut={handleSignOut} isAdmin={isAdmin} />
+              <UserMenu
+                user={user}
+                onSignOut={handleSignOut}
+                isAdmin={isAdmin}
+                isAdvisor={isAdvisor}
+              />
             ) : (
               <>
                 <NavLink to="/login" className="fl-signin-btn">Sign in</NavLink>

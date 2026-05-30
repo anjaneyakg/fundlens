@@ -54,6 +54,8 @@ import ProtectedRoute          from './components/ProtectedRoute';
 import UserManager             from './pages/admin/UserManager';
 import ToolAccessMatrix        from './pages/admin/ToolAccessMatrix';
 import { AdvisorModeProvider } from './context/AdvisorModeContext';
+import AdvisorDashboard        from './advisor/AdvisorDashboard.jsx';
+import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -123,6 +125,16 @@ export default function App() {
             <Route path="f5"    element={<F5SendReport />} />
             <Route path="f6"    element={<F6DataManager />} />
           </Route>
+
+          {/* ── Advisor Dashboard — Advisor required (admin also passes via role hierarchy) ── */}
+          <Route
+            path="/advisor"
+            element={<ProtectedRoute requiredRole="advisor"><AdvisorDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/advisor/client/:id"
+            element={<ProtectedRoute requiredRole="advisor"><AdvisorClientView /></ProtectedRoute>}
+          />
 
           {/* ── Admin routes — Admin required ── */}
           <Route
