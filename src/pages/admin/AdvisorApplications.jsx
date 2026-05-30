@@ -151,6 +151,7 @@ export default function AdvisorApplications() {
 
   // ── Approve ───────────────────────────────────────────────────────────────
   async function handleApprove(uid, regType) {
+    if (!token) return
     setActionStatus(p => ({ ...p, [uid]: 'approving' }))
     try {
       const res = await fetch('/api/admin?action=approve-advisor', {
@@ -179,6 +180,7 @@ export default function AdvisorApplications() {
   }
 
   async function handleReject(uid) {
+    if (!token) return
     const reason = rejectForms[uid] || ''
     setActionStatus(p => ({ ...p, [uid]: 'rejecting' }))
     try {
@@ -204,6 +206,7 @@ export default function AdvisorApplications() {
 
   // ── Admin-direct registration ─────────────────────────────────────────────
   async function handleDirectRegister() {
+    if (!token) return
     setDirectError('')
     if (!directForm.uid.trim() || !directForm.email.trim() || !directForm.applicant_name.trim() || !directForm.firm_name.trim()) {
       setDirectError('UID, email, applicant name, and firm name are required.')
