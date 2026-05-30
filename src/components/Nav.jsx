@@ -441,7 +441,7 @@ function ResearchDropdown({ currentPath, onClose }) {
   )
 }
 
-function NavTab({ label, type, isGuest, currentPath, children, isActive: propActive }) {
+function NavTab({ label, type, path: tabPath, isGuest, currentPath, children, isActive: propActive }) {
   const [open, setOpen]   = useState(false)
   const ref               = useRef(null)
   const navigate          = useNavigate()
@@ -463,7 +463,7 @@ function NavTab({ label, type, isGuest, currentPath, children, isActive: propAct
       navigate('/login', { state: { from: currentPath, message: 'Register to access this feature' } })
       return
     }
-    if (type === 'track') { navigate('/portfolio'); return }
+    if (type === 'track') { navigate(tabPath || '/portfolio'); return }
     if (isDropdown) setOpen(o => !o)
   }
 
@@ -555,6 +555,17 @@ function UserMenu({ user, onSignOut, isAdmin, isAdvisor }) {
             </a>
           )}
 
+          {/* Promote — shown for advisor AND admin roles */}
+          {(isAdvisor || isAdmin) && (
+            <a
+              href="/advisor/promote"
+              style={menuLinkStyle}
+              onClick={() => setOpen(false)}
+            >
+              📣 Promote
+            </a>
+          )}
+
           {/* Admin Console — shown for admin role only */}
           {isAdmin && (
             <a
@@ -575,7 +586,7 @@ function UserMenu({ user, onSignOut, isAdmin, isAdvisor }) {
   )
 }
 
-function DrawerSection({ label, type, isGuest, groupIds, currentPath, onClose }) {
+function DrawerSection({ label, type, path: sectionPath, isGuest, groupIds, currentPath, onClose }) {
   const [open, setOpen] = useState(false)
   const navigate        = useNavigate()
 
@@ -594,7 +605,7 @@ function DrawerSection({ label, type, isGuest, groupIds, currentPath, onClose })
       onClose()
       return
     }
-    if (type === 'track') { navigate('/portfolio'); onClose(); return }
+    if (type === 'track') { navigate(sectionPath || '/portfolio'); onClose(); return }
     setOpen(o => !o)
   }
 
@@ -661,7 +672,7 @@ function MobileDrawer({
           <DrawerSection label="Track"          type="track"    isGuest={isGuest}  currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Save & Invest"  type="disabled" isGuest={false}    currentPath={currentPath} onClose={onClose} />
           {advisorMode && isAdvisor && (
-            <DrawerSection label="Promote" type="promote" isGuest={false} currentPath={currentPath} onClose={onClose} />
+            <DrawerSection label="Promote" type="track" path="/advisor/promote" isGuest={false} currentPath={currentPath} onClose={onClose} />
           )}
         </div>
 
@@ -829,9 +840,10 @@ export default function Nav() {
               <NavTab
                 label="Promote"
                 type="track"
+                path="/advisor/promote"
                 isGuest={false}
                 currentPath={currentPath}
-                isActive={currentPath.startsWith('/promote')}
+                isActive={currentPath.startsWith('/advisor/promote')}
               />
             )}
           </div>

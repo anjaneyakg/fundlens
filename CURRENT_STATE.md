@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 30 May 2026 · v35.0
+**Last updated:** 30 May 2026 · v36.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -498,6 +498,46 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PH3-S3 — Promote Module ✅ (30 May 2026)
+
+| Item | Status |
+|---|---|
+| `src/advisor/AdvisorPromote.jsx` — /advisor/promote: 3 section stacks (Leaflets/Email/WhatsApp), TemplateCard with MiniPreview, LeafletModal with 3 layout templates, JPEG export via html2canvas (dynamic import), email copy-to-clipboard, WhatsApp Web Share API | ✅ Done |
+| `src/advisor/AdvisorDashboard.jsx` — `promote_shortcut` widget added (6th widget): shows active template counts, "Open Promote module" button | ✅ Done |
+| `src/App.jsx` — /advisor/promote route added | ✅ Done |
+| `src/components/Nav.jsx` — "📣 Promote" link in UserMenu for advisor/admin; desktop Promote NavTab now routes to /advisor/promote; mobile drawer Promote routes correctly | ✅ Done |
+| `html2canvas@1.4.1` installed; Vite splits it as a separate 201KB chunk via dynamic import | ✅ Done |
+| Vite build — 956 modules, 0 new errors | ✅ Done |
+
+### Leaflet templates
+
+| Layout constant | Description |
+|---|---|
+| `header_split` | Coloured top bar (logo + firm name), hero zone, content zone, footer (reg numbers + disclaimer) |
+| `corner_badge` | Hero at top, floating firm identity badge positioned by `corner_position` field, content zone + footer |
+| `footer_only` | Hero + content zone + coloured footer with "DISTRIBUTED BY ADVISOR / DISTRIBUTOR" label + logo + firm name + reg numbers |
+
+All three templates share: `CTABlock` (card or strip style), 1080×1080px canvas, brand_colour_hex + brand_font from advisor_firm_profiles.
+
+### Key design decisions
+
+- **html2canvas dynamic import**: `await import('html2canvas')` in `handleDownload()` — keeps it out of the main bundle (201KB split chunk).
+- **Canvas scale 2**: `html2canvas({ scale: 2 })` for retina-quality JPEG output at `quality: 0.92`.
+- **MiniPreview (CSS-only)**: 160×100px visual representation of each template layout using just CSS and branding colours — no html2canvas at preview time.
+- **Branding banner**: if `advisor_firm_profiles` returns no row, a warning banner links to /advisor/settings.
+- **REGULATORY LANGUAGE**: all UI labels, template text, and code say "Advisor / Distributor" — never "Advisor" alone.
+- **promo_messages fetch**: uses anon `supabase` client (public table); `advisor_firm_profiles` uses authenticated `createSupabaseClient(token)`.
+
+### Supabase tables used
+
+| Table | Client | Select |
+|---|---|---|
+| `promo_messages` | Anon | All columns WHERE is_active=true ORDER BY display_order ASC |
+| `advisor_firm_profiles` | Auth | All columns WHERE advisor_id = uid .maybeSingle() |
+| `promo_messages` (Dashboard) | Anon | category column only WHERE is_active=true (for promote_shortcut widget) |
+
+---
+
 ## PH3-S2 — White-label Branding System ✅ (30 May 2026)
 
 | Item | Status |
@@ -594,8 +634,8 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **PH3-S3** — Promote module (leaflets, email drafts, WhatsApp templates) |
-| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies before PH3-S3 |
+| P0 | **PH3-S4** — Advisor onboarding flow |
+| P0 | **advisor_profiles RLS** — currently open (`USING true`); tighten policies (SQL in NEXT_SESSION.md) |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026 — FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all workflows) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |

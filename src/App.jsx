@@ -57,6 +57,7 @@ import { AdvisorModeProvider } from './context/AdvisorModeContext';
 import AdvisorDashboard        from './advisor/AdvisorDashboard.jsx';
 import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
 import AdvisorSettings         from './advisor/AdvisorSettings.jsx';
+import AdvisorPromote          from './advisor/AdvisorPromote.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -139,6 +140,10 @@ export default function App() {
           <Route
             path="/advisor/client/:id"
             element={<ProtectedRoute requiredRole="advisor"><AdvisorClientView /></ProtectedRoute>}
+          />
+          <Route
+            path="/advisor/promote"
+            element={<ProtectedRoute requiredRole="advisor"><AdvisorPromote /></ProtectedRoute>}
           />
 
           {/* ── Admin routes — Admin required ── */}

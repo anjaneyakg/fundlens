@@ -17,6 +17,7 @@ const WIDGETS = [
   { id: 'health_snapshot',   label: 'Health Snapshot' },
   { id: 'alerts',            label: 'Alerts' },
   { id: 'market_indicators', label: 'Market Indicators' },
+  { id: 'promote_shortcut',  label: 'Promote' },
 ]
 
 const BSE_INDEX_NAMES = ['NIFTY 50', 'SENSEX', 'NIFTY MID 150']
@@ -479,6 +480,42 @@ function MarketIndicatorsWidget({ bseData, sentiment, onHide }) {
   )
 }
 
+// ── WIDGET 6: PROMOTE SHORTCUT ────────────────────────────────────────────────
+
+function PromoteShortcutWidget({ promoStats, onHide }) {
+  const navigate = useNavigate()
+  return (
+    <WidgetCard title="Promote" onHide={onHide}>
+      <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
+        {promoStats.leaflets > 0 || promoStats.email > 0 || promoStats.whatsapp > 0 ? (
+          <>
+            <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{promoStats.leaflets}</span> leaflet
+            {promoStats.leaflets !== 1 ? 's' : ''}&nbsp;·&nbsp;
+            <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{promoStats.email}</span> email draft
+            {promoStats.email !== 1 ? 's' : ''}&nbsp;·&nbsp;
+            <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{promoStats.whatsapp}</span> WhatsApp template
+            {promoStats.whatsapp !== 1 ? 's' : ''}
+          </>
+        ) : (
+          'Co-branded marketing materials for client acquisition.'
+        )}
+      </div>
+      <button
+        onClick={() => navigate('/advisor/promote')}
+        style={{
+          padding: '9px 20px',
+          background: 'var(--color-primary)', color: '#fff',
+          border: 'none', borderRadius: 8, cursor: 'pointer',
+          fontSize: 13, fontWeight: 600,
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        Open Promote module
+      </button>
+    </WidgetCard>
+  )
+}
+
 // ── MANAGE WIDGETS DRAWER ─────────────────────────────────────────────────────
 
 function ManageWidgetsDrawer({ prefs, onChange, onClose }) {
@@ -592,6 +629,9 @@ export default function AdvisorDashboard() {
   const [sentiment, setSentiment]       = useState(null)
   const [loadingData, setLoadingData]   = useState(true)
 
+  // Promote stats — count of active templates per category
+  const [promoStats, setPromoStats]     = useState({ leaflets: 0, email: 0, whatsapp: 0 })
+
   // UI state
   const [healthFilter, setHealthFilter] = useState(null)    // null | 'green' | 'amber' | 'red'
   const [manageOpen, setManageOpen]     = useState(false)
@@ -687,6 +727,28 @@ export default function AdvisorDashboard() {
         }
       } catch (err) {
         console.error('[AdvisorDashboard] sentiment fetch failed:', err)
+      }
+
+      // ── promo_messages — count active templates per category ──────────────
+      try {
+        const { data: promoData, error: promoErr } = await supabase
+          .from('promo_messages')
+          .select('category')
+          .eq('is_active', true)
+
+        if (promoErr) {
+          console.error('[AdvisorDashboard] promo_messages fetch error:', promoErr)
+        } else if (!cancelled && promoData) {
+          const stats = { leaflets: 0, email: 0, whatsapp: 0 }
+          for (const row of promoData) {
+            if (row.category === 'leaflet')   stats.leaflets++
+            if (row.category === 'email')     stats.email++
+            if (row.category === 'whatsapp')  stats.whatsapp++
+          }
+          setPromoStats(stats)
+        }
+      } catch (err) {
+        console.error('[AdvisorDashboard] promo_messages fetch failed:', err)
       }
 
       if (!cancelled) setLoadingData(false)
@@ -844,6 +906,14 @@ export default function AdvisorDashboard() {
               bseData={bseData}
               sentiment={sentiment}
               onHide={() => hideWidget('market_indicators')}
+            />
+          )}
+
+          {/* Promote shortcut — half width on desktop */}
+          {isVisible(prefs, 'promote_shortcut') && (
+            <PromoteShortcutWidget
+              promoStats={promoStats}
+              onHide={() => hideWidget('promote_shortcut')}
             />
           )}
         </div>
