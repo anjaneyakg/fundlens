@@ -14,7 +14,7 @@
 // Table: public.profiles (id TEXT = Firebase UID, email, role, plan_tier)
 
 const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY;
+const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const CORS_ORIGIN   = 'https://fundlens-six.vercel.app';
 
 const corsHeaders = {
