@@ -14,21 +14,18 @@ import { createSupabaseClient, supabase } from '../lib/supabaseClient'
 const DEFAULT_BRAND_COLOUR = '#1A3C6E'
 const DEFAULT_FONT         = 'DM Sans'
 
-// Maps advisor_firm_profiles.brand_font display name → Google Fonts URL family name
 function fontApiName(name) {
   if (!name) return DEFAULT_FONT
   if (name === 'Source Sans Pro') return 'Source+Sans+3'
   return name.replace(/ /g, '+')
 }
 
-// Returns CSS font-family string
 function cssFontFamily(name) {
   if (!name) return "'DM Sans', sans-serif"
   if (name === 'Source Sans Pro') return "'Source Sans 3', sans-serif"
   return `'${name}', sans-serif`
 }
 
-// Generates a light tint (~15% opacity) of a hex colour for backgrounds
 function lightTint(hex) {
   const h = (hex || DEFAULT_BRAND_COLOUR).replace('#', '')
   const r = parseInt(h.slice(0, 2), 16)
@@ -97,9 +94,9 @@ function CategoryBadge({ category }) {
 
 function LayoutBadge({ layout }) {
   const labels = {
-    header_split:  'Header split',
-    corner_badge:  'Corner badge',
-    footer_only:   'Footer only',
+    header_split: 'Header split',
+    corner_badge: 'Corner badge',
+    footer_only:  'Footer only',
   }
   return (
     <span style={{
@@ -193,8 +190,7 @@ function MiniPreview({ template, branding }) {
           </div>
         </>
       )}
-      {/* Email / WhatsApp: simple representation */}
-      {!['header_split','corner_badge','footer_only'].includes(template.template_layout) && (
+      {!['header_split', 'corner_badge', 'footer_only'].includes(template.template_layout) && (
         <div style={{ padding: 8 }}>
           <div style={{ fontSize: 7, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{template.title}</div>
           <div style={{ fontSize: 6, color: '#475569', lineHeight: 1.4 }}>{(template.text || '').slice(0, 70)}…</div>
@@ -212,27 +208,17 @@ function TemplateCard({ template, branding, onGenerate, onCopy, onShare }) {
       background: '#fff', border: '1px solid var(--color-border)',
       borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
     }}>
-      {/* Badges row */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <CategoryBadge category={template.category} />
         {template.template_layout && <LayoutBadge layout={template.template_layout} />}
       </div>
-
-      {/* Title */}
       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
         {template.title || 'Untitled template'}
       </div>
-
-      {/* Mini preview */}
       <MiniPreview template={template} branding={branding} />
-
-      {/* CTA */}
       <div>
         {template.category === 'leaflet' && (
-          <button
-            onClick={() => onGenerate(template)}
-            style={ctaBtn('#1A3C6E')}
-          >
+          <button onClick={() => onGenerate(template)} style={ctaBtn('#1A3C6E')}>
             Generate JPEG
           </button>
         )}
@@ -272,6 +258,71 @@ function ctaBtn(bg) {
   }
 }
 
+// ── CTA BLOCK (shared across all 3 leaflet templates) ─────────────────────────
+
+function CTABlock({ branding, ctaStyle, colour, font }) {
+  const firmName = branding?.firm_name || 'Your Firm'
+  const phone    = branding?.helpdesk_phone
+  const email    = branding?.helpdesk_email
+  const website  = branding?.website_url
+
+  if (ctaStyle === 'strip') {
+    return (
+      <div style={{
+        marginTop: 24, background: colour,
+        borderRadius: 10, padding: '16px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Your Advisor / Distributor</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>{firmName}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          {phone && <div style={{ fontSize: 15, color: '#fff' }}>{phone}</div>}
+          {email && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{email}</div>}
+        </div>
+      </div>
+    )
+  }
+
+  const initials = firmName.charAt(0).toUpperCase()
+  return (
+    <div style={{
+      marginTop: 24, background: lightTint(colour),
+      borderRadius: 10, padding: '16px 20px',
+      borderLeft: `4px solid ${colour}`,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: colour, marginBottom: 12 }}>
+        Contact your Advisor / Distributor
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {branding?.logo_url ? (
+          <img
+            src={branding.logo_url}
+            alt={firmName}
+            crossOrigin="anonymous"
+            style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'contain', background: '#fff', padding: 4 }}
+          />
+        ) : (
+          <div style={{
+            width: 48, height: 48, borderRadius: 10,
+            background: colour, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: 20, fontWeight: 700,
+          }}>
+            {initials}
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#1e293b' }}>{firmName}</div>
+          {phone   && <div style={{ fontSize: 14, color: '#475569', marginTop: 2 }}>{phone}</div>}
+          {email   && <div style={{ fontSize: 13, color: '#64748b' }}>{email}</div>}
+          {website && <div style={{ fontSize: 12, color: '#94a3b8' }}>{website}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── LEAFLET CANVAS — TEMPLATE A (header_split) ────────────────────────────────
 
 function TemplateHeaderSplit({ template, branding }) {
@@ -285,7 +336,7 @@ function TemplateHeaderSplit({ template, branding }) {
 
   return (
     <div style={{
-      width: 1080, height: 1080, background: '#fff',
+      width: 1080, height: 1080, background: '#ffffff',
       fontFamily: font, display: 'flex', flexDirection: 'column',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -297,10 +348,14 @@ function TemplateHeaderSplit({ template, branding }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {branding?.logo_url && (
-            <img src={branding.logo_url} alt={firmName}
-              style={{ maxHeight: 80, maxWidth: 200, objectFit: 'contain' }} />
+            <img
+              src={branding.logo_url}
+              alt={firmName}
+              crossOrigin="anonymous"
+              style={{ maxHeight: 80, maxWidth: 200, objectFit: 'contain' }}
+            />
           )}
-          <span style={{ color: '#fff', fontSize: 28, fontWeight: 700 }}>{firmName}</span>
+          <span style={{ color: '#ffffff', fontSize: 28, fontWeight: 700 }}>{firmName}</span>
         </div>
         <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14 }}>Powered by FundLens</span>
       </div>
@@ -335,8 +390,6 @@ function TemplateHeaderSplit({ template, branding }) {
             <span style={{ fontSize: 17, color: '#334155', lineHeight: 1.5 }}>{b}</span>
           </div>
         ))}
-
-        {/* CTA Block */}
         <CTABlock branding={branding} ctaStyle={ctaStyle} colour={colour} font={font} />
       </div>
 
@@ -379,7 +432,7 @@ function TemplateCornerBadge({ template, branding }) {
 
   return (
     <div style={{
-      width: 1080, height: 1080, background: '#fff',
+      width: 1080, height: 1080, background: '#ffffff',
       fontFamily: font, display: 'flex', flexDirection: 'column',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -423,7 +476,10 @@ function TemplateCornerBadge({ template, branding }) {
         justifyContent: 'space-between', flexShrink: 0,
       }}>
         <span style={{ fontSize: 13, color: '#64748b' }}>{regStr}</span>
-        <span style={{ fontSize: 12, color: '#94a3b8', maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{
+          fontSize: 12, color: '#94a3b8',
+          maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {branding?.disclaimer_text}
         </span>
       </div>
@@ -432,13 +488,17 @@ function TemplateCornerBadge({ template, branding }) {
       <div style={{
         position: 'absolute',
         ...badgePos,
-        background: '#fff', border: `1px solid ${colour}`,
+        background: '#ffffff', border: `1px solid ${colour}`,
         borderRadius: 8, padding: '8px 12px',
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         {branding?.logo_url && (
-          <img src={branding.logo_url} alt={firmName}
-            style={{ height: 32, width: 32, objectFit: 'contain' }} />
+          <img
+            src={branding.logo_url}
+            alt={firmName}
+            crossOrigin="anonymous"
+            style={{ height: 32, width: 32, objectFit: 'contain' }}
+          />
         )}
         <span style={{ fontSize: 16, fontWeight: 700, color: colour }}>{firmName}</span>
       </div>
@@ -459,7 +519,7 @@ function TemplateFooterOnly({ template, branding }) {
 
   return (
     <div style={{
-      width: 1080, height: 1080, background: '#fff',
+      width: 1080, height: 1080, background: '#ffffff',
       fontFamily: font, display: 'flex', flexDirection: 'column',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -508,16 +568,23 @@ function TemplateFooterOnly({ template, branding }) {
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: '0 48px', gap: 8,
       }}>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariant: 'small-caps', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+        <div style={{
+          fontSize: 11, color: 'rgba(255,255,255,0.6)',
+          fontVariant: 'small-caps', letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>
           Distributed by Advisor / Distributor
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {branding?.logo_url && (
-            <img src={branding.logo_url} alt={firmName}
-              style={{ height: 40, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+            <img
+              src={branding.logo_url}
+              alt={firmName}
+              crossOrigin="anonymous"
+              style={{ height: 40, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+            />
           )}
           <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}>{firmName}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#ffffff' }}>{firmName}</div>
             {regStr && (
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>{regStr}</div>
             )}
@@ -528,73 +595,24 @@ function TemplateFooterOnly({ template, branding }) {
   )
 }
 
-// ── CTA BLOCK (shared across all 3 leaflet templates) ────────────────────────
+// ── LEAFLET CANVAS SWITCHER ───────────────────────────────────────────────────
 
-function CTABlock({ branding, ctaStyle, colour, font }) {
-  const firmName = branding?.firm_name || 'Your Firm'
-  const phone    = branding?.helpdesk_phone
-  const email    = branding?.helpdesk_email
-  const website  = branding?.website_url
-
-  if (ctaStyle === 'strip') {
-    return (
-      <div style={{
-        marginTop: 24, background: colour,
-        borderRadius: 10, padding: '16px 24px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Your Advisor / Distributor</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>{firmName}</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          {phone   && <div style={{ fontSize: 15, color: '#fff' }}>{phone}</div>}
-          {email   && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{email}</div>}
-        </div>
-      </div>
-    )
-  }
-
-  // Default: card style
-  const initials = firmName.charAt(0).toUpperCase()
-  return (
-    <div style={{
-      marginTop: 24, background: lightTint(colour),
-      borderRadius: 10, padding: '16px 20px',
-      borderLeft: `4px solid ${colour}`,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: colour, marginBottom: 12 }}>
-        Contact your Advisor / Distributor
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        {branding?.logo_url ? (
-          <img src={branding.logo_url} alt={firmName}
-            style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'contain', background: '#fff', padding: 4 }} />
-        ) : (
-          <div style={{
-            width: 48, height: 48, borderRadius: 10,
-            background: colour, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 20, fontWeight: 700,
-          }}>
-            {initials}
-          </div>
-        )}
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#1e293b' }}>{firmName}</div>
-          {phone   && <div style={{ fontSize: 14, color: '#475569', marginTop: 2 }}>{phone}</div>}
-          {email   && <div style={{ fontSize: 13, color: '#64748b' }}>{email}</div>}
-          {website && <div style={{ fontSize: 12, color: '#94a3b8' }}>{website}</div>}
-        </div>
-      </div>
-    </div>
-  )
+function LeafletCanvas({ template, branding }) {
+  const layout = template.template_layout
+  if (layout === 'header_split') return <TemplateHeaderSplit template={template} branding={branding} />
+  if (layout === 'corner_badge') return <TemplateCornerBadge template={template} branding={branding} />
+  if (layout === 'footer_only')  return <TemplateFooterOnly  template={template} branding={branding} />
+  // Fallback for any future layout
+  return <TemplateHeaderSplit template={template} branding={branding} />
 }
 
 // ── LEAFLET MODAL ─────────────────────────────────────────────────────────────
 
 function LeafletModal({ template, branding, onClose }) {
-  const canvasRef   = useRef(null)
+  // exportRef targets the hidden, untransformed 1080x1080px div — html2canvas target
+  const exportRef = useRef(null)
   const [busy, setBusy] = useState(false)
+
   const colour      = branding?.brand_colour_hex || DEFAULT_BRAND_COLOUR
   const firmName    = branding?.firm_name || 'Your Firm'
   const CANVAS_SIZE = 1080
@@ -602,16 +620,27 @@ function LeafletModal({ template, branding, onClose }) {
   const scale       = PREVIEW_MAX / CANVAS_SIZE
 
   async function handleDownload() {
-    if (!canvasRef.current) return
+    if (!exportRef.current) return
     setBusy(true)
     try {
+      // FIX 2: wait for all fonts (including the advisor's Google Font) before capture
+      await document.fonts.ready
+
       const html2canvas = (await import('html2canvas')).default
-      const cvs = await html2canvas(canvasRef.current, {
+
+      // FIX 4: explicit options — no transforms, explicit size, white background
+      const cvs = await html2canvas(exportRef.current, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
+        backgroundColor: '#ffffff',
+        width: 1080,
+        height: 1080,
+        windowWidth: 1080,
+        windowHeight: 1080,
         logging: false,
       })
+
       const url  = cvs.toDataURL('image/jpeg', 0.92)
       const link = document.createElement('a')
       link.href  = url
@@ -623,8 +652,6 @@ function LeafletModal({ template, branding, onClose }) {
       setBusy(false)
     }
   }
-
-  const layout = template.template_layout
 
   return (
     <>
@@ -650,9 +677,7 @@ function LeafletModal({ template, branding, onClose }) {
         fontFamily: "'DM Sans', sans-serif",
       }}>
         {/* Header */}
-        <div style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
             Leaflet preview — {template.title}
           </span>
@@ -663,26 +688,23 @@ function LeafletModal({ template, branding, onClose }) {
           }}>✕</button>
         </div>
 
-        {/* Scaled canvas preview */}
+        {/*
+          FIX 1 — VISIBLE PREVIEW DIV
+          CSS-transformed for display only. pointer-events: none.
+          html2canvas never touches this div.
+        */}
         <div style={{
           width: PREVIEW_MAX, height: PREVIEW_MAX, overflow: 'hidden',
           borderRadius: 8, border: '1px solid var(--color-border)',
-          position: 'relative',
+          position: 'relative', pointerEvents: 'none',
         }}>
           <div style={{
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            width: CANVAS_SIZE, height: CANVAS_SIZE,
+            width: CANVAS_SIZE,
+            height: CANVAS_SIZE,
           }}>
-            <div ref={canvasRef}>
-              {layout === 'header_split'  && <TemplateHeaderSplit  template={template} branding={branding} />}
-              {layout === 'corner_badge'  && <TemplateCornerBadge  template={template} branding={branding} />}
-              {layout === 'footer_only'   && <TemplateFooterOnly   template={template} branding={branding} />}
-              {/* Fallback for any future layout */}
-              {!['header_split','corner_badge','footer_only'].includes(layout) && (
-                <TemplateHeaderSplit template={template} branding={branding} />
-              )}
-            </div>
+            <LeafletCanvas template={template} branding={branding} />
           </div>
         </div>
 
@@ -693,7 +715,8 @@ function LeafletModal({ template, branding, onClose }) {
           style={{
             padding: '10px 32px',
             background: colour, color: '#fff',
-            border: 'none', borderRadius: 9, cursor: busy ? 'not-allowed' : 'pointer',
+            border: 'none', borderRadius: 9,
+            cursor: busy ? 'not-allowed' : 'pointer',
             fontSize: 14, fontWeight: 600,
             fontFamily: "'DM Sans', sans-serif",
             opacity: busy ? 0.7 : 1,
@@ -701,6 +724,27 @@ function LeafletModal({ template, branding, onClose }) {
         >
           {busy ? 'Generating…' : 'Download JPEG'}
         </button>
+      </div>
+
+      {/*
+        FIX 1 + FIX 3 — HIDDEN EXPORT DIV
+        Rendered at true 1080x1080px with NO CSS transform.
+        Positioned off-screen so it never flashes to the user.
+        This is the only div html2canvas captures.
+      */}
+      <div
+        ref={exportRef}
+        style={{
+          position: 'fixed',
+          left: -9999,
+          top: -9999,
+          width: 1080,
+          height: 1080,
+          overflow: 'hidden',
+          // No transform, no scale, no zoom
+        }}
+      >
+        <LeafletCanvas template={template} branding={branding} />
       </div>
     </>
   )
@@ -770,24 +814,18 @@ export default function AdvisorPromote() {
   const width    = useWindowWidth()
   const isMobile = width <= 768
 
-  const [templates, setTemplates]       = useState([])
-  const [branding, setBranding]         = useState(null)
-  const [loadingData, setLoadingData]   = useState(true)
+  const [templates, setTemplates]     = useState([])
+  const [branding, setBranding]       = useState(null)
+  const [loadingData, setLoadingData] = useState(true)
 
-  // Modal state
-  const [leafletModal, setLeafletModal] = useState(null)  // template object | null
+  const [leafletModal, setLeafletModal] = useState(null)
 
-  // Toast
   const [toast, setToast] = useState(null)
   const showToast = useCallback((msg) => setToast(msg), [])
 
   // ── Font loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (branding?.brand_font) {
-      loadBrandFont(branding.brand_font)
-    } else {
-      loadBrandFont(DEFAULT_FONT)
-    }
+    loadBrandFont(branding?.brand_font || DEFAULT_FONT)
   }, [branding?.brand_font])
 
   // ── Data fetch ───────────────────────────────────────────────────────────────
@@ -800,7 +838,6 @@ export default function AdvisorPromote() {
     async function fetchAll() {
       setLoadingData(true)
 
-      // promo_messages — public table, anon client is fine
       try {
         const { data, error } = await supabase
           .from('promo_messages')
@@ -817,7 +854,6 @@ export default function AdvisorPromote() {
         console.error('[AdvisorPromote] promo_messages fetch failed:', err)
       }
 
-      // advisor_firm_profiles — RLS-gated
       try {
         const { data, error } = await sb
           .from('advisor_firm_profiles')
@@ -841,18 +877,16 @@ export default function AdvisorPromote() {
     return () => { cancelled = true }
   }, [user, token, isAdvisor, isAdmin])
 
-  // ── Filtered by category ─────────────────────────────────────────────────────
-  const leaflets   = templates.filter(t => t.category === 'leaflet')
-  const emails     = templates.filter(t => t.category === 'email')
-  const whatsapps  = templates.filter(t => t.category === 'whatsapp')
+  const leaflets  = templates.filter(t => t.category === 'leaflet')
+  const emails    = templates.filter(t => t.category === 'email')
+  const whatsapps = templates.filter(t => t.category === 'whatsapp')
 
-  // ── Signature block builder ──────────────────────────────────────────────────
   function buildSignature() {
     const b = branding
     if (!b) return ''
     const regNums = Array.isArray(b.registration_numbers) ? b.registration_numbers : []
     const regStr  = regNums.map(r => r.display_label || `${r.type} ${r.number}`).join(' · ')
-    const parts = [
+    return [
       'Warm regards,',
       b.firm_name || '',
       [b.helpdesk_phone, b.helpdesk_email].filter(Boolean).join(' · '),
@@ -860,17 +894,11 @@ export default function AdvisorPromote() {
       regStr || '',
       b.disclaimer_text || '',
       'Powered by FundLens — fundlens.in',
-    ].filter(Boolean)
-    return parts.join('\n')
+    ].filter(Boolean).join('\n')
   }
 
-  // ── Email copy ───────────────────────────────────────────────────────────────
   async function handleCopy(template) {
-    const subject   = template.title || ''
-    const body      = template.body_text || template.text || ''
-    const signature = buildSignature()
-    const full      = `Subject: ${subject}\n\n${body}\n\n${signature}`
-
+    const full = `Subject: ${template.title || ''}\n\n${template.body_text || template.text || ''}\n\n${buildSignature()}`
     try {
       await navigator.clipboard.writeText(full)
       showToast('Email draft copied to clipboard')
@@ -880,19 +908,12 @@ export default function AdvisorPromote() {
     }
   }
 
-  // ── WhatsApp share ───────────────────────────────────────────────────────────
   async function handleShare(template) {
-    const b = branding
-    const firmName = b?.firm_name || 'Your Advisor / Distributor'
-    const phone    = b?.helpdesk_phone || ''
-    const msg = [
-      template.title,
-      '',
-      template.text || '',
-      '',
-      firmName,
-      phone,
-    ].filter(line => line !== undefined).join('\n')
+    const firmName = branding?.firm_name || 'Your Advisor / Distributor'
+    const phone    = branding?.helpdesk_phone || ''
+    const msg = [template.title, '', template.text || '', '', firmName, phone]
+      .filter(line => line !== undefined)
+      .join('\n')
 
     if (navigator.share) {
       try {
@@ -937,16 +958,10 @@ export default function AdvisorPromote() {
       }}>
         <div style={{ textAlign: 'center', maxWidth: 380, padding: '0 20px' }}>
           <div style={{ fontSize: 40, marginBottom: 20 }}>🔒</div>
-          <h2 style={{
-            fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)',
-            margin: '0 0 12px',
-          }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>
             Advisor / Distributor access required.
           </h2>
-          <p style={{
-            fontSize: 14, color: 'var(--color-text-secondary)',
-            marginBottom: 28, lineHeight: 1.6,
-          }}>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 28, lineHeight: 1.6 }}>
             Upgrade to an Advisor / Distributor plan to unlock co-branded marketing materials.
           </p>
           <a
@@ -954,8 +969,7 @@ export default function AdvisorPromote() {
             style={{
               display: 'inline-flex', alignItems: 'center', padding: '10px 24px',
               background: 'var(--color-primary)', color: '#fff',
-              borderRadius: 10, textDecoration: 'none',
-              fontWeight: 600, fontSize: 14,
+              borderRadius: 10, textDecoration: 'none', fontWeight: 600, fontSize: 14,
             }}
           >
             Upgrade
@@ -977,7 +991,6 @@ export default function AdvisorPromote() {
         fontFamily: "'DM Sans', sans-serif",
       }}>
 
-        {/* Page header */}
         <div style={{ marginBottom: 32 }}>
           <h1 style={{
             fontSize: isMobile ? 22 : 28, fontWeight: 700,
@@ -990,7 +1003,6 @@ export default function AdvisorPromote() {
           </div>
         </div>
 
-        {/* Branding incomplete banner */}
         {!loadingData && !branding && (
           <div style={{
             background: '#fffbeb', border: '1px solid #fbbf24',
@@ -1003,77 +1015,51 @@ export default function AdvisorPromote() {
             </span>
             <Link
               to="/advisor/settings"
-              style={{
-                fontSize: 13, fontWeight: 600, color: '#b45309',
-                textDecoration: 'underline',
-              }}
+              style={{ fontSize: 13, fontWeight: 600, color: '#b45309', textDecoration: 'underline' }}
             >
               Set up branding →
             </Link>
           </div>
         )}
 
-        {/* Loading state */}
         {loadingData && (
-          <div style={{
-            textAlign: 'center', padding: '48px 0',
-            fontSize: 13, color: 'var(--color-text-muted)',
-          }}>
+          <div style={{ textAlign: 'center', padding: '48px 0', fontSize: 13, color: 'var(--color-text-muted)' }}>
             Loading templates…
           </div>
         )}
 
-        {/* ── SECTION 1: Leaflets ── */}
         {!loadingData && (
           <div style={{ marginBottom: 48 }}>
             <SectionHeading title="Leaflets (JPEG)" count={leaflets.length} />
             <TemplateGrid
-              templates={leaflets}
-              branding={branding}
-              isMobile={isMobile}
-              onGenerate={setLeafletModal}
-              onCopy={handleCopy}
-              onShare={handleShare}
+              templates={leaflets} branding={branding} isMobile={isMobile}
+              onGenerate={setLeafletModal} onCopy={handleCopy} onShare={handleShare}
             />
           </div>
         )}
 
-        {/* ── SECTION 2: Email campaigns ── */}
         {!loadingData && (
           <div style={{ marginBottom: 48 }}>
             <SectionHeading title="Email campaigns" count={emails.length} />
             <TemplateGrid
-              templates={emails}
-              branding={branding}
-              isMobile={isMobile}
-              onGenerate={setLeafletModal}
-              onCopy={handleCopy}
-              onShare={handleShare}
+              templates={emails} branding={branding} isMobile={isMobile}
+              onGenerate={setLeafletModal} onCopy={handleCopy} onShare={handleShare}
             />
           </div>
         )}
 
-        {/* ── SECTION 3: WhatsApp messages ── */}
         {!loadingData && (
           <div style={{ marginBottom: 24 }}>
             <SectionHeading title="WhatsApp messages" count={whatsapps.length} />
             <TemplateGrid
-              templates={whatsapps}
-              branding={branding}
-              isMobile={isMobile}
-              onGenerate={setLeafletModal}
-              onCopy={handleCopy}
-              onShare={handleShare}
+              templates={whatsapps} branding={branding} isMobile={isMobile}
+              onGenerate={setLeafletModal} onCopy={handleCopy} onShare={handleShare}
             />
           </div>
         )}
 
-        {/* Empty state — no templates in Supabase yet */}
         {!loadingData && templates.length === 0 && (
-          <div style={{
-            textAlign: 'center', padding: '72px 0',
-            color: 'var(--color-text-muted)',
-          }}>
+          <div style={{ textAlign: 'center', padding: '72px 0', color: 'var(--color-text-muted)' }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
               No templates yet.
@@ -1086,7 +1072,6 @@ export default function AdvisorPromote() {
 
       </div>
 
-      {/* Leaflet modal */}
       {leafletModal && (
         <LeafletModal
           template={leafletModal}
@@ -1095,7 +1080,6 @@ export default function AdvisorPromote() {
         />
       )}
 
-      {/* Toast */}
       {toast && (
         <Toast message={toast} onDone={() => setToast(null)} />
       )}
