@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 31 May 2026 · v37.0
+**Last updated:** 31 May 2026 · v38.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -498,6 +498,63 @@ Add all VITE_FIREBASE_* (6 vars) to Vercel dashboard → Project Settings → En
 
 ---
 
+## PH3-S5 — Client Invitation Flow ✅ (31 May 2026)
+
+| Item | Status |
+|---|---|
+| `api/advisor.js` — new serverless function: create-invite, get-my-clients, accept-invite, add-client-direct | ✅ Done |
+| `src/advisor/AdvisorInviteClient.jsx` — /advisor/clients/invite: invite form, share panel (email/WhatsApp/copy), placeholder client, recent invites table | ✅ Done |
+| `src/pages/AcceptInvite.jsx` — /accept-invite: public landing for invite links; handles both unauth (create/sign in) and auth (auto-accept) states | ✅ Done |
+| `src/pages/Register.jsx` — modified: reads ?invite= param, calls accept-invite after registration | ✅ Done |
+| `src/advisor/AdvisorDashboard.jsx` — surgical: `headerExtra` prop added to WidgetCard; "Invite Client" button added to ClientListWidget header | ✅ Done |
+| `src/App.jsx` — added /advisor/clients/invite (advisor-protected) and /accept-invite (public) routes | ✅ Done |
+| Vite build — 960 modules, 0 new errors | ✅ Done |
+
+### Client invitation flow
+
+| Step | Flow |
+|---|---|
+| Advisor creates invite | /advisor/clients/invite → form → api/advisor?action=create-invite → invite_url returned |
+| Invite shared | Copy link / mailto: / WhatsApp wa.me link with invite_url |
+| Client clicks link | /accept-invite?token=TOKEN |
+| Not logged in | Shows landing card → "Create account" → /register?invite=TOKEN or "Sign in" → /login with redirect back |
+| Register with invite | /register?invite=TOKEN → completes 4-step wizard → accept-invite called automatically → advisor linked |
+| Already logged in | /accept-invite → auto-calls accept-invite API → success/expired/error card |
+| Token accepted | advisor_client_links: client_id set, status=active, consent recorded |
+
+### api/advisor.js actions
+
+| Action | Auth | Description |
+|---|---|---|
+| `create-invite` | Advisor | INSERT advisor_client_links: status=invited, invite_token=UUID, expires 30 days. Returns invite_url |
+| `get-my-clients` | Advisor | SELECT advisor_client_links for advisor_id, with profiles join for client email |
+| `accept-invite` | Any auth'd | Find row by invite_token, check expiry, UPDATE with client_id+consent, INSERT admin_notifications |
+| `add-client-direct` | Advisor | INSERT placeholder client (status=placeholder, no client_id, no invite) |
+
+### Design decisions
+
+- **`requireAdvisor()`**: checks `profiles.role IN ('advisor', 'admin')` — same JWT decode pattern as admin.js
+- **Invite URL**: hardcoded to `https://fundlens.in/accept-invite?token=TOKEN` (production domain)
+- **Resend**: no new row — re-populates share panel with existing token; no API call needed
+- **Expiry**: checked in the API (not client-side) during accept-invite for security
+- **Consent fields**: consent_given_at, consent_ip (x-forwarded-for), consent_user_agent recorded on acceptance
+- **Admin notifications**: `client_linked` notification inserted (non-fatal if it fails)
+- **Register + invite**: accept-invite called after refreshRole() — non-blocking (failure shows note, doesn't block registration)
+- **WidgetCard headerExtra**: minimal prop addition, not a full rewrite of AdvisorDashboard
+
+### New/modified files
+
+| File | Action |
+|---|---|
+| `api/advisor.js` | Created |
+| `src/advisor/AdvisorInviteClient.jsx` | Created |
+| `src/pages/AcceptInvite.jsx` | Created |
+| `src/pages/Register.jsx` | Modified — ?invite= handling |
+| `src/advisor/AdvisorDashboard.jsx` | Surgical edit — WidgetCard headerExtra, ClientListWidget invite button |
+| `src/App.jsx` | Modified — 2 new routes |
+
+---
+
 ## PH3-S4 — Advisor Onboarding Flow ✅ (31 May 2026)
 
 | Item | Status |
@@ -707,8 +764,8 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Run migrations/004_registration.sql** in Supabase fundlens-prod SQL editor before testing PH3-S4 |
-| P0 | **PH3-S5** — Client invitation flow |
+| P0 | **Run migrations/004_registration.sql** in Supabase fundlens-prod SQL editor before testing PH3-S4/S5 |
+| P0 | **Phase 3 complete** — PH3-S1 through PH3-S5 all done. Next: Phase 4 polish sessions. |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |

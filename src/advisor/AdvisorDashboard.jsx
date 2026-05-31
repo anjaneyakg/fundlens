@@ -108,7 +108,7 @@ function ToggleSwitch({ on, onChange }) {
   )
 }
 
-function WidgetCard({ title, onHide, children }) {
+function WidgetCard({ title, onHide, children, headerExtra }) {
   return (
     <div style={{
       background: '#fff',
@@ -123,18 +123,21 @@ function WidgetCard({ title, onHide, children }) {
         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
           {title}
         </span>
-        <button
-          onClick={onHide}
-          title="Hide widget"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
-            color: 'var(--color-text-muted)', borderRadius: 6,
-            display: 'flex', alignItems: 'center',
-            transition: 'color 0.15s',
-          }}
-        >
-          <EyeOffIcon size={15} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {headerExtra}
+          <button
+            onClick={onHide}
+            title="Hide widget"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+              color: 'var(--color-text-muted)', borderRadius: 6,
+              display: 'flex', alignItems: 'center',
+              transition: 'color 0.15s',
+            }}
+          >
+            <EyeOffIcon size={15} />
+          </button>
+        </div>
       </div>
       {children}
     </div>
@@ -221,8 +224,23 @@ function ClientListWidget({ clients, healthFilter, onHide }) {
   }
   // 'aum' and 'health' are placeholder sorts — order is unchanged (all equal)
 
+  const inviteBtn = (
+    <button
+      onClick={() => navigate('/advisor/clients/invite')}
+      style={{
+        fontSize: 11, fontWeight: 600, padding: '4px 10px',
+        border: '1.5px solid var(--color-primary)', borderRadius: 6,
+        background: 'rgba(29,158,117,0.06)', color: 'var(--color-primary)',
+        cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+        whiteSpace: 'nowrap', transition: 'all 0.15s',
+      }}
+    >
+      + Invite Client
+    </button>
+  )
+
   return (
-    <WidgetCard title="Client List" onHide={onHide}>
+    <WidgetCard title="Client List" onHide={onHide} headerExtra={inviteBtn}>
       {clients.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--color-text-muted)' }}>
           <div style={{ fontSize: 14, marginBottom: 6, color: 'var(--color-text-secondary)' }}>

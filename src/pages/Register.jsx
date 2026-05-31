@@ -1,5 +1,6 @@
 // src/pages/Register.jsx
 // PH3-S4: Unified registration wizard — 4 steps.
+// PH3-S5: Reads ?invite=TOKEN — after registration calls accept-invite to link client.
 // Requires Firebase auth (redirects to /login if no user).
 // Redirects to / if user already has a profiles row (profileExists === true).
 // Never auto-creates the profiles row — that is this wizard's job.
@@ -232,6 +233,13 @@ const regStyles = `
     padding: 12px 14px; font-size: 13px; color: var(--color-text-secondary);
     border-left: 3px solid var(--color-primary); margin-top: 8px;
   }
+
+  .reg-invite-banner {
+    background: rgba(29,158,117,0.06); border: 1px solid rgba(29,158,117,0.2);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 24px;
+    font-size: 13px; color: var(--color-primary); font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
 `
 
 function StepIndicator({ current }) {
@@ -278,20 +286,26 @@ export default function Register() {
     city:          '',
   })
   const [promoCode,   setPromoCode]   = useState('')
-  const [promoStatus, setPromoStatus] = useState(null) // null | 'checking' | 'valid' | 'invalid'
+  const [promoStatus, setPromoStatus] = useState(null)
   const [promoData,   setPromoData]   = useState(null)
   const [declarations, setDeclarations] = useState({ notDebarred: false, registrationCurrent: false })
   const [submitting,  setSubmitting]  = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [done, setDone]               = useState(false)
 
+  // PH3-S5: invite token from URL
+  const [inviteToken,   setInviteToken]   = useState('')
+  const [inviteAccepted, setInviteAccepted] = useState(false)
+
   const setField = (key, val) => setForm(prev => ({ ...prev, [key]: val }))
 
-  // Handle URL params: ?type=advisor or ?type=investor
+  // Handle URL params: ?type=, ?invite=
   useEffect(() => {
-    const type = searchParams.get('type')
+    const type   = searchParams.get('type')
+    const invite = searchParams.get('invite')
     if (type === 'advisor')  { setRegType('advisor');  setStep(2) }
     if (type === 'investor') { setRegType('investor'); setStep(2) }
+    if (invite) setInviteToken(invite.trim())
   }, [])
 
   // Redirect guards
@@ -334,11 +348,8 @@ export default function Register() {
       if (error) { console.error('[Register] promo check error:', error); setPromoStatus('invalid'); return }
       if (!data) { setPromoStatus('invalid'); return }
 
-      // Check usage
       if (data.used_count >= data.max_uses) { setPromoStatus('invalid'); return }
-      // Check expiry
       if (data.expires_at && new Date(data.expires_at) < new Date()) { setPromoStatus('invalid'); return }
-      // Check registration type match
       if (data.registration_type !== regType) { setPromoStatus('invalid'); return }
 
       setPromoData(data)
@@ -351,10 +362,10 @@ export default function Register() {
 
   // ── Debarred check ────────────────────────────────────────────────────────
   async function runDebarredCheck() {
-    if (regType !== 'advisor') return true // Investors skip debarred check
+    if (regType !== 'advisor') return true
     const entityType  = subType === 'sebi_ria' ? 'sebi_ria' : 'arn'
     const entityValue = (subType === 'sebi_ria' ? form.sebiRiaNumber : form.arnNumber).trim().toUpperCase()
-    if (!entityValue) return true // Field missing — let required-field validation catch it
+    if (!entityValue) return true
 
     try {
       const { data } = await supabase
@@ -367,7 +378,7 @@ export default function Register() {
       return !(data && data.length > 0)
     } catch (err) {
       console.error('[Register] debarred check error:', err)
-      return true // Don't block on check failure
+      return true
     }
   }
 
@@ -387,8 +398,7 @@ export default function Register() {
 
       const sb = createSupabaseClient(token)
 
-      // 2. Create profiles row
-      // Check if already exists (race-condition safety)
+      // 2. Create profiles row (race-condition safe)
       const { data: existingProfile } = await sb
         .from('profiles')
         .select('id')
@@ -410,7 +420,7 @@ export default function Register() {
         }
       }
 
-      // 3. For advisors: create advisor_profiles row with status=pending
+      // 3. For advisors: create advisor_profiles row (status=pending)
       if (regType === 'advisor') {
         const apPayload = {
           user_id:               user.uid,
@@ -437,7 +447,7 @@ export default function Register() {
         }
       }
 
-      // 4. Notify admin (fire and forget — non-blocking)
+      // 4. Notify admin (fire and forget)
       const displayName = regType === 'advisor'
         ? form.applicantName.trim()
         : form.displayName.trim() || user.email
@@ -452,8 +462,8 @@ export default function Register() {
             type:     regType === 'advisor' ? 'new_advisor_application' : 'new_investor_registration',
             message:  `New ${regType === 'advisor' ? 'Advisor' : 'Investor'} registration: ${displayName} (${user.email})`,
             metadata: {
-              uid:              user.uid,
-              email:            user.email,
+              uid:               user.uid,
+              email:             user.email,
               registration_type: regType === 'advisor' ? subType : null,
               arn_number:        subType === 'mfd_arn' ? form.arnNumber.trim() : null,
               sebi_ria_number:   subType === 'sebi_ria' ? form.sebiRiaNumber.trim() : null,
@@ -466,8 +476,29 @@ export default function Register() {
         console.error('[Register] admin notification error (non-fatal):', notifErr)
       }
 
-      // 5. Refresh profile state in auth context → profileExists becomes true
+      // 5. Refresh profile state → profileExists becomes true
       await refreshRole()
+
+      // 6. Accept invite if coming from an invite link (PH3-S5)
+      if (inviteToken) {
+        try {
+          const inviteRes = await fetch('/api/advisor?action=accept-invite', {
+            method: 'POST',
+            headers: {
+              'Content-Type':  'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ invite_token: inviteToken }),
+          })
+          if (inviteRes.ok) {
+            setInviteAccepted(true)
+          } else {
+            console.error('[Register] accept-invite failed (non-fatal):', await inviteRes.json().catch(() => ({})))
+          }
+        } catch (inviteErr) {
+          console.error('[Register] accept-invite error (non-fatal):', inviteErr)
+        }
+      }
 
       setDone(true)
     } catch (err) {
@@ -498,6 +529,20 @@ export default function Register() {
     return true
   }
 
+  // ── Success message logic ─────────────────────────────────────────────────
+  function successMessage() {
+    if (inviteToken && inviteAccepted) {
+      return 'Registration complete — you\'re now connected with your advisor. They can view your portfolio analytics when you upload your statement.'
+    }
+    if (inviteToken && !inviteAccepted) {
+      return 'Welcome to FundLens! Your invite link may have expired — contact your advisor for a new one.'
+    }
+    if (regType === 'advisor') {
+      return 'Your advisor application is under review. You\'ll have full advisor access once approved — typically within 2 working days.\n\nIn the meantime, you can explore Plan and Research tools.'
+    }
+    return 'Welcome to FundLens! You now have access to Plan, Research, and Track tools.'
+  }
+
   // ── Success screen ────────────────────────────────────────────────────────
   if (done) {
     return (
@@ -516,16 +561,7 @@ export default function Register() {
                 </svg>
               </div>
               <div className="reg-success-h">Registration complete!</div>
-              {regType === 'advisor' ? (
-                <p className="reg-success-p">
-                  Your advisor application is under review. You'll have full advisor access once approved — typically within 2 working days.<br /><br />
-                  In the meantime, you can explore Plan and Research tools.
-                </p>
-              ) : (
-                <p className="reg-success-p">
-                  Welcome to FundLens! You now have access to Plan, Research, and Track tools.
-                </p>
-              )}
+              <p className="reg-success-p">{successMessage()}</p>
               <button className="reg-success-go" onClick={() => navigate('/')}>
                 Go to FundLens
               </button>
@@ -544,13 +580,20 @@ export default function Register() {
     <div className="reg-page">
       <style>{regStyles}</style>
 
-      {/* Logo */}
       <a href="/" className="reg-logo" style={{ maxWidth: 600, width: '100%' }}>
         <div className="reg-logo-mark">F</div>
         <div className="reg-logo-text">Fund<span>Lens</span></div>
       </a>
 
       <div className="reg-wrap">
+        {/* Invite banner */}
+        {inviteToken && (
+          <div className="reg-invite-banner">
+            <span>🔗</span>
+            You were invited by an advisor — complete registration to connect automatically.
+          </div>
+        )}
+
         <StepIndicator current={step} />
 
         <div className="reg-card">
@@ -617,7 +660,6 @@ export default function Register() {
               <div className="reg-h1">Your registration details</div>
               <div className="reg-sub">Tell us about your practice so we can set up your advisor account.</div>
 
-              {/* Sub-type selector */}
               <div className="reg-field">
                 <label className="reg-label">Registration type <span className="req">*</span></label>
                 <div className="subtype-row">
@@ -638,7 +680,6 @@ export default function Register() {
                 </div>
               </div>
 
-              {/* ARN / SEBI fields */}
               {subType === 'mfd_arn' && (
                 <>
                   <div className="reg-field">
@@ -702,7 +743,6 @@ export default function Register() {
                 </div>
               )}
 
-              {/* Common fields */}
               <div className="reg-field">
                 <label className="reg-label" htmlFor="firmName">
                   Firm / Practice Name <span className="req">*</span>
@@ -792,9 +832,7 @@ export default function Register() {
                   </button>
                 </div>
                 {promoStatus === 'valid' && (
-                  <div className="promo-valid">
-                    ✓ Code applied — your discount has been noted.
-                  </div>
+                  <div className="promo-valid">✓ Code applied — your discount has been noted.</div>
                 )}
                 {promoStatus === 'invalid' && (
                   <div className="promo-invalid">
@@ -811,7 +849,6 @@ export default function Register() {
               <div className="reg-h1">Review & confirm</div>
               <div className="reg-sub">Please review your details and confirm the declaration below.</div>
 
-              {/* Summary */}
               <div style={{ marginBottom: 24 }}>
                 <div className="review-row">
                   <span className="review-key">Registration type</span>
@@ -873,9 +910,16 @@ export default function Register() {
                     </span>
                   </div>
                 )}
+                {inviteToken && (
+                  <div className="review-row">
+                    <span className="review-key">Invite</span>
+                    <span className="review-val" style={{ color: 'var(--color-primary)' }}>
+                      🔗 Advisor invite active
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Declarations */}
               <div style={{ marginBottom: 20 }}>
                 <div className="reg-check">
                   <input

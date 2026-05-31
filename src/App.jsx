@@ -51,6 +51,7 @@ import AmfiMarketCapUpload     from './pages/admin/AmfiMarketCapUpload.jsx';
 import Login                   from './pages/Login';
 import Upgrade                 from './pages/Upgrade';
 import Register                from './pages/Register';
+import AcceptInvite            from './pages/AcceptInvite.jsx';
 import ProtectedRoute          from './components/ProtectedRoute';
 import UserManager             from './pages/admin/UserManager';
 import ToolAccessMatrix        from './pages/admin/ToolAccessMatrix';
@@ -60,6 +61,7 @@ import AdvisorDashboard        from './advisor/AdvisorDashboard.jsx';
 import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
 import AdvisorSettings         from './advisor/AdvisorSettings.jsx';
 import AdvisorPromote          from './advisor/AdvisorPromote.jsx';
+import AdvisorInviteClient     from './advisor/AdvisorInviteClient.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -80,6 +82,9 @@ export default function App() {
 
           {/* /register — public but self-redirects if already registered */}
           <Route path="/register"               element={<Register />} />
+
+          {/* /accept-invite — public invite acceptance (handles both authed and unauthed states) */}
+          <Route path="/accept-invite"          element={<AcceptInvite />} />
 
           {/* Plan tools — public, no login required */}
           <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
@@ -149,6 +154,10 @@ export default function App() {
           <Route
             path="/advisor/promote"
             element={<ProtectedRoute requiredRole="advisor"><AdvisorPromote /></ProtectedRoute>}
+          />
+          <Route
+            path="/advisor/clients/invite"
+            element={<ProtectedRoute requiredRole="advisor"><AdvisorInviteClient /></ProtectedRoute>}
           />
 
           {/* ── Admin routes — Admin required ── */}
