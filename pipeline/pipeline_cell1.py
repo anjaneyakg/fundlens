@@ -1,3 +1,12 @@
+# ============================================================
+# RETIRED — 31 May 2026
+# This script has been superseded by daily_nav_sync.py
+# which writes NAV data directly to Supabase nav_history.
+# The Gist-based pipeline is no longer used.
+# Do not run this script. It is kept for reference only.
+# ============================================================
+raise SystemExit("This script is retired. Use daily_nav_sync.py instead.")
+
 # pipeline_cell1.py
 # FundLens Data Pipeline — Cell 1 — v4.2.1
 # Source: AMFI Direct (amfiindia.com + portal.amfiindia.com)

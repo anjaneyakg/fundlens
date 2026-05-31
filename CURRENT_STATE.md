@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 31 May 2026 · v39.0
+**Last updated:** 01 Jun 2026 · v40.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -782,8 +782,8 @@ features never activated.
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
-| P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
-| P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
+| P0 | **GitHub Actions secrets** — Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo secrets to activate daily_nav_sync cron |
+| P1 | **PH1-S4** ✅ Done — daily_nav_sync.py replaces pipeline_cell1.py + pipeline_cell2.py (Gist pipeline retired) |
 | P2 | **Test advisor_client_links** — Run manual test INSERT to verify ClientListWidget populates |
 
 ---
@@ -797,6 +797,7 @@ features never activated.
 | 3 | ✅ Vercel env vars (`VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) | ~~Missing~~ | All three set 24 May 2026 |
 | 4 | Tighten `advisor_profiles` RLS policies (currently `USING true`) | Phase 3 scope | Do in PH3-S1 or PH3-S2 |
 | 5 | Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` | None | Recovers ~1–1.5 GB index bloat |
+| 6 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
 
 ---
 
@@ -847,8 +848,9 @@ features never activated.
 | `sync_amc_master.py` | v2.0 | ✅ Ready | Sync AMCs from FundInsight → amcs table. |
 | `populate_schemes_table.py` | v2.0 | ✅ Ready | Load scheme master from AMFI. |
 | `uti_fetch.py` | v1.0 | ⛔ Retired | Replaced by cell_a_fetcher. |
-| `pipeline_cell1.py` | v4.3.1 | ⏸ Pending rebuild | Remove 5Y fetch, today-only NAV (Phase 1 S4) |
-| `pipeline_cell2.py` | v4.3.1 | ⏸ Pending rebuild | Upload to Gist rebuild (Phase 1 S4) |
+| `daily_nav_sync.py` | v1.0 | ✅ Live | Daily NAV → Supabase. Runs Mon–Fri 11:30PM IST via GitHub Actions. Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY secrets. |
+| `pipeline_cell1.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Raises SystemExit on import. |
+| `pipeline_cell2.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Gist pipeline discontinued. |
 
 ---
 

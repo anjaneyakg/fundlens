@@ -1,3 +1,12 @@
+# ============================================================
+# RETIRED — 31 May 2026
+# This script has been superseded by daily_nav_sync.py
+# which writes NAV data directly to Supabase nav_history.
+# The Gist-based pipeline is no longer used.
+# Do not run this script. It is kept for reference only.
+# ============================================================
+raise SystemExit("This script is retired. Use daily_nav_sync.py instead.")
+
 # pipeline_cell2.py — FundLens v4.3.1
 # Upload all 5 outputs to Gists
 #
