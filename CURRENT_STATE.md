@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 31 May 2026 · v38.0
+**Last updated:** 31 May 2026 · v39.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -760,20 +760,31 @@ features never activated.
 
 ---
 
+## PH4-S5 — Bug Fixes ✅ (31 May 2026)
+
+| Item | Status |
+|---|---|
+| Fix 1: `CompareSchemes.jsx` — removed duplicate `border` key in P2P period pills and Year pills (build warning) | ✅ Done |
+| Fix 2: `FDvsMF.jsx` line 531 — merged duplicate `style` props on tenure range input → `style={{ ...S.input, width:'100%', accentColor:'#a0522d' }}` (build warning) | ✅ Done |
+| Fix 3: `SchemeMapping.jsx` — fixed AMC autocomplete fallback from `Object.values(amfiMap).flat()` → `[]`; wrong AMC schemes no longer bleed into other AMC dropdowns | ✅ Done |
+| Fix 4: `CompareSchemes.jsx` `categorySlug()` — strip apostrophes before replacing non-alphanumeric; "Children's" now slugifies to `childrens` not `children_s` (also verified SchemeBasket.jsx `slugify()` was already correct) | ✅ Done |
+| Fix 5: `SIPCalculator.jsx` — migrated `loadNavHistory` from `api.mfapi.in` to Supabase `nav_history` table (primary) with mfapi.in fallback; added `supabase` import | ✅ Done |
+| Vite build — 960 modules, 0 errors, duplicate-key build warnings resolved | ✅ Done |
+
+---
+
 ## Immediate Next Session Priorities
 
 | Priority | Task |
 |---|---|
 | P0 | **Run migrations/004_registration.sql** in Supabase fundlens-prod SQL editor before testing PH3-S4/S5 |
-| P0 | **Phase 3 complete** — PH3-S1 through PH3-S5 all done. Next: Phase 4 polish sessions. |
+| P0 | **Phase 3 + PH4-S5 complete** — Next: PH4-S6 Mobile responsive audit (375px, useWindowWidth() everywhere) |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
 | P1 | **PH1-S4** — Pipeline Cell 1 rebuild (today-only NAV fetch, replace pipeline_cell1.py) |
 | P2 | **NAV top-up** — Run `--auto-resume` nightly to stay current (T-1) |
 | P2 | **Test advisor_client_links** — Run manual test INSERT to verify ClientListWidget populates |
-| P4 | **Build warning: FDvsMF.jsx line 533** — duplicate `style` attribute (Phase 4 fix) |
-| P4 | **Build warning: CompareSchemes.jsx lines 775, 823** — duplicate `border` key (Phase 4 fix) |
 
 ---
 

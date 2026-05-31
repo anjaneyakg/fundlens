@@ -528,9 +528,8 @@ export default function FDvsMF() {
                 <span>Tenure (Years)</span>
                 <span style={S.labelVal}>{tenureYears}Y</span>
               </label>
-              <input style={S.input} type="range" min="1" max="20" value={tenureYears}
-                onChange={e => setTenureYears(+e.target.value)}
-                style={{ width: '100%', accentColor: '#a0522d' }} />
+              <input style={{ ...S.input, width: '100%', accentColor: '#a0522d' }} type="range" min="1" max="20" value={tenureYears}
+                onChange={e => setTenureYears(+e.target.value)} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#b0a090', fontFamily: 'monospace', marginTop: '2px' }}>
                 <span>1Y</span><span>10Y</span><span>20Y</span>
               </div>

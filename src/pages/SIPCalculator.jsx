@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { supabase } from '../lib/supabaseClient';
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const style = `
@@ -665,31 +666,49 @@ export default function SIPCalculator() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Load NAV history when scheme selected
+  // Load NAV history — primary: Supabase nav_history, fallback: mfapi.in
   const loadNavHistory = useCallback(async (schemeId) => {
     setNavLoading(true); setNavError(null); setNavMap(null); setResult(null);
     try {
-      const res  = await fetch(`https://api.mfapi.in/mf/${schemeId}`);
-      const json = await res.json();
-      const data = json.data || [];
-      const map  = {};
-      const dts  = [];
-      data.forEach(r => {
-        const d = new Date(r.date.split("-").reverse().join("-"));
-        const k = d.toISOString().slice(0, 10);
-        map[k]  = parseFloat(r.nav);
+      let rawRows = null;
+
+      // Primary: Supabase nav_history table
+      const { data: supaData, error: supaError } = await supabase
+        .from('nav_history')
+        .select('nav_date, nav')
+        .eq('scheme_id', schemeId)
+        .order('nav_date', { ascending: true })
+        .limit(10000);
+
+      if (!supaError && supaData && supaData.length > 0) {
+        rawRows = supaData.map(r => ({ dateStr: r.nav_date, nav: parseFloat(r.nav) }));
+      } else {
+        // Fallback: mfapi.in
+        const res  = await fetch(`https://api.mfapi.in/mf/${schemeId}`);
+        const json = await res.json();
+        const rows = json.data || [];
+        rawRows = rows.map(r => ({
+          dateStr: r.date.split("-").reverse().join("-"),
+          nav: parseFloat(r.nav),
+        }));
+      }
+
+      const map = {}, dts = [];
+      rawRows.forEach(({ dateStr, nav }) => {
+        const d = new Date(dateStr);
+        map[d.toISOString().slice(0, 10)] = nav;
         dts.push(d);
       });
       dts.sort((a, b) => a - b);
       setNavMap(map);
       setNavDates(dts);
-      // Set default start year to scheme's inception + 1
       if (dts.length > 0) {
         const inceptionYear = dts[0].getFullYear();
         setStartYear(Math.min(inceptionYear + 1, new Date().getFullYear() - 1));
       }
     } catch(e) {
-      setNavError("Could not fetch NAV history from MFAPI.");
+      console.error('SIPCalculator: Failed to load NAV history', e);
+      setNavError("Could not load NAV history. Please try again.");
     } finally {
       setNavLoading(false);
     }

@@ -236,7 +236,10 @@ const calcYearReturns = (hist) => {
 };
 
 const categorySlug = (category, plan) => {
-  const slug = category.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  const slug = category.toLowerCase()
+    .replace(/'/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
   return `nav_${slug}_${plan.toLowerCase()}.json`;
 };
 
@@ -768,7 +771,7 @@ export default function CompareSchemes() {
                     <div style={{display:"flex",gap:5,marginBottom:12,flexWrap:"wrap"}}>
                       {["1W","1M","3M","6M","1Y","3Y"].map(p => (
                         <button key={p} onClick={() => setReturnPeriod(p)} style={{
-                          padding:"3px 9px",borderRadius:10,border:"none",cursor:"pointer",
+                          padding:"3px 9px",borderRadius:10,cursor:"pointer",
                           fontFamily:"'DM Mono'",fontSize:9,
                           background: returnPeriod===p ? "linear-gradient(135deg,#635bff,#4f46e5)" : "rgba(99,91,255,0.06)",
                           color: returnPeriod===p ? "#fff" : "#6b72a0",
@@ -816,7 +819,7 @@ export default function CompareSchemes() {
                           <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",flexWrap:"nowrap"}}>
                             {allYears.map(y => (
                               <button key={y} onClick={() => setActiveYear(y)} style={{
-                                padding:"3px 9px",borderRadius:10,border:"none",cursor:"pointer",
+                                padding:"3px 9px",borderRadius:10,cursor:"pointer",
                                 fontFamily:"'DM Mono'",fontSize:9,whiteSpace:"nowrap",flexShrink:0,
                                 background: activeYear===y ? "linear-gradient(135deg,#635bff,#4f46e5)" : "rgba(99,91,255,0.06)",
                                 color: activeYear===y ? "#fff" : "#6b72a0",

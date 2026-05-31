@@ -460,7 +460,7 @@ export default function SchemeMapping() {
   })
 
   const amfiSchemes = selectedAmc
-    ? (amfiMap[selectedAmc] || Object.values(amfiMap).flat())
+    ? (amfiMap[selectedAmc] || [])
     : []
 
   // ── Handle mapping change ────────────────────────────────────────────────
