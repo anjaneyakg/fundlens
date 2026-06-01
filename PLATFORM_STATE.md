@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 30 May 2026 (PH3-S3 Promote module done)
+**Last updated:** 01 Jun 2026 (EB-S1 Expense Manager foundation done)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -76,8 +76,8 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH3-S1 | Advisor Dashboard (`/advisor`) — 5 widgets, widget prefs, BSE/AIrrow market data, client list from advisor_client_links | ✅ Done — 30 May 2026 |
 | PH3-S2 | White-label branding system — AdvisorSettings /advisor/settings, F5 PDF branding, 16 Google Fonts, Storage logo upload | ✅ Done — 30 May 2026 |
 | PH3-S3 | Promote module (leaflets, email drafts, WhatsApp templates) | ✅ Done — 30 May 2026 |
-| PH3-S4 | Advisor onboarding flow | ⏳ Pending |
-| PH3-S5 | Client invitation flow | ⏳ Pending |
+| PH3-S4 | Advisor onboarding flow | ✅ Done — 31 May 2026 |
+| PH3-S5 | Client invitation flow | ✅ Done — 31 May 2026 |
 
 ### Phase 4 — Polish & Pre-launch (Weeks 9–11)
 
@@ -87,9 +87,17 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | PH4-S2 | Online assistant — post-login | ⏳ Pending |
 | PH4-S3 | Admin module upgrades (carousel mgmt, role mgmt, advisor approval) | ⏳ Pending |
 | PH4-S4 | Node.js 24 upgrade ⚠ DEADLINE June 2026 | ✅ Done — 30 May 2026 (FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in all GHA workflows) |
-| PH4-S5 | Bug fixes (SchemeMapping autocomplete, SchemeBasket slug, SIPCalculator) | ⏳ Pending |
+| PH4-S5 | Bug fixes (SchemeMapping autocomplete, SchemeBasket slug, SIPCalculator) | ✅ Done — 31 May 2026 |
 | PH4-S6 | Mobile responsive audit (375px, useWindowWidth() everywhere) | ⏳ Pending |
 | PH4-S7 | Performance & SEO (lazy loading, code splitting, meta tags, sitemap) | ⏳ Pending |
+
+### Expense Manager (EB — standalone tool, parallel track)
+
+| Session | Deliverable | Status |
+|---|---|---|
+| EB-S1 | 4 Supabase tables, ExpenseContext, entry panel, FAB, dashboard widget, /expenses page (Log + Setup + Analytics stub + Dues) | ✅ Done — 01 Jun 2026 |
+| EB-S2 | Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection) | ⏳ Pending |
+| EB-S3 | Push notifications, family collaboration, 12-month projection | ⏳ Pending |
 
 ### Phase 5 — Monetisation & Go-Live (Weeks 11–13)
 
@@ -148,6 +156,10 @@ Plan | Research | Track | Save & Invest | [Promote — advisor only]
 | `profiles` | ✅ RLS live | `migrations/001_users_table.sql` | id TEXT (Firebase UID), email, role, plan_tier; RLS on SELECT/INSERT/UPDATE by sub claim |
 | `advisor_profiles` | ✅ RLS live (open — tighten Phase 3) | `migrations/002_advisor_profiles.sql` | user_id → profiles.id; logo_url, css_override, max_clients; RLS currently `USING true` — tighten in PH3-S1 |
 | `promo_messages` | ✅ RLS live | `migrations/003_promo_messages.sql` | id UUID, text, is_active, display_order; public RLS read policy; populate rows when content ready |
+| `expense_payment_sources` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; source_type check; credit_limit, billing_cycle_date for CC |
+| `expense_categories` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; icon_code, colour_hex, budget_limit_monthly; auto-seeded 17 defaults |
+| `expense_recurring` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; recurring_type, frequency, due_day, due_date_next |
+| `expense_transactions` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; txn_type, amount, family_member (text), recurring_id FK |
 
 ```sql
 -- profiles (Firebase UID as primary key) — RLS live in fundlens-prod

@@ -57,125 +57,146 @@ import UserManager             from './pages/admin/UserManager';
 import ToolAccessMatrix        from './pages/admin/ToolAccessMatrix';
 import AdvisorApplications     from './pages/admin/AdvisorApplications.jsx';
 import { AdvisorModeProvider } from './context/AdvisorModeContext';
+import { ExpenseProvider }     from './context/ExpenseContext';
+import ExpenseManager          from './pages/ExpenseManager';
+import ExpenseFAB              from './components/expenses/ExpenseFAB';
 import AdvisorDashboard        from './advisor/AdvisorDashboard.jsx';
 import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
 import AdvisorSettings         from './advisor/AdvisorSettings.jsx';
 import AdvisorPromote          from './advisor/AdvisorPromote.jsx';
 import AdvisorInviteClient     from './advisor/AdvisorInviteClient.jsx';
+import { useAuth }             from './hooks/useAuth';
+import { useRole }             from './hooks/useRole';
 
-export default function App() {
-  const location = useLocation();
-  const isAdmin  = location.pathname.startsWith('/admin');
+function AppInner() {
+  const location   = useLocation()
+  const isAdmin    = location.pathname.startsWith('/admin')
+  const { user }   = useAuth()
+  const { isGuest } = useRole()
+  const showFAB    = !isAdmin && user && !isGuest
 
   return (
+    <>
+      {!isAdmin && <Nav />}
+      {showFAB && <ExpenseFAB />}
+      <Routes>
+
+        {/* ── Public routes (Guest / any visitor) ── */}
+        <Route path="/"                       element={<Home />} />
+        <Route path="/login"                  element={<Login />} />
+        <Route path="/upgrade"                element={<Upgrade />} />
+        <Route path="/tools/market-gauge"     element={<MarketGauge />} />
+        <Route path="/embed/market-gauge"     element={<MarketGaugeEmbed />} />
+
+        {/* /register — public but self-redirects if already registered */}
+        <Route path="/register"               element={<Register />} />
+
+        {/* /accept-invite — public invite acceptance (handles both authed and unauthed states) */}
+        <Route path="/accept-invite"          element={<AcceptInvite />} />
+
+        {/* Plan tools — public, no login required */}
+        <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
+        <Route path="/sip-performance"        element={<SIPCalculator />} />
+        <Route path="/wealth-creator"         element={<WealthCreator />} />
+        <Route path="/fd-calculator"          element={<FDCalculator />} />
+        <Route path="/swp-performance"        element={<SWPCalculator />} />
+        <Route path="/fd-vs-mf"              element={<FDvsMF />} />
+        <Route path="/goal-sip"              element={<GoalSIP />} />
+        <Route path="/goal-calculator"       element={<GoalCalculator />} />
+        <Route path="/loan-calculator"       element={<LoanCalc />} />
+        <Route path="/prepay-vs-invest"      element={<PrepayVsInvest />} />
+        <Route path="/stp-calculator"        element={<STPCalculator />} />
+        <Route path="/stp-actual"            element={<STPActual />} />
+        <Route path="/scheme-basket"         element={<SchemeBasket />} />
+        <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
+        <Route path="/rd-calculator"         element={<RDCalculator />} />
+        <Route path="/capital-gains"         element={<CapitalGains />} />
+        <Route path="/post-tax"              element={<PostTaxComparator />} />
+        <Route path="/real-return"           element={<InflationAdjustedReturn />} />
+        <Route path="/xirr-calc"             element={<PortfolioXIRR />} />
+        <Route path="/risk-profiler"         element={<RiskProfiler />} />
+
+        {/* ── Research routes — Individual required ── */}
+        <Route path="/schemes"
+          element={<ProtectedRoute requiredRole="individual"><Schemes /></ProtectedRoute>} />
+        <Route path="/category-leaderboard"
+          element={<ProtectedRoute requiredRole="individual"><CategoryLeaderboard /></ProtectedRoute>} />
+        <Route path="/compare-schemes"
+          element={<ProtectedRoute requiredRole="individual"><CompareSchemes /></ProtectedRoute>} />
+
+        {/* ── Expense Manager — Individual required ── */}
+        <Route path="/expenses"
+          element={<ProtectedRoute requiredRole="individual"><ExpenseManager /></ProtectedRoute>} />
+
+        {/* ── Track / PortfolioLens — Individual required ── */}
+        <Route
+          path="/portfolio"
+          element={<ProtectedRoute requiredRole="individual"><PortfolioLensLayout /></ProtectedRoute>}
+        >
+          <Route index        element={<PortfolioLensIndex />} />
+          <Route path="e1"    element={<E1Dashboard />} />
+          <Route path="e2"    element={<E2Overview />} />
+          <Route path="e3"    element={<E3Holdings />} />
+          <Route path="e4"    element={<E4Overlap />} />
+          <Route path="e5"    element={<E5Performance />} />
+          <Route path="e6"    element={<E6CashflowReturns />} />
+          <Route path="e7"    element={<E7CapitalGains />} />
+          <Route path="e8"    element={<E8TransactionReport />} />
+          <Route path="f1"    element={<F1HealthCheck />} />
+          <Route path="f2"    element={<F2Alerts />} />
+          <Route path="f3"    element={<F3RebalancePlanner />} />
+          <Route path="f4"    element={<F4ModelPortfolio />} />
+          <Route path="f5"    element={<F5SendReport />} />
+          <Route path="f6"    element={<F6DataManager />} />
+        </Route>
+
+        {/* ── Advisor routes — Advisor required (admin also passes via role hierarchy) ── */}
+        <Route
+          path="/advisor"
+          element={<ProtectedRoute requiredRole="advisor"><AdvisorDashboard /></ProtectedRoute>}
+        />
+        <Route
+          path="/advisor/settings"
+          element={<ProtectedRoute requiredRole="advisor"><AdvisorSettings /></ProtectedRoute>}
+        />
+        <Route
+          path="/advisor/client/:id"
+          element={<ProtectedRoute requiredRole="advisor"><AdvisorClientView /></ProtectedRoute>}
+        />
+        <Route
+          path="/advisor/promote"
+          element={<ProtectedRoute requiredRole="advisor"><AdvisorPromote /></ProtectedRoute>}
+        />
+        <Route
+          path="/advisor/clients/invite"
+          element={<ProtectedRoute requiredRole="advisor"><AdvisorInviteClient /></ProtectedRoute>}
+        />
+
+        {/* ── Admin routes — Admin required ── */}
+        <Route
+          path="/admin"
+          element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>}
+        >
+          <Route path="portfolio-upload" element={<PortfolioUpload />} />
+          <Route path="coverage"         element={<CoverageDashboard />} />
+          <Route path="scheme-mapping"   element={<SchemeMapping />} />
+          <Route path="amfi-marketcap"   element={<AmfiMarketCapUpload />} />
+          <Route path="users"            element={<UserManager />} />
+          <Route path="applications"     element={<AdvisorApplications />} />
+          <Route path="tool-access"      element={<ToolAccessMatrix />} />
+        </Route>
+
+      </Routes>
+    </>
+  )
+}
+
+export default function App() {
+  return (
     <AdvisorModeProvider>
-      <>
-        {!isAdmin && <Nav />}
-        <Routes>
-
-          {/* ── Public routes (Guest / any visitor) ── */}
-          <Route path="/"                       element={<Home />} />
-          <Route path="/login"                  element={<Login />} />
-          <Route path="/upgrade"                element={<Upgrade />} />
-          <Route path="/tools/market-gauge"     element={<MarketGauge />} />
-          <Route path="/embed/market-gauge"     element={<MarketGaugeEmbed />} />
-
-          {/* /register — public but self-redirects if already registered */}
-          <Route path="/register"               element={<Register />} />
-
-          {/* /accept-invite — public invite acceptance (handles both authed and unauthed states) */}
-          <Route path="/accept-invite"          element={<AcceptInvite />} />
-
-          {/* Plan tools — public, no login required */}
-          <Route path="/loan-vs-sip"            element={<LoanVsSIP />} />
-          <Route path="/sip-performance"        element={<SIPCalculator />} />
-          <Route path="/wealth-creator"         element={<WealthCreator />} />
-          <Route path="/fd-calculator"          element={<FDCalculator />} />
-          <Route path="/swp-performance"        element={<SWPCalculator />} />
-          <Route path="/fd-vs-mf"              element={<FDvsMF />} />
-          <Route path="/goal-sip"              element={<GoalSIP />} />
-          <Route path="/goal-calculator"       element={<GoalCalculator />} />
-          <Route path="/loan-calculator"       element={<LoanCalc />} />
-          <Route path="/prepay-vs-invest"      element={<PrepayVsInvest />} />
-          <Route path="/stp-calculator"        element={<STPCalculator />} />
-          <Route path="/stp-actual"            element={<STPActual />} />
-          <Route path="/scheme-basket"         element={<SchemeBasket />} />
-          <Route path="/pre-retirement-planner" element={<PreRetirementPlanner />} />
-          <Route path="/rd-calculator"         element={<RDCalculator />} />
-          <Route path="/capital-gains"         element={<CapitalGains />} />
-          <Route path="/post-tax"              element={<PostTaxComparator />} />
-          <Route path="/real-return"           element={<InflationAdjustedReturn />} />
-          <Route path="/xirr-calc"             element={<PortfolioXIRR />} />
-          <Route path="/risk-profiler"         element={<RiskProfiler />} />
-
-          {/* ── Research routes — Individual required ── */}
-          <Route path="/schemes"
-            element={<ProtectedRoute requiredRole="individual"><Schemes /></ProtectedRoute>} />
-          <Route path="/category-leaderboard"
-            element={<ProtectedRoute requiredRole="individual"><CategoryLeaderboard /></ProtectedRoute>} />
-          <Route path="/compare-schemes"
-            element={<ProtectedRoute requiredRole="individual"><CompareSchemes /></ProtectedRoute>} />
-
-          {/* ── Track / PortfolioLens — Individual required ── */}
-          <Route
-            path="/portfolio"
-            element={<ProtectedRoute requiredRole="individual"><PortfolioLensLayout /></ProtectedRoute>}
-          >
-            <Route index        element={<PortfolioLensIndex />} />
-            <Route path="e1"    element={<E1Dashboard />} />
-            <Route path="e2"    element={<E2Overview />} />
-            <Route path="e3"    element={<E3Holdings />} />
-            <Route path="e4"    element={<E4Overlap />} />
-            <Route path="e5"    element={<E5Performance />} />
-            <Route path="e6"    element={<E6CashflowReturns />} />
-            <Route path="e7"    element={<E7CapitalGains />} />
-            <Route path="e8"    element={<E8TransactionReport />} />
-            <Route path="f1"    element={<F1HealthCheck />} />
-            <Route path="f2"    element={<F2Alerts />} />
-            <Route path="f3"    element={<F3RebalancePlanner />} />
-            <Route path="f4"    element={<F4ModelPortfolio />} />
-            <Route path="f5"    element={<F5SendReport />} />
-            <Route path="f6"    element={<F6DataManager />} />
-          </Route>
-
-          {/* ── Advisor routes — Advisor required (admin also passes via role hierarchy) ── */}
-          <Route
-            path="/advisor"
-            element={<ProtectedRoute requiredRole="advisor"><AdvisorDashboard /></ProtectedRoute>}
-          />
-          <Route
-            path="/advisor/settings"
-            element={<ProtectedRoute requiredRole="advisor"><AdvisorSettings /></ProtectedRoute>}
-          />
-          <Route
-            path="/advisor/client/:id"
-            element={<ProtectedRoute requiredRole="advisor"><AdvisorClientView /></ProtectedRoute>}
-          />
-          <Route
-            path="/advisor/promote"
-            element={<ProtectedRoute requiredRole="advisor"><AdvisorPromote /></ProtectedRoute>}
-          />
-          <Route
-            path="/advisor/clients/invite"
-            element={<ProtectedRoute requiredRole="advisor"><AdvisorInviteClient /></ProtectedRoute>}
-          />
-
-          {/* ── Admin routes — Admin required ── */}
-          <Route
-            path="/admin"
-            element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>}
-          >
-            <Route path="portfolio-upload" element={<PortfolioUpload />} />
-            <Route path="coverage"         element={<CoverageDashboard />} />
-            <Route path="scheme-mapping"   element={<SchemeMapping />} />
-            <Route path="amfi-marketcap"   element={<AmfiMarketCapUpload />} />
-            <Route path="users"            element={<UserManager />} />
-            <Route path="applications"     element={<AdvisorApplications />} />
-            <Route path="tool-access"      element={<ToolAccessMatrix />} />
-          </Route>
-
-        </Routes>
-      </>
+      <ExpenseProvider>
+        <AppInner />
+      </ExpenseProvider>
     </AdvisorModeProvider>
-  );
+  )
 }

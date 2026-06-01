@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 01 Jun 2026 · v41.0
+**Last updated:** 01 Jun 2026 · v42.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,48 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-S1 — Expense Manager Foundation ✅ (01 Jun 2026)
+
+| Item | Status |
+|---|---|
+| `migrations/005_expense_manager.sql` — 4 tables + RLS (expense_payment_sources, expense_categories, expense_recurring, expense_transactions) | ✅ Written — ⚠ Run manually in Supabase SQL editor |
+| `src/context/ExpenseContext.jsx` — loads all 4 tables on mount, auto-inserts 17 default categories + 1 Cash source, exposes full CRUD | ✅ Done |
+| `src/components/expenses/ExpenseEntryPanel.jsx` — slide-up panel, amount + type toggle + category/source/member/date/note, pre-selects last-used | ✅ Done |
+| `src/components/expenses/ExpenseFAB.jsx` — fixed bottom-right FAB, opens EntryPanel, visible on all post-login screens | ✅ Done |
+| `src/components/expenses/ExpenseDashboardWidget.jsx` — compact widget, masked/unmasked, budget progress bar, Log Expense + View Details | ✅ Done |
+| `src/pages/ExpenseManager.jsx` — /expenses, 4 tabs: Log + Setup + Analytics (stub) + Dues | ✅ Done |
+| `src/App.jsx` — /expenses route (individual-protected), ExpenseProvider wrapper, FAB conditionally shown | ✅ Done |
+| `src/components/Nav.jsx` — "Expenses" as first tab (desktop + mobile drawer), authenticated users only | ✅ Done |
+| Vite build — 964 modules, 0 errors, 0 new warnings | ✅ Done |
+
+### EB-S1 New Files
+
+| File | Purpose |
+|---|---|
+| `migrations/005_expense_manager.sql` | 4 Supabase tables + RLS |
+| `src/context/ExpenseContext.jsx` | Data layer + CRUD |
+| `src/components/expenses/ExpenseEntryPanel.jsx` | Floating entry panel |
+| `src/components/expenses/ExpenseFAB.jsx` | Fixed FAB button |
+| `src/components/expenses/ExpenseDashboardWidget.jsx` | Dashboard embed widget |
+| `src/pages/ExpenseManager.jsx` | Main /expenses page |
+
+### EB-S1 Pending Manual Action
+
+**Run `migrations/005_expense_manager.sql` in Supabase fundlens-prod SQL editor before testing.**
+Creates: expense_payment_sources, expense_categories, expense_recurring, expense_transactions (all with RLS).
+
+### EB-S1 Architecture Notes
+
+- ExpenseContext wraps AppInner (inside ExpenseProvider in App.jsx); ExpenseFAB renders at app level — only when `user && !isGuest`.
+- Auto-default seeding: if user has 0 categories on first open, ExpenseContext inserts the 17 default categories + 1 Cash source in one transaction. Idempotent: only fires if count === 0.
+- RLS policy on all 4 tables: `auth.jwt() ->> 'sub' = user_id` — each user sees only their own rows.
+- Last-used category + source persisted in `localStorage` keys `eep_last_cat` / `eep_last_src` — pre-selected on every panel open.
+- Dues tab: lists recurring items where `due_date_next ≤ today + 30 days`. Mark Paid auto-logs a transaction with `recurring_id` FK set.
+- Family members: stored as text on transactions (`family_member` column) — not a FK table yet. FamilyMembersSection in Setup tab manages a local state list (pre-populated from transaction history). FK table planned for EB-S3.
+- Analytics tab: stub only ("coming soon"). Full charts in EB-S2.
 
 ---
 

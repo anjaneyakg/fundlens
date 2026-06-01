@@ -667,6 +667,9 @@ function MobileDrawer({
         </div>
 
         <div className="fl-drawer-body">
+          {!isGuest && user && (
+            <DrawerSection label="Expenses" type="track" path="/expenses" isGuest={false} currentPath={currentPath} onClose={onClose} />
+          )}
           <DrawerSection label="Plan"           type="plan"     isGuest={false}    groupIds={PLAN_GROUP_IDS}     currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Research"       type="research" isGuest={isGuest}  groupIds={RESEARCH_GROUP_IDS} currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Track"          type="track"    isGuest={isGuest}  currentPath={currentPath} onClose={onClose} />
@@ -766,6 +769,7 @@ export default function Nav() {
     GROUP_MAP[id]?.items.some(i => i.live && i.path === currentPath)
   )
   const isTrackActive    = currentPath.startsWith('/portfolio')
+  const isExpensesActive = currentPath.startsWith('/expenses')
 
   const showPromote = advisorMode && isAdvisor
 
@@ -801,6 +805,18 @@ export default function Nav() {
 
           {/* Centre tabs — hidden on mobile via CSS */}
           <div className="fl-tabs">
+            {/* Expense Manager — authenticated users only */}
+            {!isGuest && user && (
+              <NavTab
+                label="Expenses"
+                type="track"
+                path="/expenses"
+                isGuest={false}
+                currentPath={currentPath}
+                isActive={isExpensesActive}
+              />
+            )}
+
             <NavTab
               label="Plan"
               type="plan"
