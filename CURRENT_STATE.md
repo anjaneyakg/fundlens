@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 01 Jun 2026 · v40.0
+**Last updated:** 01 Jun 2026 · v41.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -796,8 +796,10 @@ features never activated.
 | 2 | ✅ Run `migrations/003_promo_messages.sql` in fundlens-prod | ~~Supabase IO timeout~~ | Done 24 May 2026; populate STATIC_PROMOS rows when content is ready |
 | 3 | ✅ Vercel env vars (`VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) | ~~Missing~~ | All three set 24 May 2026 |
 | 4 | Tighten `advisor_profiles` RLS policies (currently `USING true`) | Phase 3 scope | Do in PH3-S1 or PH3-S2 |
-| 5 | Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` | None | Recovers ~1–1.5 GB index bloat |
-| 6 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
+| 5 | Get DB password from Supabase dashboard → Settings → Database → Connection string, add `SUPABASE_DB_PASSWORD=<pw>` to FundInsight/.env | None | Required to run download_nav_local.py and reindex_nav.py |
+| 6 | Run `python pipeline/download_nav_local.py` from FundInsight/ after adding SUPABASE_DB_PASSWORD | After #5 | ~45-90 min. Downloads 25M rows to FundInsight/data/nav_local/. Then run nav_gap_analysis.py. |
+| 7 | Run `python pipeline/reindex_nav.py` from FundInsight/ (can run in parallel with download) | After #5 | ~20-60 min. REINDEX CONCURRENTLY all nav_history indexes. Recovers ~1–1.5 GB bloat. |
+| 8 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
 
 ---
 
@@ -851,6 +853,10 @@ features never activated.
 | `daily_nav_sync.py` | v1.0 | ✅ Live | Daily NAV → Supabase. Runs Mon–Fri 11:30PM IST via GitHub Actions. Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY secrets. |
 | `pipeline_cell1.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Raises SystemExit on import. |
 | `pipeline_cell2.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Gist pipeline discontinued. |
+| `db_connect.py` *(FI)* | v1.0 | ✅ Ready | FundInsight/pipeline/ — shared psycopg2 helper. Requires SUPABASE_DB_PASSWORD in .env. |
+| `download_nav_local.py` *(FI)* | v1.0 | ⏳ Pending credentials | FundInsight/pipeline/ — downloads nav_history year-by-year to data/nav_local/. ~45-90 min full run. |
+| `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending credentials | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
+| `nav_gap_analysis.py` *(FI)* | v1.0 | ⏳ Needs local CSVs | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Run after download. |
 
 ---
 
