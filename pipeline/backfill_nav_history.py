@@ -213,6 +213,8 @@ def fetch_window(from_date: date, to_date: date) -> list[dict]:
         "frmdt": from_date.strftime("%d-%b-%Y"),
         "todt":  to_date.strftime("%d-%b-%Y"),
     }
+    url = f"{AMFI_NAV_HISTORY_URL}?frmdt={params['frmdt']}&todt={params['todt']}"
+    print(f"[DIAGNOSTIC] Fetching URL: {url}")
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -392,6 +394,23 @@ def run_backfill(start: date | None, end: date | None, dry_run: bool = False,
             len(skipped_codes),
             sorted(skipped_codes)[:5],
         )
+
+    if dry_run:
+        print("\n[DIAGNOSTIC] Running hardcoded test fetch for Jan 2024 ...")
+        test_url = (
+            "https://portal.amfiindia.com/"
+            "DownloadNAVHistoryReport_Po.aspx"
+            "?frmdt=01-Jan-2024&todt=31-Jan-2024"
+        )
+        try:
+            r = requests.get(test_url, timeout=60)
+            lines = [l for l in r.text.strip().split("\n") if l.strip()]
+            print(f"Test fetch status : {r.status_code}")
+            print(f"Test fetch lines  : {len(lines)}")
+            print(f"First line        : {lines[0] if lines else '(empty)'}")
+            print(f"Last line         : {lines[-1] if lines else '(empty)'}")
+        except Exception as exc:
+            print(f"Test fetch ERROR  : {exc}")
 
 # ---------------------------------------------------------------------------
 # CLI
