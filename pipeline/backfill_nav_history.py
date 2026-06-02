@@ -1,5 +1,5 @@
 """
-backfill_nav_history.py  —  v1.4.0
+backfill_nav_history.py  —  v1.4.1
 
 Fetches NAV history from AMFI and inserts into Supabase nav_history table.
 
@@ -23,6 +23,8 @@ Usage:
     python backfill_nav_history.py --auto-resume --dry-run
 
 Changelog:
+  v1.4.1  get_supabase_client: key fallback chain SUPABASE_SERVICE_ROLE_KEY
+          → SUPABASE_KEY → SUPABASE_SERVICE_KEY.
   v1.4.0  Add --from / --to as aliases for --start-date / --end-date.
           Supports year-by-year gap repair runs:
             python backfill_nav_history.py --from 2006-01-01 --to 2006-12-31
@@ -89,10 +91,16 @@ log = logging.getLogger("backfill")
 
 def get_supabase_client() -> Client:
     url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_KEY", "").strip()
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        or os.environ.get("SUPABASE_KEY", "").strip()
+        or os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    )
     if not url or not key:
-        log.error("SUPABASE_URL and SUPABASE_KEY must be set as environment variables.")
-        sys.exit(1)
+        raise SystemExit(
+            "ERROR: No Supabase service key found. "
+            "Set SUPABASE_SERVICE_ROLE_KEY in .env"
+        )
     client = create_client(url, key)
     client.postgrest.timeout = 300
     return client
@@ -502,7 +510,7 @@ def main() -> None:
     else:
         start, end = resolve_date_range(args)
 
-    log.info("backfill_nav_history.py  v1.4.0  starting")
+    log.info("backfill_nav_history.py  v1.4.1  starting")
     log.info(
         "  Mode     : %s",
         "auto-resume" if args.auto_resume
