@@ -97,7 +97,8 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 |---|---|---|
 | EB-S1 | 4 Supabase tables, ExpenseContext, entry panel, FAB, dashboard widget, /expenses page (Log + Setup + Analytics stub + Dues) | ✅ Done — 01 Jun 2026 |
 | EB-S2 | Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection) + Dues tab (Mark Paid, Snooze, grouping) | ✅ Done — 02 Jun 2026 |
-| EB-S3 | Push notifications, family collaboration, 12-month projection | ⏳ Pending |
+| EB-S3 | Reimbursement tracker, unusual spend alerts, subscription audit, end-of-month summary, CSV export | ✅ Done — 02 Jun 2026 |
+| EB-S4 | Push notifications, family collaboration — if new requirements arise | ⏳ Future |
 
 ### Phase 5 — Monetisation & Go-Live (Weeks 11–13)
 

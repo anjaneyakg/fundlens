@@ -268,11 +268,53 @@ const analyticsCSS = `
   }
   .ea-donut-total { font-size: 16px; font-weight: 700; color: #1a1a2a; font-family: 'DM Sans', sans-serif; }
   .ea-donut-sub   { font-size: 11px; color: #94a3b8; font-family: 'DM Sans', sans-serif; }
+
+  /* Section I — Subscription Audit */
+  .ea-sub-summary {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: #64748b;
+    margin-bottom: 14px; line-height: 1.5;
+  }
+  .ea-sub-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .ea-sub-row:last-child { border-bottom: none; }
+  .ea-sub-icon   { font-size: 20px; flex-shrink: 0; width: 26px; text-align: center; margin-top: 2px; }
+  .ea-sub-info   { flex: 1; min-width: 0; }
+  .ea-sub-name   { font-size: 14px; font-weight: 600; color: #1a1a2a; }
+  .ea-sub-meta   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .ea-sub-annual { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .ea-sub-right  { text-align: right; flex-shrink: 0; }
+  .ea-sub-amount { font-size: 14px; font-weight: 700; color: #1A3C6E; }
+  .ea-sub-freq   { font-size: 11px; color: #94a3b8; }
+  .ea-sub-deactivate {
+    margin-top: 4px; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+    background: #ffffff; color: #64748b;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .ea-sub-deactivate:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+  .ea-sub-deactivate:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ea-sub-highlight {
+    background: #f0f4ff; border: 1px solid #c7d2fe;
+    border-radius: 12px; padding: 16px; margin-top: 14px;
+  }
+  .ea-sub-hl-label { font-size: 12px; color: #64748b; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; }
+  .ea-sub-hl-amounts {
+    font-size: 17px; font-weight: 700; color: #1A3C6E;
+    font-family: 'DM Sans', sans-serif; margin-bottom: 6px;
+  }
+  .ea-sub-hl-note { font-size: 12px; color: #64748b; font-family: 'DM Sans', sans-serif; }
+  @media (max-width: 480px) {
+    .ea-sub-row { flex-wrap: wrap; }
+    .ea-sub-annual { display: none; }
+  }
 `
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ExpenseAnalytics({ transactions, categories, paymentSources, recurringItems, addTransaction }) {
+export default function ExpenseAnalytics({ transactions, categories, paymentSources, recurringItems, addTransaction, updateRecurringItem }) {
   const width = useWindowWidth()
 
   // Section A — Mask state
@@ -287,6 +329,10 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
   const [ccBillAmounts, setCcBillAmounts] = useState({})  // { id: string }
   const [resolvedCCs,   setResolvedCCs]   = useState(new Set())
   const [ccLogging,     setCcLogging]     = useState(null)
+
+  // Section I — Subscription audit state
+  const [deactivating,  setDeactivating]  = useState(null)
+  const [deactivatedIds,setDeactivatedIds]= useState(new Set())
 
   // Toast
   const [toast, setToast] = useState(null)
@@ -439,6 +485,38 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
       setToast({ message: 'Failed to log. Check connection.', type: 'error' })
     } finally {
       setCcLogging(null)
+    }
+  }
+
+  // ── Section I — Subscription audit ───────────────────────────────────────
+  const subscriptions = useMemo(() => {
+    return recurringItems
+      .filter(r => r.recurring_type === 'subscription' && r.is_active !== false && !deactivatedIds.has(r.id))
+      .map(r => {
+        const monthly = r.frequency === 'monthly' ? r.amount
+          : r.frequency === 'yearly'  ? r.amount / 12
+          : r.frequency === 'weekly'  ? r.amount * 4.3
+          : r.amount * 30  // daily
+        return { ...r, monthly }
+      })
+      .sort((a, b) => b.monthly - a.monthly)
+  }, [recurringItems, deactivatedIds])
+
+  const subscriptionMonthlyTotal = subscriptions.reduce((s, r) => s + r.monthly, 0)
+  const subscriptionAnnualTotal  = subscriptionMonthlyTotal * 12
+
+  async function handleDeactivate(r) {
+    if (!updateRecurringItem) return
+    setDeactivating(r.id)
+    try {
+      await updateRecurringItem(r.id, { is_active: false })
+      setDeactivatedIds(prev => new Set([...prev, r.id]))
+      setToast({ message: `${r.item_name} deactivated`, type: 'success' })
+    } catch (err) {
+      console.error('ExpenseAnalytics handleDeactivate error:', err)
+      setToast({ message: 'Failed to deactivate. Check connection.', type: 'error' })
+    } finally {
+      setDeactivating(null)
     }
   }
 
@@ -735,6 +813,62 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
             </table>
           </div>
         </div>
+
+        {/* ── Section I: Subscription Audit ───────────────────────────── */}
+        {subscriptions.length > 0 && (
+          <div className="ea-card">
+            <div className="ea-card-title">📱 Subscription Audit</div>
+            <div className="ea-sub-summary">
+              <strong>{subscriptions.length}</strong> active subscription{subscriptions.length !== 1 ? 's' : ''} ·{' '}
+              {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(subscriptionMonthlyTotal))}`}/mo ·{' '}
+              {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(subscriptionAnnualTotal))}`}/yr
+            </div>
+
+            {subscriptions.map(r => {
+              const cat      = categories.find(c => c.id === r.category_id)
+              const busy     = deactivating === r.id
+              const freqLabel = r.frequency === 'monthly' ? '/mo'
+                : r.frequency === 'yearly'  ? '/yr'
+                : r.frequency === 'weekly'  ? '/wk'
+                : '/day'
+              return (
+                <div key={r.id} className="ea-sub-row">
+                  <span className="ea-sub-icon">{cat ? cat.icon_code : '📱'}</span>
+                  <div className="ea-sub-info">
+                    <div className="ea-sub-name">{r.item_name}</div>
+                    <div className="ea-sub-meta">
+                      {r.due_date_next ? `Next: ${r.due_date_next}` : 'No next date'}{cat ? ` · ${cat.category_name}` : ''}
+                    </div>
+                    <div className="ea-sub-annual">
+                      Annual cost: {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(r.monthly * 12))}`}
+                    </div>
+                  </div>
+                  <div className="ea-sub-right">
+                    <div className="ea-sub-amount">{masked ? '₹ ••••' : `₹${fmtAmt(r.amount)}`}</div>
+                    <div className="ea-sub-freq">{freqLabel}</div>
+                    {updateRecurringItem && (
+                      <button className="ea-sub-deactivate" disabled={busy} onClick={() => handleDeactivate(r)}>
+                        {busy ? '…' : 'Deactivate'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            <div className="ea-sub-highlight">
+              <div className="ea-sub-hl-label">Total subscription spend</div>
+              <div className="ea-sub-hl-amounts">
+                {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(subscriptionMonthlyTotal))}`} / month{' '}
+                <span style={{ color:'#94a3b8', fontWeight:400, fontSize:14 }}>·</span>{' '}
+                {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(subscriptionAnnualTotal))}`} / year
+              </div>
+              <div className="ea-sub-hl-note">
+                That's {masked ? '₹ ••••' : `₹${fmtAmt(Math.round(subscriptionMonthlyTotal))}`} of your monthly budget committed to subscriptions
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </>

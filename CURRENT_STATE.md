@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 02 Jun 2026 · v45.0
+**Last updated:** 02 Jun 2026 · v46.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,45 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-S3 — Reimbursement Tracker, Unusual Alerts, Subscription Audit, End-of-Month Card, CSV Export ✅ (02 Jun 2026)
+
+| Item | Status |
+|---|---|
+| **Feature 1 — Reimbursable Tracker** (ExpenseManager.jsx Log tab) | ✅ Done |
+| `[All Entries] [Reimbursable]` view toggle — navy active pill | ✅ Done |
+| Reimbursable view: Pending section (amber header, total, Mark Received), Received section (green header, dimmed rows) | ✅ Done |
+| All-entries view: "Mark Reimbursable" action in expanded TxnRow; "Mark Received" button for pending txns | ✅ Done |
+| `handleReimbursableUpdate` calls `updateTransaction` via ExpenseContext | ✅ Done |
+| **Feature 2 — Unusual Spend Alerts** (ExpenseManager.jsx Log tab) | ✅ Done |
+| `flaggedTransactionIds` (useMemo) — 90-day category average, 2.5× threshold, min 3 prior txns | ✅ Done |
+| ⚠ Unusual badge on flagged TxnRow entries | ✅ Done |
+| Dismissible amber banner when any flagged txns exist this month | ✅ Done |
+| **Feature 3 — End-of-Month Summary Card** (ExpenseManager.jsx Log tab) | ✅ Done |
+| Visible when `dom >= 26 || dom <= 3` (month closing / just-closed) | ✅ Done |
+| Savings rate (green >20%, amber 10-20%, red <10%), top 3 categories, budget overshoot, txn count, prior-month comparison | ✅ Done |
+| Gradient card: `linear-gradient(135deg, #f0f4ff 0%, #fff 100%)`, navy border | ✅ Done |
+| **Feature 4 — Subscription Audit** (ExpenseAnalytics.jsx Section I) | ✅ Done |
+| Active subscriptions list sorted by amount desc, monthly equivalent computed for each frequency | ✅ Done |
+| Deactivate button → `updateRecurringItem(id, { is_active: false })` + optimistic removal | ✅ Done |
+| Annual cost highlight box (navy #f0f4ff card at bottom of list) | ✅ Done |
+| Masked state: all ₹ amounts → `₹ ••••` | ✅ Done |
+| `updateRecurringItem` prop added to ExpenseAnalytics — passed from ExpenseManager | ✅ Done |
+| **Feature 5 — CSV Export** (ExpenseManager.jsx Log tab) | ✅ Done |
+| "⬇ Export CSV" button in log toolbar; stacked on mobile | ✅ Done |
+| Exports filtered transactions: Date, Type, Category, Amount, Source, Member, Note, Reimbursable, Status, Logged At | ✅ Done |
+| DD-MMM-YYYY format via `fmtDateLong()`; proper CSV escaping (double-quote wrapping) | ✅ Done |
+| Blob download + toast: "✓ CSV exported — N transactions" | ✅ Done |
+| Build | 966 modules, 0 errors, 0 new warnings |
+
+### EB-S3 Architecture Notes
+- Unusual spend: computes category average from ALL transactions in last 90 days, flags filtered transactions within last 30 days that exceed 2.5× average AND category has ≥3 prior transactions. `flaggedTransactionIds` is a `Set` via useMemo.
+- Reimbursable view: uses ALL transactions (not period-filtered) since reimbursements span months. `handleReimbursableUpdate` accepts a patch object so it handles both "mark reimbursable" and "mark received" via the same function.
+- End-of-month card: `summaryOffset = dom <= 3 ? -1 : 0` determines whether to show current or prior month. `showSummaryCard` is computed outside useMemo (static during render).
+- Subscription audit: `deactivatedIds` is a local Set state for immediate optimistic removal after Deactivate. Items actually deactivated in Supabase via `updateRecurringItem` (context function), so data stays consistent on reload.
+- ExpenseEntryPanel.jsx was NOT modified this session (it is in the restricted list). The `is_reimbursable` field can be set post-entry via the "Mark Reimbursable" action in the expanded TxnRow.
 
 ---
 
