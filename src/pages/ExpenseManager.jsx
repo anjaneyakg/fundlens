@@ -377,11 +377,110 @@ const emCSS = `
     .em-due-actions { flex-direction: row; flex-wrap: wrap; width: 100%; }
     .em-due-pay-btn, .em-due-snooze-btn { flex: 1; }
   }
+
+  /* ── CC RECONCILE VIEW (Log tab 3rd sub-tab) ── */
+  .em-cc-card {
+    background: #f8faff; border: 1px solid #e8ecf0; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 8px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .em-cc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .em-cc-name   { font-size: 14px; font-weight: 700; color: #1a1a2a; }
+  .em-cc-sub    { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .em-cc-cycle  { font-size: 12px; color: #94a3b8; text-align: right; }
+  .em-cc-row    { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; }
+  .em-cc-key    { color: #64748b; }
+  .em-cc-val    { font-weight: 700; color: #1a1a2a; display: flex; align-items: center; gap: 8px; }
+  .em-cc-divider { border: none; border-top: 1px solid #e8ecf0; margin: 8px 0; }
+  .em-cc-input  {
+    width: 100%; padding: 8px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; background: #ffffff;
+    color: #1a1a2a; box-sizing: border-box; transition: border-color 0.15s; margin-top: 6px;
+  }
+  .em-cc-input:focus { border-color: #1A3C6E; }
+  .em-cc-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .em-cc-save-btn {
+    padding: 7px 16px; border: none; border-radius: 8px;
+    background: #1A3C6E; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .em-cc-save-btn:hover:not(:disabled) { background: #15306b; }
+  .em-cc-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .em-cc-edit-btn {
+    padding: 3px 8px; border: 1px solid #e2e8f0; border-radius: 6px;
+    background: #ffffff; color: #64748b;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .em-cc-edit-btn:hover { border-color: #1A3C6E; color: #1A3C6E; }
+  .em-cc-log-btn {
+    flex: 1; padding: 8px 12px; border: none; border-radius: 8px;
+    background: #f59e0b; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .em-cc-log-btn:hover:not(:disabled) { background: #d97706; }
+  .em-cc-log-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .em-cc-cashback-btn {
+    flex: 1; padding: 8px 12px; border: none; border-radius: 8px;
+    background: #3b82f6; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .em-cc-cashback-btn:hover:not(:disabled) { background: #2563eb; }
+  .em-cc-cashback-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .em-cc-resolve-btn {
+    padding: 8px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+    background: #ffffff; color: #374151;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .em-cc-resolve-btn:hover { border-color: #94a3b8; }
+  .em-cc-divider-between { border: none; border-top: 1px solid #e8ecf0; margin: 16px 0; }
+
+  /* ── CURRENCY SETUP SECTION ── */
+  .em-cur-inr-row {
+    background: #f0f4ff; color: #64748b; font-size: 13px;
+    padding: 10px 12px; border-radius: 6px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .em-cur-row {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid #f8f9fa; font-family: 'DM Sans', sans-serif;
+  }
+  .em-cur-row:last-child { border-bottom: none; }
+  .em-cur-symbol { font-size: 16px; font-weight: 700; width: 28px; text-align: center; flex-shrink: 0; color: #1A3C6E; }
+  .em-cur-info   { flex: 1; min-width: 0; }
+  .em-cur-name   { font-size: 14px; font-weight: 600; color: #1a1a2a; }
+  .em-cur-rate   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .em-cur-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .em-cur-inline-edit { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .em-cur-rate-input {
+    width: 90px; padding: 5px 8px; border: 1.5px solid #1A3C6E; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; color: #1a1a2a;
+  }
+  .em-cur-confirm-btn {
+    padding: 5px 10px; border: none; border-radius: 6px;
+    background: #1A3C6E; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer;
+  }
+  .em-cur-confirm-btn:hover { background: #15306b; }
+  .em-cur-remove-confirm { font-size: 12px; color: #dc2626; font-family: 'DM Sans', sans-serif; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .em-cur-quick-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .em-cur-quick-chip {
+    border: 1px solid #1A3C6E; color: #1A3C6E; border-radius: 12px;
+    padding: 4px 12px; font-size: 12px; font-family: 'DM Sans', sans-serif;
+    cursor: pointer; background: #ffffff; transition: background 0.12s;
+  }
+  .em-cur-quick-chip:hover { background: #f0f4ff; }
 `
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function TxnRow({ txn, categories, paymentSources, isFlagged, onDelete, onUpdate, reimbProcessing }) {
+function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onDelete, onUpdate, reimbProcessing }) {
   const [expanded, setExpanded] = useState(false)
   const cat       = categories.find(c => c.id === txn.category_id)
   const src       = paymentSources.find(s => s.id === txn.payment_source_id)
@@ -413,6 +512,12 @@ function TxnRow({ txn, categories, paymentSources, isFlagged, onDelete, onUpdate
           <div className="em-txn-amount" style={{ color: isExpense ? '#dc2626' : isIncome ? '#16a34a' : '#2563eb' }}>
             {isExpense ? '−' : '+'} ₹{fmtAmt(txn.amount)}
           </div>
+          {txn.original_currency && txn.original_amount != null && (
+            <div className="em-txn-src" style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>
+              {(currencyPrefs?.find(c => c.currency_code === txn.original_currency)?.currency_symbol) || txn.original_currency}
+              {Number(txn.original_amount).toLocaleString('en-IN')} @ ₹{txn.fx_rate_used}
+            </div>
+          )}
           {src && <div className="em-txn-src">{SOURCE_ICONS[src.source_type]} {src.source_name}</div>}
         </div>
       </div>
@@ -746,16 +851,377 @@ function DueRow({ r, categories, onMarkPaid, onSnooze, processing }) {
   )
 }
 
+// ── CC Reconcile View ─────────────────────────────────────────────────────────
+
+function CCReconcileView({ paymentSources, transactions, categories, updatePaymentSource, addTransaction, onToast }) {
+  const creditCards = paymentSources.filter(s => s.source_type === 'credit_card')
+  const [settleInputs, setSettleInputs] = useState({})
+  const [editingIds,   setEditingIds]   = useState(new Set())
+  const [saving,       setSaving]       = useState(null)
+  const [logging,      setLogging]      = useState(null)
+  const [resolvedIds,  setResolvedIds]  = useState(new Set())
+
+  if (creditCards.length === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:'48px 20px', color:'#94a3b8', fontFamily:'DM Sans', fontSize:14, lineHeight:1.6 }}>
+        <div>No credit cards set up yet.</div>
+        <div style={{ marginTop:8, fontSize:13 }}>Add a credit card in Setup → Payment Sources.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding:'8px 16px 0' }}>
+      {creditCards.map((source, idx) => {
+        if (resolvedIds.has(source.id)) return null
+
+        const cycleDay = source.billing_cycle_date || 1
+        const today = new Date(); today.setHours(0,0,0,0)
+        let cycleStart = new Date(today.getFullYear(), today.getMonth(), cycleDay)
+        if (today < cycleStart) {
+          cycleStart = new Date(today.getFullYear(), today.getMonth() - 1, cycleDay)
+        }
+        const cycleEnd = new Date(cycleStart)
+        cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+        cycleEnd.setDate(cycleEnd.getDate() - 1)
+
+        const cycleStartStr   = dateToDStr(cycleStart)
+        const cycleEndStr     = dateToDStr(cycleEnd)
+        const currentCycleKey = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth()+1).padStart(2,'0')}`
+
+        const loggedTotal = transactions
+          .filter(t => t.payment_source_id === source.id && t.txn_type === 'expense' && t.txn_date >= cycleStartStr && t.txn_date <= cycleEndStr)
+          .reduce((s, t) => s + Number(t.amount), 0)
+
+        const hasSaved      = source.last_settled_cycle === currentCycleKey && source.last_settled_amount != null
+        const settledAmount = hasSaved ? Number(source.last_settled_amount) : null
+        const isEditing     = editingIds.has(source.id)
+        const inputVal      = settleInputs[source.id] ?? ''
+        const showInput     = !hasSaved || isEditing
+        const diff          = settledAmount != null ? settledAmount - loggedTotal : null
+
+        async function handleSave() {
+          const amt = parseFloat(inputVal)
+          if (!amt || amt <= 0) return
+          setSaving(source.id)
+          try {
+            await updatePaymentSource(source.id, { last_settled_amount: amt, last_settled_cycle: currentCycleKey })
+            setEditingIds(prev => { const s = new Set(prev); s.delete(source.id); return s })
+            setSettleInputs(prev => ({ ...prev, [source.id]: '' }))
+            onToast({ message: `✓ Settlement of ₹${fmtAmt(amt)} saved`, type: 'success' })
+          } catch (err) {
+            console.error('CCReconcileView handleSave error:', err)
+            onToast({ message: 'Failed to save. Check connection.', type: 'error' })
+          } finally { setSaving(null) }
+        }
+
+        async function handleLogUntracked() {
+          const untrackedCat = categories.find(c => c.category_name === 'Untracked CC Spend')
+          setSaving(null); setLogging(source.id)
+          try {
+            await addTransaction({ txn_type:'expense', amount:diff, category_id:untrackedCat?.id||null, payment_source_id:source.id, txn_date:dateToDStr(new Date()), notes:'CC untracked spend' })
+            onToast({ message: `✓ ₹${fmtAmt(diff)} logged as Untracked`, type: 'success' })
+          } catch (err) {
+            console.error('CCReconcileView handleLogUntracked error:', err)
+            onToast({ message: 'Failed to log. Check connection.', type: 'error' })
+          } finally { setLogging(null) }
+        }
+
+        async function handleLogCashback() {
+          setLogging(source.id)
+          try {
+            await addTransaction({ txn_type:'income', amount:Math.abs(diff), payment_source_id:source.id, txn_date:dateToDStr(new Date()), notes:'CC cashback or refund' })
+            onToast({ message: `✓ ₹${fmtAmt(Math.abs(diff))} logged as Cashback`, type: 'success' })
+          } catch (err) {
+            console.error('CCReconcileView handleLogCashback error:', err)
+            onToast({ message: 'Failed to log. Check connection.', type: 'error' })
+          } finally { setLogging(null) }
+        }
+
+        return (
+          <div key={source.id}>
+            <div className="em-cc-card">
+              <div className="em-cc-header">
+                <div>
+                  <div className="em-cc-name">{source.source_name}</div>
+                  {source.last_four && <div className="em-cc-sub">•••• {source.last_four}</div>}
+                </div>
+                <div className="em-cc-cycle">Cycle: {cycleDay}th monthly</div>
+              </div>
+
+              <div className="em-cc-row">
+                <span className="em-cc-key">Logged via this card:</span>
+                <span className="em-cc-val">₹{fmtAmt(loggedTotal)}</span>
+              </div>
+
+              <div className="em-cc-row">
+                <span className="em-cc-key">Bill settled:</span>
+                {hasSaved && !isEditing ? (
+                  <span className="em-cc-val">
+                    ₹{fmtAmt(settledAmount)}
+                    <button className="em-cc-edit-btn" onClick={() => {
+                      setSettleInputs(prev => ({ ...prev, [source.id]: String(settledAmount) }))
+                      setEditingIds(prev => new Set([...prev, source.id]))
+                    }}>✏ Edit</button>
+                  </span>
+                ) : (
+                  <div style={{ display:'flex', gap:6, alignItems:'center', flex:1, marginLeft:8 }}>
+                    <input
+                      className="em-cc-input"
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="₹ Enter bill paid"
+                      value={inputVal}
+                      onChange={e => setSettleInputs(prev => ({ ...prev, [source.id]: e.target.value }))}
+                      style={{ marginTop:0, flex:1 }}
+                    />
+                    <button
+                      className="em-cc-save-btn"
+                      disabled={!parseFloat(inputVal) || saving === source.id}
+                      onClick={handleSave}
+                    >
+                      {saving === source.id ? '…' : '✓ Save'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {diff !== null && (
+                <>
+                  <hr className="em-cc-divider" />
+                  {diff > 0 && (
+                    <>
+                      <div style={{ color:'#f59e0b', fontWeight:700, fontSize:13, fontFamily:'DM Sans' }}>⚠ Untracked: ₹{fmtAmt(diff)}</div>
+                      <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'DM Sans', margin:'3px 0 8px' }}>Charges, fees, or unlogged expenses</div>
+                      <div className="em-cc-actions">
+                        <button className="em-cc-log-btn" disabled={logging === source.id} onClick={handleLogUntracked}>{logging === source.id ? '…' : '+ Log as Untracked'}</button>
+                        <button className="em-cc-resolve-btn" onClick={() => setResolvedIds(p => new Set([...p, source.id]))}>Mark Resolved</button>
+                      </div>
+                    </>
+                  )}
+                  {diff < 0 && (
+                    <>
+                      <div style={{ color:'#3b82f6', fontWeight:700, fontSize:13, fontFamily:'DM Sans' }}>ℹ Cashback/refund: ₹{fmtAmt(Math.abs(diff))}</div>
+                      <div className="em-cc-actions" style={{ marginTop:8 }}>
+                        <button className="em-cc-cashback-btn" disabled={logging === source.id} onClick={handleLogCashback}>{logging === source.id ? '…' : '+ Log as Cashback'}</button>
+                        <button className="em-cc-resolve-btn" onClick={() => setResolvedIds(p => new Set([...p, source.id]))}>Mark Resolved</button>
+                      </div>
+                    </>
+                  )}
+                  {diff === 0 && settledAmount > 0 && (
+                    <>
+                      <div style={{ color:'#16a34a', fontWeight:700, fontSize:13, fontFamily:'DM Sans' }}>✓ Reconciled</div>
+                      <div className="em-cc-actions" style={{ marginTop:8 }}>
+                        <button className="em-cc-resolve-btn" onClick={() => setResolvedIds(p => new Set([...p, source.id]))}>Mark Resolved</button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+            {idx < creditCards.filter(c => !resolvedIds.has(c.id)).length - 1 && <div className="em-cc-divider-between" />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Foreign Currencies Setup Section ──────────────────────────────────────────
+
+const KNOWN_CURRENCIES = {
+  USD: { display_name: 'US Dollar',        currency_symbol: '$'  },
+  EUR: { display_name: 'Euro',             currency_symbol: '€'  },
+  GBP: { display_name: 'British Pound',    currency_symbol: '£'  },
+  AED: { display_name: 'UAE Dirham',       currency_symbol: 'د.إ'},
+  SGD: { display_name: 'Singapore Dollar', currency_symbol: 'S$' },
+  JPY: { display_name: 'Japanese Yen',     currency_symbol: '¥'  },
+}
+
+function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove, onToast }) {
+  const [showForm,    setShowForm]    = useState(false)
+  const [form,        setForm]        = useState({ currency_code:'', display_name:'', currency_symbol:'', fx_rate_to_inr:'' })
+  const [saving,      setSaving]      = useState(false)
+  const [editRateId,  setEditRateId]  = useState(null)
+  const [editRateVal, setEditRateVal] = useState('')
+  const [removingId,  setRemovingId]  = useState(null)
+  const [confirmRmId, setConfirmRmId] = useState(null)
+
+  const existingCodes = new Set(currencyPrefs.map(c => c.currency_code))
+  const quickAddCodes = ['USD','EUR','GBP','AED','SGD','JPY'].filter(c => !existingCodes.has(c))
+
+  async function handleAdd() {
+    const code = form.currency_code.trim().toUpperCase()
+    if (!code || !form.display_name.trim() || !form.currency_symbol.trim() || !form.fx_rate_to_inr) return
+    setSaving(true)
+    try {
+      await onAdd({
+        currency_code:  code,
+        display_name:   form.display_name.trim(),
+        currency_symbol:form.currency_symbol.trim(),
+        fx_rate_to_inr: Number(form.fx_rate_to_inr),
+        display_order:  currencyPrefs.length,
+        rate_updated_at:new Date().toISOString(),
+      })
+      setForm({ currency_code:'', display_name:'', currency_symbol:'', fx_rate_to_inr:'' })
+      setShowForm(false)
+      onToast({ message: `✓ ${code} added`, type: 'success' })
+    } catch (err) {
+      console.error('ForeignCurrenciesSection handleAdd error:', err)
+      onToast({ message: 'Failed to add. Check connection.', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  async function handleUpdateRate(id, code) {
+    const rate = parseFloat(editRateVal)
+    if (!rate || rate <= 0) return
+    try {
+      await onUpdateRate(id, rate)
+      setEditRateId(null)
+      setEditRateVal('')
+      onToast({ message: '✓ Rate updated', type: 'success' })
+    } catch (err) {
+      console.error('ForeignCurrenciesSection handleUpdateRate error:', err)
+      onToast({ message: 'Failed to update. Check connection.', type: 'error' })
+    }
+  }
+
+  async function handleRemove(id, code) {
+    setRemovingId(id)
+    try {
+      await onRemove(id)
+      setConfirmRmId(null)
+      onToast({ message: `${code} removed`, type: 'success' })
+    } catch (err) {
+      console.error('ForeignCurrenciesSection handleRemove error:', err)
+      onToast({ message: 'Failed to remove. Check connection.', type: 'error' })
+    } finally { setRemovingId(null) }
+  }
+
+  function prefillQuickAdd(code) {
+    const known = KNOWN_CURRENCIES[code] || {}
+    setForm({ currency_code:code, display_name:known.display_name||'', currency_symbol:known.currency_symbol||'', fx_rate_to_inr:'' })
+    setShowForm(true)
+  }
+
+  return (
+    <SetupSection icon="💱" title="Foreign Currencies" count={currencyPrefs.length}>
+      <div style={{ paddingTop:12 }}>
+        {/* Locked INR row */}
+        <div className="em-cur-inr-row">
+          <span style={{ fontSize:18 }}>🇮🇳</span>
+          <div style={{ flex:1 }}>
+            <span style={{ fontWeight:600, color:'#1a1a2a' }}>Indian Rupee (INR)</span>
+          </div>
+          <span style={{ fontSize:11, background:'#1A3C6E', color:'#fff', borderRadius:10, padding:'2px 8px', fontWeight:700 }}>Default</span>
+        </div>
+
+        {/* User currency rows */}
+        {currencyPrefs.map(cp => (
+          <div key={cp.id} className="em-cur-row">
+            <span className="em-cur-symbol">{cp.currency_symbol}</span>
+            <div className="em-cur-info">
+              <div className="em-cur-name">{cp.display_name} ({cp.currency_code})</div>
+              {editRateId === cp.id ? (
+                <div className="em-cur-inline-edit">
+                  <span style={{ fontSize:12, color:'#64748b', fontFamily:'DM Sans' }}>1 {cp.currency_code} = ₹</span>
+                  <input
+                    className="em-cur-rate-input"
+                    type="number"
+                    inputMode="decimal"
+                    value={editRateVal}
+                    onChange={e => setEditRateVal(e.target.value)}
+                    placeholder={String(cp.fx_rate_to_inr)}
+                    autoFocus
+                  />
+                  <button className="em-cur-confirm-btn" onClick={() => handleUpdateRate(cp.id, cp.currency_code)}>✓</button>
+                  <button className="em-cancel-btn" style={{ padding:'5px 10px', fontSize:12 }} onClick={() => { setEditRateId(null); setEditRateVal('') }}>✕</button>
+                </div>
+              ) : (
+                <div className="em-cur-rate">
+                  ₹{cp.fx_rate_to_inr} per unit
+                  {cp.rate_updated_at && ` · Updated: ${fmtDate(cp.rate_updated_at.slice(0,10))}`}
+                </div>
+              )}
+              {confirmRmId === cp.id && (
+                <div className="em-cur-remove-confirm">
+                  Remove {cp.currency_code}? Past entries keep their rate.
+                  <button className="em-cancel-btn" style={{ padding:'4px 10px', fontSize:12 }} onClick={() => setConfirmRmId(null)}>Cancel</button>
+                  <button className="em-txn-del-btn" style={{ padding:'4px 10px', fontSize:12 }} disabled={removingId === cp.id} onClick={() => handleRemove(cp.id, cp.currency_code)}>
+                    {removingId === cp.id ? '…' : 'Remove'}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="em-cur-actions">
+              {editRateId !== cp.id && (
+                <button className="em-icon-btn" onClick={() => { setEditRateId(cp.id); setEditRateVal(String(cp.fx_rate_to_inr)) }}>✏</button>
+              )}
+              {confirmRmId !== cp.id && (
+                <button className="em-icon-btn danger" onClick={() => setConfirmRmId(cp.id)}>🗑</button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Quick-add chips */}
+        {quickAddCodes.length > 0 && currencyPrefs.length < 3 && (
+          <div className="em-cur-quick-chips">
+            {quickAddCodes.map(code => (
+              <button key={code} className="em-cur-quick-chip" onClick={() => prefillQuickAdd(code)}>{code}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Add form */}
+        {currencyPrefs.length < 3 && (
+          showForm ? (
+            <div className="em-add-form" style={{ marginTop:12 }}>
+              <div className="em-form-row">
+                <div>
+                  <div className="em-field-label">Code</div>
+                  <input className="em-field-input" maxLength={3} placeholder="USD" value={form.currency_code} onChange={e => setForm(f => ({ ...f, currency_code:e.target.value.toUpperCase() }))} />
+                </div>
+                <div>
+                  <div className="em-field-label">Symbol</div>
+                  <input className="em-field-input" maxLength={3} placeholder="$" value={form.currency_symbol} onChange={e => setForm(f => ({ ...f, currency_symbol:e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <div className="em-field-label">Display name</div>
+                <input className="em-field-input" placeholder="US Dollar" value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name:e.target.value }))} />
+              </div>
+              <div>
+                <div className="em-field-label">
+                  Rate: 1 {form.currency_code || '?'} = ₹
+                </div>
+                <input className="em-field-input" type="number" inputMode="decimal" placeholder="83.5" value={form.fx_rate_to_inr} onChange={e => setForm(f => ({ ...f, fx_rate_to_inr:e.target.value }))} />
+              </div>
+              <div className="em-form-row">
+                <button className="em-add-btn" disabled={!form.currency_code.trim()||!form.display_name.trim()||!form.currency_symbol.trim()||!form.fx_rate_to_inr||saving} onClick={handleAdd}>{saving?'Saving…':'Save'}</button>
+                <button className="em-cancel-btn" onClick={() => { setShowForm(false); setForm({ currency_code:'', display_name:'', currency_symbol:'', fx_rate_to_inr:'' }) }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button className="em-add-trigger" onClick={() => setShowForm(true)}>+ Add Currency</button>
+          )
+        )}
+      </div>
+    </SetupSection>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ExpenseManager() {
   const {
-    transactions, categories, paymentSources, recurringItems, familyMembers,
+    transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
     loading, error, reload,
     addTransaction, deleteTransaction, updateTransaction,
     addCategory, updateCategory,
     addPaymentSource, updatePaymentSource,
     addRecurringItem, updateRecurringItem, deleteRecurringItem,
+    addCurrencyPref, updateCurrencyRate, removeCurrencyPref,
   } = useExpense()
 
   const width    = useWindowWidth()
@@ -767,7 +1233,7 @@ export default function ExpenseManager() {
   const [panelOpen,             setPanelOpen]             = useState(false)
   const [alertDismissed,        setAlertDismissed]        = useState(false)
   const [unusualAlertDismissed, setUnusualAlertDismissed] = useState(false)
-  const [logView,               setLogView]               = useState('all')   // 'all' | 'reimbursable'
+  const [logView,               setLogView]               = useState('all')   // 'all' | 'reimbursable' | 'cc'
   const [reimbProcessing,       setReimbProcessing]       = useState(null)
   const [dueProcessing,         setDueProcessing]         = useState(null)
   const [toast,                 setToast]                 = useState(null)
@@ -1109,11 +1575,16 @@ export default function ExpenseManager() {
               </div>
             )}
 
-            {/* View toggle: All | Reimbursable */}
+            {/* View toggle: All | Reimbursable | CC Reconcile */}
             <div className="em-view-toggle">
-              <button className={`em-view-btn${logView==='all'?' active':''}`} onClick={() => setLogView('all')}>All Entries</button>
+              <button className={`em-view-btn${logView==='all'?' active':''}`} onClick={() => setLogView('all')}>
+                {width < 400 ? 'All' : 'All Entries'}
+              </button>
               <button className={`em-view-btn${logView==='reimbursable'?' active':''}`} onClick={() => setLogView('reimbursable')}>
-                Reimbursable {pendingReimburse.length > 0 ? `(${pendingReimburse.length})` : ''}
+                {width < 400 ? 'Reimburse' : `Reimbursable${pendingReimburse.length > 0 ? ` (${pendingReimburse.length})` : ''}`}
+              </button>
+              <button className={`em-view-btn${logView==='cc'?' active':''}`} onClick={() => setLogView('cc')}>
+                {width < 400 ? 'CC' : 'CC Reconcile'}
               </button>
             </div>
 
@@ -1144,6 +1615,7 @@ export default function ExpenseManager() {
                         txn={txn}
                         categories={categories}
                         paymentSources={paymentSources}
+                        currencyPrefs={currencyPrefs}
                         isFlagged={flaggedTransactionIds.has(txn.id)}
                         onDelete={deleteTransaction}
                         onUpdate={handleReimbursableUpdate}
@@ -1153,6 +1625,18 @@ export default function ExpenseManager() {
                   )}
                 </div>
               </>
+            )}
+
+            {/* ── CC RECONCILE VIEW ── */}
+            {logView === 'cc' && (
+              <CCReconcileView
+                paymentSources={paymentSources}
+                transactions={transactions}
+                categories={categories}
+                updatePaymentSource={updatePaymentSource}
+                addTransaction={addTransaction}
+                onToast={setToast}
+              />
             )}
 
             {/* ── REIMBURSABLE VIEW ── */}
@@ -1228,6 +1712,7 @@ export default function ExpenseManager() {
             <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
             <CategoriesSection categories={categories} onAdd={addCategory} onUpdate={updateCategory} />
             <RecurringSection recurringItems={recurringItems} categories={categories} paymentSources={paymentSources} onAdd={addRecurringItem} onUpdate={updateRecurringItem} onDelete={deleteRecurringItem} />
+            <ForeignCurrenciesSection currencyPrefs={currencyPrefs} onAdd={addCurrencyPref} onUpdateRate={updateCurrencyRate} onRemove={removeCurrencyPref} onToast={setToast} />
           </div>
         )}
 

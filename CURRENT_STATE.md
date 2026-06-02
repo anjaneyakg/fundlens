@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v47.0
+**Last updated:** 03 Jun 2026 · v48.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,52 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Fix-3 — CC Reconcile to Log Tab, CC Settlement Persistence, Multi-Currency Manual FX ✅ (03 Jun 2026)
+
+| Item | Status |
+|---|---|
+| **Change 1 — Remove CC Reconciliation from Analytics** | ✅ Done |
+| Section G (CC Reconciliation) deleted from `ExpenseAnalytics.jsx`; Sections H→G, I→H; `getCCBillingCycle` helper removed; `addTransaction` prop removed from component signature | ✅ Done |
+| **Change 2 — CC Reconcile as Log tab 3rd sub-tab** | ✅ Done |
+| `logView` state extended: `'all' \| 'reimbursable' \| 'cc'` | ✅ Done |
+| 3-button view toggle; mobile (<400px) short labels: All / Reimburse / CC | ✅ Done |
+| `CCReconcileView` sub-component: per-card billing cycle calc (local time, `dateToDStr`), logged total, settled amount from `last_settled_cycle`/`last_settled_amount`, inline save + edit flow | ✅ Done |
+| CC settlement persisted via `updatePaymentSource(id, { last_settled_amount, last_settled_cycle })` | ✅ Done |
+| Difference row: ⚠ Untracked (amber), ℹ Cashback (blue), ✓ Reconciled (green); Log as Untracked / Log as Cashback → `addTransaction`; Mark Resolved (session dismiss) | ✅ Done |
+| Empty state when no credit cards set up | ✅ Done |
+| **Change 3 — Currency prefs in context** | ✅ Done |
+| `currencyPrefs` state + `expense_currency_prefs` fetch in `loadAll` (parallel with other tables) | ✅ Done |
+| `addCurrencyPref`, `updateCurrencyRate` (updates `fx_rate_to_inr` + `rate_updated_at`), `removeCurrencyPref` | ✅ Done |
+| All three exposed in context value | ✅ Done |
+| **Change 4 — Currency Setup in Setup tab (Section F)** | ✅ Done |
+| `ForeignCurrenciesSection` sub-component in `ExpenseManager.jsx` after RecurringSection | ✅ Done |
+| Locked INR row (navy Default badge, not editable/deletable) | ✅ Done |
+| User currency rows: symbol, name, code, rate, updated date; inline Edit Rate (replaces rate with input + ✓); inline Remove with confirm | ✅ Done |
+| Add Currency form (max 3 currencies): code (toUpperCase, maxLength 3), display_name, symbol, fx_rate_to_inr | ✅ Done |
+| Quick-add chips for USD/EUR/GBP/AED/SGD/JPY (filtered to not-yet-added); pre-fills add form | ✅ Done |
+| **Change 5 — Currency selector in Entry Panel** | ✅ Done |
+| Currency chip row (INR + each currencyPref) shown only when `currencyPrefs.length > 0` | ✅ Done |
+| Amount prefix switches to currency symbol when foreign currency selected | ✅ Done |
+| FX rate row: "1 {code} = ₹{rate} [✏]"; edit inline → `updateCurrencyRate` | ✅ Done |
+| Live INR preview: "= ₹{amount×rate}" updates on every keystroke; "= ₹ —" when empty | ✅ Done |
+| On save: `amount = Math.round(rawAmt × rate × 100)/100`, `original_amount/currency/fx_rate_used/inr_equivalent` set | ✅ Done |
+| INR selected: all original_* fields null | ✅ Done |
+| **Log tab TxnRow FX sub-line** | ✅ Done |
+| Rows where `original_currency` is not null show sub-line: `{symbol}{original_amount} @ ₹{fx_rate_used}` in 11px `#94a3b8` | ✅ Done |
+| Build | ✅ 0 errors — not verified (session did not run Vite build) |
+
+### EB-Fix-3 Architecture Notes
+
+- `CCReconcileView` is a sub-component defined in `ExpenseManager.jsx` (not a separate file). Receives `paymentSources, transactions, categories, updatePaymentSource, addTransaction, onToast` as props.
+- Billing cycle: `cycleStart` is always the most recent `billing_cycle_date` day that has passed (local time, using `new Date(year, month, day)` not ISO string). `cycleEnd = cycleStart + 1 month - 1 day`.
+- `currentCycleKey` = `YYYY-MM` of `cycleStart`. Compared to `source.last_settled_cycle` to determine whether a saved amount exists for the current cycle.
+- `ForeignCurrenciesSection` uses `SetupSection` wrapper (existing collapsible card). Capped at 3 currencies (plus locked INR). Quick-add chips only shown when slots remain.
+- Entry panel: currency state (`selectedCurrency`, `editRate`, `editRateVal`, `savingRate`) reset on panel open (`open` useEffect) and after successful save (`resetForNextEntry`). `updateCurrencyRate` from context updates the pref in-place so the new rate is immediately reflected in future entries.
+- New Supabase table required: `expense_currency_prefs` — already created manually before this session.
+- New columns required: `expense_payment_sources.last_settled_amount`, `expense_payment_sources.last_settled_cycle`, `expense_transactions.original_amount`, `expense_transactions.original_currency`, `expense_transactions.fx_rate_used`, `expense_transactions.inr_equivalent` — all already added manually before this session.
 
 ---
 

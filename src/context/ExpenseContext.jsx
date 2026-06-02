@@ -37,6 +37,7 @@ export function ExpenseProvider({ children }) {
   const [categories,      setCategories]      = useState([])
   const [paymentSources,  setPaymentSources]  = useState([])
   const [recurringItems,  setRecurringItems]  = useState([])
+  const [currencyPrefs,   setCurrencyPrefs]   = useState([])
   const [loading,         setLoading]         = useState(true)
   const [error,           setError]           = useState(null)
 
@@ -56,20 +57,23 @@ export function ExpenseProvider({ children }) {
     try {
       const client = createSupabaseClient(token)
 
-      const [txnRes, catRes, srcRes, recRes] = await Promise.all([
+      const [txnRes, catRes, srcRes, recRes, cpRes] = await Promise.all([
         client.from('expense_transactions').select('*').eq('user_id', user.uid).order('txn_date', { ascending: false }).order('created_at', { ascending: false }),
         client.from('expense_categories').select('*').eq('user_id', user.uid).order('display_order'),
         client.from('expense_payment_sources').select('*').eq('user_id', user.uid).order('display_order'),
         client.from('expense_recurring').select('*').eq('user_id', user.uid).order('due_date_next'),
+        client.from('expense_currency_prefs').select('*').eq('user_id', user.uid).order('display_order'),
       ])
 
       if (txnRes.error) throw txnRes.error
       if (catRes.error) throw catRes.error
       if (srcRes.error) throw srcRes.error
       if (recRes.error) throw recRes.error
+      if (cpRes.error) console.error('ExpenseContext loadAll currency_prefs error:', cpRes.error)
 
       setTransactions(txnRes.data || [])
       setRecurringItems(recRes.data || [])
+      setCurrencyPrefs(cpRes.data || [])
 
       let cats = catRes.data || []
       let srcs = srcRes.data || []
@@ -249,13 +253,52 @@ export function ExpenseProvider({ children }) {
     setRecurringItems(prev => prev.filter(r => r.id !== id))
   }
 
+  // ── Currency prefs ────────────────────────────────────────────────────────────
+
+  async function addCurrencyPref(payload) {
+    const client = sb()
+    if (!client || !user) return
+    const row = { ...payload, user_id: user.uid }
+    const { data, error: err } = await client.from('expense_currency_prefs').insert([row]).select()
+    if (err) { console.error('addCurrencyPref error:', err); throw err }
+    setCurrencyPrefs(prev => [...prev, data[0]])
+    return data[0]
+  }
+
+  async function updateCurrencyRate(id, newRate) {
+    const client = sb()
+    if (!client) return
+    const { data, error: err } = await client
+      .from('expense_currency_prefs')
+      .update({ fx_rate_to_inr: newRate, rate_updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', user.uid)
+      .select()
+    if (err) { console.error('updateCurrencyRate error:', err); throw err }
+    setCurrencyPrefs(prev => prev.map(c => c.id === id ? data[0] : c))
+    return data[0]
+  }
+
+  async function removeCurrencyPref(id) {
+    const client = sb()
+    if (!client) return
+    const { error: err } = await client
+      .from('expense_currency_prefs')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.uid)
+    if (err) { console.error('removeCurrencyPref error:', err); throw err }
+    setCurrencyPrefs(prev => prev.filter(c => c.id !== id))
+  }
+
   const value = {
-    transactions, categories, paymentSources, recurringItems, familyMembers,
+    transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
     loading, error, reload: loadAll,
     addTransaction, updateTransaction, deleteTransaction,
     addCategory, updateCategory,
     addPaymentSource, updatePaymentSource,
     addRecurringItem, updateRecurringItem, deleteRecurringItem,
+    addCurrencyPref, updateCurrencyRate, removeCurrencyPref,
   }
 
   return <ExpenseContext.Provider value={value}>{children}</ExpenseContext.Provider>

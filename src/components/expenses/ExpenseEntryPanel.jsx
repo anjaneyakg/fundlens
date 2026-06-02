@@ -189,6 +189,35 @@ const panelCSS = `
   }
   @keyframes eep-spin { to { transform: rotate(360deg); } }
 
+  /* Currency selector */
+  .eep-fx-rate-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; color: #94a3b8;
+    flex-wrap: wrap;
+  }
+  .eep-fx-rate-edit {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .eep-fx-rate-input {
+    width: 90px; padding: 4px 8px; border: 1.5px solid #1A3C6E; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; color: #1a1a2a;
+  }
+  .eep-fx-edit-btn {
+    padding: 2px 8px; border: 1px solid #e2e8f0; border-radius: 6px;
+    background: #ffffff; color: #64748b; font-size: 11px; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: border-color 0.12s;
+  }
+  .eep-fx-edit-btn:hover { border-color: #1A3C6E; color: #1A3C6E; }
+  .eep-fx-confirm-btn {
+    padding: 4px 10px; border: none; border-radius: 6px;
+    background: #1A3C6E; color: #ffffff; font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+  .eep-fx-preview {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+    color: #1A3C6E; margin-bottom: 10px;
+  }
+
   /* Bottom sheet (More categories / sources) */
   .eep-sheet-backdrop {
     position: fixed; inset: 0; z-index: 900;
@@ -240,7 +269,7 @@ const LSKEY_CAT = 'eep_last_cat'
 const LSKEY_SRC = 'eep_last_src'
 
 export default function ExpenseEntryPanel({ open, onClose }) {
-  const { categories, paymentSources, familyMembers, addTransaction } = useExpense()
+  const { categories, paymentSources, familyMembers, addTransaction, currencyPrefs, updateCurrencyRate } = useExpense()
 
   const [amount,     setAmount]     = useState('')
   const [txnType,    setTxnType]    = useState('expense')
@@ -252,10 +281,14 @@ export default function ExpenseEntryPanel({ open, onClose }) {
   const [noteOpen,   setNoteOpen]   = useState(false)
 
   // Save state: 'idle' | 'loading' | 'success' | 'error'
-  const [saveState,  setSaveState]  = useState('idle')
-  const [catSheet,   setCatSheet]   = useState(false)
-  const [srcSheet,   setSrcSheet]   = useState(false)
-  const [toast,      setToast]      = useState(null)  // { message, type }
+  const [saveState,      setSaveState]      = useState('idle')
+  const [catSheet,       setCatSheet]       = useState(false)
+  const [srcSheet,       setSrcSheet]       = useState(false)
+  const [toast,          setToast]          = useState(null)  // { message, type }
+  const [selectedCurrency, setSelectedCurrency] = useState('INR')
+  const [editRate,       setEditRate]       = useState(false)
+  const [editRateVal,    setEditRateVal]    = useState('')
+  const [savingRate,     setSavingRate]     = useState(false)
 
   const amountRef = useRef(null)
 
@@ -290,6 +323,9 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     if (savedSrc && activeSources.find(s => s.id === savedSrc)) setSourceId(savedSrc)
     else if (activeSources.length > 0) setSourceId(activeSources[0].id)
     setSaveState('idle')
+    setSelectedCurrency('INR')
+    setEditRate(false)
+    setEditRateVal('')
     setTimeout(() => amountRef.current?.focus(), 350)
   }, [open])
 
@@ -305,13 +341,22 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     setNote('')
     setNoteOpen(false)
     setTxnDate(todayStr())
+    setSelectedCurrency('INR')
+    setEditRate(false)
+    setEditRateVal('')
   }
 
   async function handleSave() {
-    const amt = parseFloat(amount)
-    if (!amt || amt <= 0 || saveState === 'loading') return
+    const rawAmt = parseFloat(amount)
+    if (!rawAmt || rawAmt <= 0 || saveState === 'loading') return
     setSaveState('loading')
     const catName = categories.find(c => c.id === categoryId)?.category_name || 'Expense'
+
+    const isForeign = selectedCurrency !== 'INR'
+    const selectedPref = currencyPrefs.find(c => c.currency_code === selectedCurrency)
+    const rate = selectedPref?.fx_rate_to_inr || 1
+    const amt = isForeign ? Math.round(rawAmt * rate * 100) / 100 : rawAmt
+
     try {
       await addTransaction({
         txn_type:          txnType,
@@ -321,6 +366,10 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         family_member:     member || 'Self',
         txn_date:          txnDate,
         notes:             note || null,
+        original_amount:   isForeign ? rawAmt : null,
+        original_currency: isForeign ? selectedCurrency : null,
+        fx_rate_used:      isForeign ? rate : null,
+        inr_equivalent:    isForeign ? amt : null,
       })
       if (categoryId) localStorage.setItem(LSKEY_CAT, categoryId)
       if (sourceId)   localStorage.setItem(LSKEY_SRC, sourceId)
@@ -382,9 +431,37 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         </div>
 
         <div className="eep-body">
+          {/* Currency chip row — only shown when foreign currencies are configured */}
+          {currencyPrefs.length > 0 && (
+            <>
+              <div className="eep-label">Currency</div>
+              <div className="eep-chips" style={{ marginBottom:12 }}>
+                <button
+                  className={`eep-chip${selectedCurrency === 'INR' ? ' selected' : ''}`}
+                  onClick={() => { setSelectedCurrency('INR'); setEditRate(false) }}
+                >
+                  ₹ INR
+                </button>
+                {currencyPrefs.map(cp => (
+                  <button
+                    key={cp.currency_code}
+                    className={`eep-chip${selectedCurrency === cp.currency_code ? ' selected' : ''}`}
+                    onClick={() => { setSelectedCurrency(cp.currency_code); setEditRate(false) }}
+                  >
+                    {cp.currency_symbol} {cp.currency_code}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* Amount */}
           <div className="eep-amount-row">
-            <span className="eep-rupee">₹</span>
+            <span className="eep-rupee">
+              {selectedCurrency === 'INR'
+                ? '₹'
+                : (currencyPrefs.find(c => c.currency_code === selectedCurrency)?.currency_symbol || selectedCurrency)}
+            </span>
             <input
               ref={amountRef}
               className="eep-amount-input"
@@ -398,6 +475,60 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
             />
           </div>
+
+          {/* FX rate row + live INR preview — only for foreign currency */}
+          {selectedCurrency !== 'INR' && currencyPrefs.length > 0 && (() => {
+            const pref = currencyPrefs.find(c => c.currency_code === selectedCurrency)
+            const rate = pref?.fx_rate_to_inr || 1
+            const rawAmt = parseFloat(amount)
+            const inrPreview = rawAmt > 0 ? (rawAmt * rate).toLocaleString('en-IN') : null
+
+            async function handleSaveRate() {
+              const r = parseFloat(editRateVal)
+              if (!r || r <= 0 || !pref) return
+              setSavingRate(true)
+              try {
+                await updateCurrencyRate(pref.id, r)
+                setEditRate(false)
+                setEditRateVal('')
+              } catch (err) {
+                console.error('ExpenseEntryPanel handleSaveRate error:', err)
+              } finally { setSavingRate(false) }
+            }
+
+            return (
+              <>
+                <div className="eep-fx-rate-row">
+                  {editRate ? (
+                    <div className="eep-fx-rate-edit">
+                      <span>1 {selectedCurrency} = ₹</span>
+                      <input
+                        className="eep-fx-rate-input"
+                        type="number"
+                        inputMode="decimal"
+                        value={editRateVal}
+                        onChange={e => setEditRateVal(e.target.value)}
+                        placeholder={String(rate)}
+                        autoFocus
+                      />
+                      <button className="eep-fx-confirm-btn" disabled={savingRate} onClick={handleSaveRate}>
+                        {savingRate ? '…' : '✓'}
+                      </button>
+                      <button className="eep-fx-edit-btn" onClick={() => { setEditRate(false); setEditRateVal('') }}>✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>1 {selectedCurrency} = ₹{rate}</span>
+                      <button className="eep-fx-edit-btn" onClick={() => { setEditRate(true); setEditRateVal(String(rate)) }}>✏</button>
+                    </>
+                  )}
+                </div>
+                <div className="eep-fx-preview">
+                  {inrPreview ? `= ₹${inrPreview}` : '= ₹ —'}
+                </div>
+              </>
+            )
+          })()}
 
           {/* Type toggle */}
           <div className="eep-type-row">

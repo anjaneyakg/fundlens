@@ -84,29 +84,6 @@ function dateRangeFor(period, customStart, customEnd) {
   }
 }
 
-function getCCBillingCycle(cc) {
-  if (!cc.billing_cycle_date) {
-    const p = monthPfx(0)
-    return { start: p + '-01', end: todayStr(), label: 'Current month' }
-  }
-  const bcd   = cc.billing_cycle_date
-  const today = new Date()
-  const dom   = today.getDate()
-  let cycleStart, cycleEnd
-  if (dom >= bcd) {
-    cycleStart = new Date(today.getFullYear(), today.getMonth(), bcd)
-    cycleEnd   = new Date(today.getFullYear(), today.getMonth() + 1, bcd - 1)
-  } else {
-    cycleStart = new Date(today.getFullYear(), today.getMonth() - 1, bcd)
-    cycleEnd   = new Date(today.getFullYear(), today.getMonth(), bcd - 1)
-  }
-  return {
-    start: cycleStart.toISOString().slice(0,10),
-    end:   cycleEnd.toISOString().slice(0,10),
-    label: `${bcd}th – ${bcd > 1 ? bcd-1 : 'last'}th`,
-  }
-}
-
 // ── Custom Recharts Tooltip ───────────────────────────────────────────────────
 
 function mkTooltip(masked) {
@@ -203,44 +180,7 @@ const analyticsCSS = `
   .ea-cat-pbar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
   .ea-cat-amt { font-size: 13px; font-weight: 700; color: #1a1a2a; text-align: right; flex-shrink: 0; font-family: 'DM Sans', sans-serif; }
 
-  /* Section G — CC Reconciliation */
-  .ea-cc-card {
-    background: #f8f9fa; border: 1px solid #e8ecf0; border-radius: 10px;
-    padding: 14px; margin-bottom: 12px;
-  }
-  .ea-cc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .ea-cc-name { font-size: 14px; font-weight: 700; color: #1a1a2a; font-family: 'DM Sans', sans-serif; }
-  .ea-cc-cycle { font-size: 11px; color: #94a3b8; font-family: 'DM Sans', sans-serif; margin-top: 2px; }
-  .ea-cc-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-family: 'DM Sans', sans-serif; font-size: 13px; }
-  .ea-cc-key { color: #64748b; }
-  .ea-cc-val { font-weight: 700; color: #1a1a2a; }
-  .ea-cc-divider { border: none; border-top: 1px solid #e8ecf0; margin: 8px 0; }
-  .ea-cc-diff-positive { color: #f59e0b; font-weight: 700; }
-  .ea-cc-diff-negative { color: #3b82f6; font-weight: 700; }
-  .ea-cc-diff-zero     { color: #16a34a; font-weight: 700; }
-  .ea-cc-input {
-    width: 100%; padding: 8px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
-    font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; background: #ffffff;
-    color: #1a1a2a; box-sizing: border-box; transition: border-color 0.15s; margin-top: 6px;
-  }
-  .ea-cc-input:focus { border-color: #1A3C6E; }
-  .ea-cc-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .ea-cc-btn-log {
-    flex: 1; padding: 8px 12px; border: none; border-radius: 8px;
-    background: #f59e0b; color: #ffffff;
-    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
-    cursor: pointer; transition: background 0.15s;
-  }
-  .ea-cc-btn-log:hover { background: #d97706; }
-  .ea-cc-btn-resolve {
-    flex: 1; padding: 8px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px;
-    background: #ffffff; color: #374151;
-    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
-    cursor: pointer; transition: border-color 0.15s;
-  }
-  .ea-cc-btn-resolve:hover { border-color: #94a3b8; }
-
-  /* Section H — Projection table */
+  /* Section G — Projection table */
   .ea-proj-table { width: 100%; border-collapse: collapse; font-family: 'DM Sans', sans-serif; font-size: 12px; margin-top: 12px; }
   .ea-proj-table th { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; text-align: left; border-bottom: 1px solid #e8ecf0; }
   .ea-proj-table td { padding: 6px 8px; color: #374151; border-bottom: 1px solid #f8f9fa; }
@@ -269,7 +209,7 @@ const analyticsCSS = `
   .ea-donut-total { font-size: 16px; font-weight: 700; color: #1a1a2a; font-family: 'DM Sans', sans-serif; }
   .ea-donut-sub   { font-size: 11px; color: #94a3b8; font-family: 'DM Sans', sans-serif; }
 
-  /* Section I — Subscription Audit */
+  /* Section H — Subscription Audit */
   .ea-sub-summary {
     font-family: 'DM Sans', sans-serif; font-size: 13px; color: #64748b;
     margin-bottom: 14px; line-height: 1.5;
@@ -314,7 +254,7 @@ const analyticsCSS = `
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ExpenseAnalytics({ transactions, categories, paymentSources, recurringItems, addTransaction, updateRecurringItem }) {
+export default function ExpenseAnalytics({ transactions, categories, paymentSources, recurringItems, updateRecurringItem }) {
   const width = useWindowWidth()
 
   // Section A — Mask state
@@ -325,12 +265,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
   const [customStart, setCustomStart] = useState('')
   const [customEnd,   setCustomEnd]   = useState(todayStr())
 
-  // Section G — CC state
-  const [ccBillAmounts, setCcBillAmounts] = useState({})  // { id: string }
-  const [resolvedCCs,   setResolvedCCs]   = useState(new Set())
-  const [ccLogging,     setCcLogging]     = useState(null)
-
-  // Section I — Subscription audit state
+  // Section H — Subscription audit state
   const [deactivating,  setDeactivating]  = useState(null)
   const [deactivatedIds,setDeactivatedIds]= useState(new Set())
 
@@ -420,10 +355,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
     return sourceSplit.map(s => ({ name: s.name, value: s.amount, type: s.type }))
   }, [masked, sourceSplit])
 
-  // ── Section G — Credit cards ───────────────────────────────────────────────
-  const creditCards = paymentSources.filter(s => s.source_type === 'credit_card')
-
-  // ── Section H — 12-month projection ──────────────────────────────────────
+  // ── Section G — 12-month projection ──────────────────────────────────────
   const projectionData = useMemo(() => {
     const d3mStart = new Date(); d3mStart.setDate(1); d3mStart.setMonth(d3mStart.getMonth() - 3)
     const d3mStr   = d3mStart.toISOString().slice(0,8) + '01'
@@ -464,31 +396,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
     return result
   }, [transactions, recurringItems])
 
-  // ── CC Reconciliation helpers ──────────────────────────────────────────────
-  async function handleLogUntracked(cc, diff) {
-    const untrackedCat = categories.find(c => c.category_name === 'Untracked CC Spend')
-    setCcLogging(cc.id)
-    try {
-      await addTransaction({
-        txn_type:          'expense',
-        amount:            Math.abs(diff),
-        category_id:       untrackedCat?.id || null,
-        payment_source_id: cc.id,
-        family_member:     'Self',
-        txn_date:          todayStr(),
-        notes:             `Untracked spend — ${cc.source_name}`,
-      })
-      setToast({ message: `₹${fmtAmt(Math.abs(diff))} logged as Untracked CC Spend`, type: 'success' })
-      setCcBillAmounts(prev => ({ ...prev, [cc.id]: '' }))
-    } catch (err) {
-      console.error('ExpenseAnalytics logUntracked error:', err)
-      setToast({ message: 'Failed to log. Check connection.', type: 'error' })
-    } finally {
-      setCcLogging(null)
-    }
-  }
-
-  // ── Section I — Subscription audit ───────────────────────────────────────
+  // ── Section H — Subscription audit ───────────────────────────────────────
   const subscriptions = useMemo(() => {
     return recurringItems
       .filter(r => r.recurring_type === 'subscription' && r.is_active !== false && !deactivatedIds.has(r.id))
@@ -707,74 +615,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
           </div>
         )}
 
-        {/* ── Section G: CC Reconciliation ────────────────────────────── */}
-        {creditCards.length > 0 && (
-          <div className="ea-card">
-            <div className="ea-card-title">🔄 CC Reconciliation</div>
-            {creditCards.map(cc => {
-              if (resolvedCCs.has(cc.id)) return null
-              const cycle       = getCCBillingCycle(cc)
-              const cycleTxns   = transactions.filter(t => t.payment_source_id === cc.id && t.txn_date >= cycle.start && t.txn_date <= cycle.end)
-              const logged      = cycleTxns.reduce((s, t) => s + Number(t.amount), 0)
-              const billInput   = ccBillAmounts[cc.id] || ''
-              const settled     = parseFloat(billInput) || 0
-              const diff        = settled > 0 ? settled - logged : 0
-              const diffCls     = diff > 0 ? 'ea-cc-diff-positive' : diff < 0 ? 'ea-cc-diff-negative' : 'ea-cc-diff-zero'
-              const diffLabel   = diff > 0 ? `₹${fmtAmt(diff)} untracked ⚠` : diff < 0 ? `₹${fmtAmt(Math.abs(diff))} over (cashback?) ℹ` : '✓ Reconciled'
-
-              return (
-                <div key={cc.id} className="ea-cc-card">
-                  <div className="ea-cc-header">
-                    <div>
-                      <div className="ea-cc-name">💳 {cc.source_name}{cc.last_four ? ` ···${cc.last_four}` : ''}</div>
-                      <div className="ea-cc-cycle">Cycle: {cycle.label}</div>
-                    </div>
-                  </div>
-                  <div className="ea-cc-row">
-                    <span className="ea-cc-key">Logged via this CC</span>
-                    <span className="ea-cc-val">{masked ? '₹ ••••' : `₹${fmtAmt(logged)}`}</span>
-                  </div>
-                  <div className="ea-cc-row">
-                    <span className="ea-cc-key">Bill paid (enter below)</span>
-                    <span className="ea-cc-val">{settled > 0 ? (masked ? '₹ ••••' : `₹${fmtAmt(settled)}`) : '—'}</span>
-                  </div>
-                  <input
-                    type="number"
-                    className="ea-cc-input"
-                    placeholder="Enter CC bill amount paid ₹"
-                    value={billInput}
-                    onChange={e => setCcBillAmounts(prev => ({ ...prev, [cc.id]: e.target.value }))}
-                  />
-                  {settled > 0 && (
-                    <>
-                      <hr className="ea-cc-divider" />
-                      <div className="ea-cc-row">
-                        <span className="ea-cc-key">Difference</span>
-                        <span className={diffCls}>{masked ? '••••' : diffLabel}</span>
-                      </div>
-                      <div className="ea-cc-actions">
-                        {diff > 0 && (
-                          <button
-                            className="ea-cc-btn-log"
-                            disabled={ccLogging === cc.id}
-                            onClick={() => handleLogUntracked(cc, diff)}
-                          >
-                            {ccLogging === cc.id ? 'Logging…' : `Log ₹${fmtAmt(diff)} as Untracked`}
-                          </button>
-                        )}
-                        <button className="ea-cc-btn-resolve" onClick={() => setResolvedCCs(p => new Set([...p, cc.id]))}>
-                          Mark Resolved
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Section H: 12-month cash outflow projection ──────────────── */}
+        {/* ── Section G: 12-month cash outflow projection ──────────────── */}
         <div className="ea-card">
           <div className="ea-card-title">📅 12-Month Cash Outflow Projection</div>
           <ResponsiveContainer width="100%" height={240}>
@@ -814,7 +655,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
           </div>
         </div>
 
-        {/* ── Section I: Subscription Audit ───────────────────────────── */}
+        {/* ── Section H: Subscription Audit ───────────────────────────── */}
         {subscriptions.length > 0 && (
           <div className="ea-card">
             <div className="ea-card-title">📱 Subscription Audit</div>
