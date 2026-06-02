@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useExpense } from '../../context/ExpenseContext'
+import Toast from '../common/Toast'
 
 const SOURCE_ICONS = {
   credit_card:  '💳',
@@ -10,12 +11,12 @@ const SOURCE_ICONS = {
 }
 
 function fmtDateLabel(dateStr) {
-  const today     = new Date()
-  const d         = new Date(dateStr + 'T00:00:00')
-  const diffDays  = Math.round((today.setHours(0,0,0,0) - d.setHours(0,0,0,0)) / 86400000)
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays > 1 && diffDays <= 7) return `${diffDays} days ago`
+  const today = new Date(); today.setHours(0,0,0,0)
+  const d     = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0)
+  const diff  = Math.round((today - d) / 86400000)
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  if (diff > 1 && diff <= 7) return `${diff} days ago`
   return dateStr
 }
 
@@ -24,28 +25,28 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-const panelStyle = `
+const panelCSS = `
   .eep-backdrop {
     position: fixed; inset: 0; z-index: 800;
-    background: rgba(0,0,0,0.45);
-    transition: opacity 0.25s;
+    background: rgba(0,0,0,0.4);
   }
   .eep-panel {
     position: fixed; bottom: 0; left: 50%; z-index: 801;
     transform: translateX(-50%) translateY(100%);
     width: 100%; max-width: 480px;
-    background: var(--color-bg, #fff);
+    background: #ffffff;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.15);
     transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
     display: flex; flex-direction: column;
-    max-height: 92vh;
+    max-height: 85vh;
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
   .eep-panel.open { transform: translateX(-50%) translateY(0); }
+  .eep-panel.eep-busy { pointer-events: none; opacity: 0.9; }
 
   .eep-handle {
-    width: 40px; height: 4px; background: #e0e0e0; border-radius: 2px;
+    width: 40px; height: 4px; background: #e2e8f0; border-radius: 2px;
     margin: 12px auto 0; flex-shrink: 0;
   }
   .eep-header {
@@ -54,190 +55,213 @@ const panelStyle = `
   }
   .eep-title {
     font-family: 'DM Sans', sans-serif; font-size: 17px; font-weight: 700;
-    color: var(--color-text-primary, #111);
+    color: #1a1a2a;
   }
   .eep-close {
     width: 30px; height: 30px; border-radius: 50%;
-    border: none; background: #f0f0f0;
+    border: none; background: #f1f5f9;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 14px; color: #666;
+    cursor: pointer; font-size: 14px; color: #64748b;
+    transition: background 0.12s;
   }
+  .eep-close:hover { background: #e2e8f0; }
 
   .eep-body {
-    flex: 1; overflow-y: auto; padding: 0 20px 20px;
+    flex: 1; overflow-y: auto; padding: 4px 20px 20px;
   }
 
   .eep-amount-row {
     display: flex; align-items: center;
-    background: #f8f9fa; border-radius: 14px;
-    padding: 12px 16px; margin-bottom: 14px;
-    border: 2px solid transparent;
+    background: #f8faff;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 16px;
     transition: border-color 0.15s;
   }
-  .eep-amount-row:focus-within { border-color: var(--color-primary, #1D9E75); }
+  .eep-amount-row:focus-within { border-color: #1A3C6E; }
   .eep-rupee {
-    font-family: 'DM Sans', sans-serif; font-size: 28px; font-weight: 700;
-    color: var(--color-text-muted, #888); margin-right: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 32px; font-weight: 700;
+    color: #94a3b8; margin-right: 6px; line-height: 1;
   }
   .eep-amount-input {
     flex: 1; border: none; background: transparent; outline: none;
-    font-family: 'DM Sans', sans-serif; font-size: 28px; font-weight: 700;
-    color: var(--color-text-primary, #111);
-    width: 100%; min-width: 0;
+    font-family: 'DM Sans', sans-serif; font-size: 36px; font-weight: 700;
+    color: #1a1a2a; width: 100%; min-width: 0; line-height: 1;
   }
-  .eep-amount-input::placeholder { color: #ccc; }
+  .eep-amount-input::placeholder { color: #cbd5e1; }
 
   .eep-type-row {
-    display: flex; background: #f0f0f0; border-radius: 10px;
-    padding: 3px; margin-bottom: 14px; gap: 2px;
+    display: flex; background: #f1f5f9; border-radius: 10px;
+    padding: 3px; margin-bottom: 16px; gap: 2px;
   }
   .eep-type-btn {
-    flex: 1; padding: 8px; border: none; border-radius: 8px;
+    flex: 1; padding: 8px 4px; border: none; border-radius: 8px;
     font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
-    cursor: pointer; background: transparent; color: #666;
-    transition: all 0.15s;
+    cursor: pointer; background: transparent; color: #64748b;
+    transition: all 0.15s; white-space: nowrap;
   }
   .eep-type-btn.active {
-    background: #fff; color: var(--color-primary, #1D9E75);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    background: #ffffff; color: #1A3C6E;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
   }
-  .eep-type-btn.active.income { color: #4CAF50; }
-  .eep-type-btn.active.transfer { color: #2196F3; }
+  .eep-type-btn.active.type-income   { color: #16a34a; }
+  .eep-type-btn.active.type-transfer { color: #2563eb; }
 
   .eep-label {
     font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
-    color: var(--color-text-muted, #888); text-transform: uppercase; letter-spacing: 0.06em;
-    margin-bottom: 7px;
+    color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 8px;
   }
 
   .eep-chips {
-    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px;
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px;
     scrollbar-width: none;
   }
   .eep-chips::-webkit-scrollbar { display: none; }
+
   .eep-chip {
-    flex-shrink: 0; padding: 6px 12px; border-radius: 20px;
-    border: 1.5px solid #e8e8e8; background: #fff;
-    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    flex-shrink: 0; padding: 7px 13px; border-radius: 20px;
+    border: 1.5px solid #e2e8f0; background: #f1f5f9;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
     cursor: pointer; transition: all 0.12s; white-space: nowrap;
     display: flex; align-items: center; gap: 5px;
-    color: var(--color-text-primary, #111);
+    color: #475569;
   }
-  .eep-chip:hover { border-color: var(--color-primary, #1D9E75); }
+  .eep-chip:hover { border-color: #1A3C6E; background: #f0f4ff; }
   .eep-chip.selected {
-    border-color: var(--color-primary, #1D9E75);
-    background: rgba(29,158,117,0.08); color: var(--color-primary, #1D9E75);
+    border-color: #1A3C6E; background: #1A3C6E; color: #ffffff;
     font-weight: 600;
   }
-  .eep-chip.more { color: var(--color-primary, #1D9E75); font-weight: 600; border-style: dashed; }
+  .eep-chip.more {
+    color: #1A3C6E; font-weight: 600;
+    border-style: dashed; background: #ffffff;
+  }
+  .eep-chip.more:hover { background: #f0f4ff; }
 
+  .eep-date-wrap { margin-bottom: 16px; }
   .eep-date-btn {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 14px; border: 1.5px solid #e8e8e8; border-radius: 10px;
-    background: #fff; cursor: pointer; margin-bottom: 14px;
-    font-family: 'DM Sans', sans-serif; font-size: 13px;
-    color: var(--color-text-primary, #111); transition: border-color 0.15s;
+    padding: 9px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    background: #f1f5f9; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    color: #1a1a2a; transition: border-color 0.15s;
+    position: relative;
   }
-  .eep-date-btn:hover { border-color: var(--color-primary, #1D9E75); }
-  .eep-date-input {
-    border: none; outline: none; font-family: 'DM Sans', sans-serif;
-    font-size: 13px; background: transparent; color: var(--color-primary, #1D9E75);
-    font-weight: 600; cursor: pointer;
-  }
+  .eep-date-btn:hover { border-color: #1A3C6E; }
+  .eep-date-label-rel { color: #1A3C6E; font-weight: 600; }
+  .eep-date-label-abs { font-size: 12px; color: #94a3b8; margin-left: 4px; }
 
   .eep-note-toggle {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 6px 0; border: none; background: transparent;
-    font-family: 'DM Sans', sans-serif; font-size: 13px;
-    color: var(--color-text-muted, #888); cursor: pointer; margin-bottom: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    color: #94a3b8; cursor: pointer; margin-bottom: 10px;
+    transition: color 0.12s;
   }
+  .eep-note-toggle:hover { color: #1A3C6E; }
   .eep-note-input {
-    width: 100%; padding: 10px 12px; border: 1.5px solid #e8e8e8; border-radius: 10px;
+    width: 100%; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
     font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
-    box-sizing: border-box; margin-bottom: 14px;
+    box-sizing: border-box; margin-bottom: 16px; background: #ffffff; color: #1a1a2a;
     transition: border-color 0.15s;
   }
-  .eep-note-input:focus { border-color: var(--color-primary, #1D9E75); }
+  .eep-note-input:focus { border-color: #1A3C6E; }
 
   .eep-save-btn {
-    width: 100%; padding: 14px; border: none; border-radius: 12px;
-    background: var(--color-primary, #1D9E75); color: #fff;
+    width: 100%; padding: 15px; border: none; border-radius: 12px;
+    background: #16a34a; color: #ffffff;
     font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700;
-    cursor: pointer; transition: all 0.15s;
-    box-shadow: 0 4px 16px rgba(29,158,117,0.3);
+    cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    box-shadow: 0 4px 16px rgba(22,163,74,0.3);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
-  .eep-save-btn:hover:not(:disabled) { background: var(--color-primary-dark, #16805e); }
-  .eep-save-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+  .eep-save-btn:hover:not(:disabled) { background: #15803d; }
+  .eep-save-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+  .eep-save-btn.btn-success { background: #16a34a; }
+  .eep-save-btn.btn-error   { background: #dc2626; box-shadow: 0 4px 16px rgba(220,38,38,0.3); }
+  .eep-save-btn.btn-loading { background: #16a34a; }
 
+  .eep-spinner {
+    width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%;
+    animation: eep-spin 0.6s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes eep-spin { to { transform: rotate(360deg); } }
+
+  /* Bottom sheet (More categories / sources) */
   .eep-sheet-backdrop {
     position: fixed; inset: 0; z-index: 900;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.45);
   }
   .eep-sheet {
     position: fixed; bottom: 0; left: 50%; z-index: 901;
     transform: translateX(-50%);
     width: 100%; max-width: 480px;
-    background: var(--color-bg, #fff);
+    background: #ffffff;
     border-radius: 20px 20px 0 0;
-    padding: 20px 20px 32px;
+    padding: 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
     max-height: 70vh; overflow-y: auto;
-    padding-bottom: env(safe-area-inset-bottom, 32px);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+  }
+  .eep-sheet-handle {
+    width: 40px; height: 4px; background: #e2e8f0; border-radius: 2px;
+    margin: 0 auto 16px;
   }
   .eep-sheet-title {
     font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 700;
-    margin-bottom: 16px; color: var(--color-text-primary, #111);
+    margin-bottom: 16px; color: #1a1a2a;
   }
   .eep-sheet-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
   }
   .eep-sheet-item {
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
-    padding: 10px 6px; border-radius: 12px; border: 1.5px solid #e8e8e8;
-    cursor: pointer; transition: all 0.12s; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 5px;
+    padding: 10px 4px; min-height: 80px;
+    border-radius: 12px; border: 1.5px solid #e8ecf0;
+    cursor: pointer; transition: all 0.12s; background: #ffffff;
   }
-  .eep-sheet-item:hover { border-color: var(--color-primary, #1D9E75); }
+  .eep-sheet-item:hover { border-color: #1A3C6E; background: #f0f4ff; }
   .eep-sheet-item.selected {
-    border-color: var(--color-primary, #1D9E75);
-    background: rgba(29,158,117,0.06);
+    border-color: #1A3C6E; background: #f0f4ff;
   }
-  .eep-sheet-icon { font-size: 22px; }
+  .eep-sheet-icon { font-size: 28px; line-height: 1; }
   .eep-sheet-name {
-    font-family: 'DM Sans', sans-serif; font-size: 10px; text-align: center;
-    color: var(--color-text-primary, #111); line-height: 1.2;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; text-align: center;
+    color: #374151; line-height: 1.2;
+    word-break: break-word; white-space: normal;
   }
-  .eep-sheet-add {
-    border: 1.5px dashed #ccc; color: var(--color-primary, #1D9E75); font-size: 10px;
-    font-weight: 600;
-  }
-
-  .eep-saving { opacity: 0.7; pointer-events: none; }
+  .eep-sheet-item.selected .eep-sheet-name { color: #1A3C6E; font-weight: 600; }
 `
 
-const LSKEY_CAT    = 'eep_last_cat'
-const LSKEY_SRC    = 'eep_last_src'
+const LSKEY_CAT = 'eep_last_cat'
+const LSKEY_SRC = 'eep_last_src'
 
 export default function ExpenseEntryPanel({ open, onClose }) {
   const { categories, paymentSources, familyMembers, addTransaction } = useExpense()
 
-  const [amount,      setAmount]      = useState('')
-  const [txnType,     setTxnType]     = useState('expense')
-  const [categoryId,  setCategoryId]  = useState(null)
-  const [sourceId,    setSourceId]    = useState(null)
-  const [member,      setMember]      = useState('Self')
-  const [txnDate,     setTxnDate]     = useState(todayStr())
-  const [note,        setNote]        = useState('')
-  const [noteOpen,    setNoteOpen]    = useState(false)
-  const [saving,      setSaving]      = useState(false)
-  const [catSheet,    setCatSheet]    = useState(false)
-  const [srcSheet,    setSrcSheet]    = useState(false)
+  const [amount,     setAmount]     = useState('')
+  const [txnType,    setTxnType]    = useState('expense')
+  const [categoryId, setCategoryId] = useState(null)
+  const [sourceId,   setSourceId]   = useState(null)
+  const [member,     setMember]     = useState('Self')
+  const [txnDate,    setTxnDate]    = useState(todayStr())
+  const [note,       setNote]       = useState('')
+  const [noteOpen,   setNoteOpen]   = useState(false)
+
+  // Save state: 'idle' | 'loading' | 'success' | 'error'
+  const [saveState,  setSaveState]  = useState('idle')
+  const [catSheet,   setCatSheet]   = useState(false)
+  const [srcSheet,   setSrcSheet]   = useState(false)
+  const [toast,      setToast]      = useState(null)  // { message, type }
 
   const amountRef = useRef(null)
-  const dateRef   = useRef(null)
 
-  const activeCategories  = categories.filter(c => c.is_active)
-  const activeSources     = paymentSources.filter(s => s.is_active)
+  const activeCategories = categories.filter(c => c.is_active)
+  const activeSources    = paymentSources.filter(s => s.is_active)
 
-  // Compute top-used categories & sources from localStorage recency (simple last-used)
   const lastCatId = localStorage.getItem(LSKEY_CAT)
   const lastSrcId = localStorage.getItem(LSKEY_SRC)
 
@@ -252,12 +276,11 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     return 0
   })
 
-  const topCats = sortedCats.slice(0, 6)
-  const topSrcs = sortedSrcs.slice(0, 3)
+  const topCats    = sortedCats.slice(0, 6)
+  const topSrcs    = sortedSrcs.slice(0, 3)
   const hasMoreCats = activeCategories.length > 6
   const hasMoreSrcs = activeSources.length > 3
 
-  // Auto-select last-used on open
   useEffect(() => {
     if (!open) return
     const savedCat = localStorage.getItem(LSKEY_CAT)
@@ -266,11 +289,14 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     else if (activeCategories.length > 0) setCategoryId(activeCategories[0].id)
     if (savedSrc && activeSources.find(s => s.id === savedSrc)) setSourceId(savedSrc)
     else if (activeSources.length > 0) setSourceId(activeSources[0].id)
+    setSaveState('idle')
     setTimeout(() => amountRef.current?.focus(), 350)
   }, [open])
 
   function handleClose() {
-    setCatSheet(false); setSrcSheet(false)
+    if (saveState === 'loading') return
+    setCatSheet(false)
+    setSrcSheet(false)
     onClose()
   }
 
@@ -279,13 +305,13 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     setNote('')
     setNoteOpen(false)
     setTxnDate(todayStr())
-    // Keep type, category, source, member for fast repeat entry
   }
 
   async function handleSave() {
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) return
-    setSaving(true)
+    if (!amt || amt <= 0 || saveState === 'loading') return
+    setSaveState('loading')
+    const catName = categories.find(c => c.id === categoryId)?.category_name || 'Expense'
     try {
       await addTransaction({
         txn_type:          txnType,
@@ -298,23 +324,56 @@ export default function ExpenseEntryPanel({ open, onClose }) {
       })
       if (categoryId) localStorage.setItem(LSKEY_CAT, categoryId)
       if (sourceId)   localStorage.setItem(LSKEY_SRC, sourceId)
-      resetForNextEntry()
+
+      setSaveState('success')
+      setToast({ message: `Saved — ₹${amt.toLocaleString('en-IN')} · ${catName}`, type: 'success' })
+
+      // After showing success, close and reset
+      setTimeout(() => {
+        resetForNextEntry()
+        setSaveState('idle')
+        onClose()
+      }, 1200)
     } catch (err) {
       console.error('ExpenseEntryPanel save error:', err)
-    } finally {
-      setSaving(false)
+      setSaveState('error')
+      setToast({ message: 'Failed to save. Check connection.', type: 'error' })
+      setTimeout(() => setSaveState('idle'), 2000)
     }
   }
 
-  const canSave = parseFloat(amount) > 0 && !saving
+  const canSave = parseFloat(amount) > 0 && saveState !== 'loading' && saveState !== 'success'
+
+  function SaveButtonContent() {
+    if (saveState === 'loading') return <><span className="eep-spinner" /> Saving…</>
+    if (saveState === 'success') return <>&#10003; Saved!</>
+    if (saveState === 'error')   return <>&#10007; Try again</>
+    return <>Save</>
+  }
+
+  const saveBtnClass = `eep-save-btn${
+    saveState === 'success' ? ' btn-success' :
+    saveState === 'error'   ? ' btn-error'   :
+    saveState === 'loading' ? ' btn-loading'  : ''
+  }`
 
   return (
     <>
-      <style>{panelStyle}</style>
+      <style>{panelCSS}</style>
+
+      {toast && (
+        <Toast
+          key={toast.message}
+          message={toast.message}
+          type={toast.type}
+          duration={2500}
+          onDismiss={() => setToast(null)}
+        />
+      )}
 
       {open && <div className="eep-backdrop" onClick={handleClose} />}
 
-      <div className={`eep-panel${open ? ' open' : ''}${saving ? ' eep-saving' : ''}`}>
+      <div className={`eep-panel${open ? ' open' : ''}${saveState === 'loading' ? ' eep-busy' : ''}`}>
         <div className="eep-handle" />
 
         <div className="eep-header">
@@ -331,8 +390,10 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               className="eep-amount-input"
               type="number"
               inputMode="decimal"
+              pattern="[0-9]*"
               placeholder="0"
               value={amount}
+              disabled={saveState === 'loading' || saveState === 'success'}
               onChange={e => setAmount(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
             />
@@ -340,11 +401,12 @@ export default function ExpenseEntryPanel({ open, onClose }) {
 
           {/* Type toggle */}
           <div className="eep-type-row">
-            {[['expense','Expense'],['income','Income'],['transfer_in','Transfer In']].map(([val, label]) => (
+            {[['expense','Expense',''],['income','Income','type-income'],['transfer_in','Transfer In','type-transfer']].map(([val, label, cls]) => (
               <button
                 key={val}
-                className={`eep-type-btn${txnType === val ? ` active ${val === 'income' ? 'income' : val === 'transfer_in' ? 'transfer' : ''}` : ''}`}
+                className={`eep-type-btn${txnType === val ? ` active ${cls}` : ''}`}
                 onClick={() => setTxnType(val)}
+                disabled={saveState === 'loading' || saveState === 'success'}
               >
                 {label}
               </button>
@@ -391,7 +453,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {familyMembers.length > 1 && (
             <>
               <div className="eep-label">For</div>
-              <div className="eep-chips" style={{ marginBottom: 14 }}>
+              <div className="eep-chips">
                 {familyMembers.map(m => (
                   <button
                     key={m}
@@ -407,34 +469,30 @@ export default function ExpenseEntryPanel({ open, onClose }) {
 
           {/* Date */}
           <div className="eep-label">Date</div>
-          <div style={{ marginBottom: 14 }}>
+          <div className="eep-date-wrap">
             <label className="eep-date-btn">
               <span>📅</span>
-              <span style={{ color: 'var(--color-text-primary, #111)' }}>
-                {fmtDateLabel(txnDate)}
-              </span>
+              <span className="eep-date-label-rel">{fmtDateLabel(txnDate)}</span>
+              {txnDate !== todayStr() && (
+                <span className="eep-date-label-abs">{txnDate}</span>
+              )}
               <input
-                ref={dateRef}
                 type="date"
                 value={txnDate}
                 max={todayStr()}
                 onChange={e => setTxnDate(e.target.value)}
-                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0 }}
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
               />
-              <span style={{ fontSize: 11, color: '#aaa', marginLeft: 4 }}>▾</span>
+              <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>▾</span>
             </label>
-            {txnDate !== todayStr() && (
-              <span style={{ marginLeft: 12, fontSize: 12, color: '#888' }}>{txnDate}</span>
-            )}
           </div>
 
           {/* Note */}
-          {!noteOpen && (
+          {!noteOpen ? (
             <button className="eep-note-toggle" onClick={() => setNoteOpen(true)}>
               <span>＋</span> Add note
             </button>
-          )}
-          {noteOpen && (
+          ) : (
             <input
               className="eep-note-input"
               type="text"
@@ -446,8 +504,12 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           )}
 
           {/* Save */}
-          <button className="eep-save-btn" onClick={handleSave} disabled={!canSave}>
-            {saving ? 'Saving…' : 'Save'}
+          <button
+            className={saveBtnClass}
+            onClick={handleSave}
+            disabled={!canSave}
+          >
+            <SaveButtonContent />
           </button>
         </div>
       </div>
@@ -457,6 +519,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         <>
           <div className="eep-sheet-backdrop" onClick={() => setCatSheet(false)} />
           <div className="eep-sheet">
+            <div className="eep-sheet-handle" />
             <div className="eep-sheet-title">Select Category</div>
             <div className="eep-sheet-grid">
               {activeCategories.map(cat => (
@@ -479,6 +542,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         <>
           <div className="eep-sheet-backdrop" onClick={() => setSrcSheet(false)} />
           <div className="eep-sheet">
+            <div className="eep-sheet-handle" />
             <div className="eep-sheet-title">Select Payment Source</div>
             <div className="eep-sheet-grid">
               {activeSources.map(src => (

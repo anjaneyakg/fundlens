@@ -1,10 +1,19 @@
 # NEXT SESSION — FundLens
-Last updated: 01 Jun 2026 (EB-S1 Expense Manager foundation done)
+Last updated: 02 Jun 2026 (EB-S1 visual fixes — light theme, toast feedback, budget badges)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
+
+## EB-S1 visual fixes: DONE ✅ (02 Jun 2026)
+- Toast.jsx: reusable slide-down toast, success (#1A3C6E) / error (#dc2626), auto-dismiss 2.5s
+- ExpenseEntryPanel: light theme, 36px amount, save FSM (loading/success/error), toast on save, panel auto-closes 1.2s after success
+- ExpenseFAB: navy (#1A3C6E), safe-area bottom inset
+- ExpenseDashboardWidget: explicit light values, Log btn navy, fixed masked bars
+- ExpenseManager: #f8f9fa bg, tabs/chips/btns navy, budget alert banner (amber/red), session-dismiss
+- Nav: useExpense + budgetAlertCount computed via useMemo, red badge on Expenses tab desktop + mobile drawer
+Build: 965 modules, 0 errors, 0 new warnings.
 
 ## EB-S1 status: DONE ✅ (01 Jun 2026)
 - migrations/005_expense_manager.sql — 4 tables (expense_payment_sources, expense_categories, expense_recurring, expense_transactions) with RLS
@@ -89,4 +98,5 @@ Scope:
 - PH3-S5 Client invitation flow (31 May 2026): api/advisor.js + AdvisorInviteClient + AcceptInvite + Register invite handling, commit 4092534 ✅
 - PH4-S5 Bug fixes (31 May 2026): CompareSchemes border/slug, FDvsMF style merge, SchemeMapping autocomplete, SIPCalculator mfapi migration ✅
 - EB-S1 Expense Manager foundation (01 Jun 2026): 4 tables, context, entry panel, FAB, widget, /expenses page ✅
+- EB-S1 visual fixes (02 Jun 2026): Toast, light theme, save FSM, budget alert badges ✅
 - Next: EB-S2 — Full Analytics tab

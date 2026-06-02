@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 01 Jun 2026 · v42.0
+**Last updated:** 02 Jun 2026 · v43.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,29 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-S1 Visual Fixes ✅ (02 Jun 2026)
+
+| Item | Status |
+|---|---|
+| `src/components/common/Toast.jsx` — new reusable toast component, slide-down from top, success (#1A3C6E) / error (#dc2626), auto-dismiss | ✅ Done |
+| `src/components/expenses/ExpenseEntryPanel.jsx` — full rewrite: explicit light theme (#ffffff panel, #f8faff amount bg), 36px amount input, decimal inputMode, selected chips navy (#1A3C6E/white), save button states (loading spinner, ✓ Saved!, ✗ Try again), panel closes 1200ms after success, toast on save | ✅ Done |
+| `src/components/expenses/ExpenseFAB.jsx` — rewrite: background #1A3C6E (navy), safe-area bottom `calc(16px + env(safe-area-inset-bottom))` | ✅ Done |
+| `src/components/expenses/ExpenseDashboardWidget.jsx` — rewrite: explicit light theme, Log Expense button #1A3C6E, fixed masked bar widths (no Math.random re-render), progress bar green/amber/red | ✅ Done |
+| `src/pages/ExpenseManager.jsx` — rewrite: #f8f9fa page bg, tabs #1A3C6E active, filter chips #1A3C6E, budget alert banner (amber ≥75%, red ≥100%), dismissible, badge count on Log tab, Mark Paid button #1A3C6E, all amounts #dc2626/#16a34a | ✅ Done |
+| `src/components/Nav.jsx` — budget badge: `useExpense` imported, `budgetAlertCount` computed (categories ≥75% budget this month), red badge on Expenses tab (desktop + mobile drawer) | ✅ Done |
+| Vite build — 965 modules, 0 errors, 0 new warnings | ✅ Done |
+
+### EB-S1 Fixes — Architecture Notes
+
+- Toast is managed as local state in ExpenseEntryPanel (`toastState = { message, type } | null`). Renders above panel (z-index 9999) via fixed position — no portal needed.
+- Save button FSM: `idle → loading → success | error → idle`. On success: closes panel after 1200ms. On error: resets after 2000ms.
+- Budget alert banner in Log tab uses current month transactions always (independent of the filter range). `alertDismissed` is session-only (useState, not persisted).
+- Nav badge: `budgetAlertCount` computed in Nav via `useMemo` from ExpenseContext. Passed as `budgetAlertCount` prop into MobileDrawer. `DrawerSection` and `NavTab` both accept `badge` prop.
+- FAB color is now distinctly navy (#1A3C6E) vs green (#16a34a save/income) — FundLens primary brand color.
+- Dark mode: all Expense components now use hardcoded light values — no CSS var that could resolve to dark. System dark mode will NOT affect these components (intentional: financial data screen should always be light and legible).
 
 ---
 

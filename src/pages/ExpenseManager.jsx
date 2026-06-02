@@ -21,20 +21,18 @@ function todayStr() {
 }
 
 function monthLabel(offset = 0) {
-  const d = new Date()
-  d.setMonth(d.getMonth() + offset)
+  const d = new Date(); d.setMonth(d.getMonth() + offset)
   return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 }
 
 function monthPrefix(offset = 0) {
-  const d = new Date()
-  d.setMonth(d.getMonth() + offset)
+  const d = new Date(); d.setMonth(d.getMonth() + offset)
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0)
-  const d = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0)
+  const d     = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0)
   return Math.round((d - today) / 86400000)
 }
 
@@ -43,273 +41,344 @@ const SOURCE_TYPE_LABELS = { credit_card:'Credit Card', bank_account:'Bank Accou
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const emStyles = `
+const emCSS = `
   .em-wrap {
-    max-width: 640px; margin: 0 auto; padding: 0 0 100px;
+    max-width: 640px; margin: 0 auto; padding: 0 0 120px;
     font-family: 'DM Sans', sans-serif;
+    background: #f8f9fa; min-height: 100vh;
   }
+
   .em-page-header {
     padding: 20px 16px 0;
     display: flex; align-items: center; gap: 10px;
+    background: #f8f9fa;
   }
   .em-page-title {
-    font-size: 22px; font-weight: 700; color: var(--color-text-primary, #111);
-    flex: 1;
+    font-size: 22px; font-weight: 700; color: #1a1a2a; flex: 1;
   }
+  .em-log-btn {
+    padding: 8px 18px; border: none; border-radius: 10px;
+    background: #1A3C6E; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .em-log-btn:hover { background: #15306b; }
 
+  /* ── TABS ── */
   .em-tabs {
-    display: flex; border-bottom: 2px solid #f0f0f0;
-    padding: 0 16px; margin-top: 16px; gap: 4px;
+    display: flex; border-bottom: 2px solid #e8ecf0;
+    padding: 0 16px; margin-top: 16px; gap: 0;
     position: sticky; top: 56px; z-index: 100;
-    background: var(--color-bg, #fff);
+    background: #ffffff;
+    box-shadow: 0 1px 0 #e8ecf0;
   }
   .em-tab {
-    padding: 12px 16px; border: none; background: transparent;
+    padding: 13px 16px; border: none; background: transparent;
     font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
-    color: var(--color-text-muted, #999); cursor: pointer;
+    color: #94a3b8; cursor: pointer;
     border-bottom: 2px solid transparent; margin-bottom: -2px;
-    transition: all 0.15s; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
   }
-  .em-tab.active { color: var(--color-primary, #1D9E75); border-bottom-color: var(--color-primary, #1D9E75); font-weight: 600; }
+  .em-tab:hover { color: #1A3C6E; }
+  .em-tab.active { color: #1A3C6E; border-bottom-color: #1A3C6E; font-weight: 700; }
+  .em-tab-badge {
+    background: #dc2626; color: #ffffff;
+    font-size: 10px; font-weight: 700;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    padding: 0 4px; line-height: 16px; text-align: center;
+  }
 
-  /* ── LOG TAB ── */
+  /* ── FILTER BAR ── */
   .em-filter-bar {
     display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto;
-    scrollbar-width: none; background: var(--color-bg, #fff);
+    scrollbar-width: none; background: #f8f9fa;
   }
   .em-filter-bar::-webkit-scrollbar { display: none; }
   .em-filter-chip {
-    flex-shrink: 0; padding: 6px 14px; border-radius: 20px;
-    border: 1.5px solid #e8e8e8; background: #fff;
-    font-size: 13px; cursor: pointer; transition: all 0.12s;
-    color: var(--color-text-primary, #111); white-space: nowrap;
+    flex-shrink: 0; padding: 7px 16px; border-radius: 20px;
+    border: 1.5px solid #e2e8f0; background: #ffffff;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.12s;
+    color: #475569; white-space: nowrap; font-family: 'DM Sans', sans-serif;
   }
+  .em-filter-chip:hover { border-color: #1A3C6E; color: #1A3C6E; }
   .em-filter-chip.active {
-    background: var(--color-primary, #1D9E75); color: #fff;
-    border-color: var(--color-primary, #1D9E75); font-weight: 600;
+    background: #1A3C6E; color: #ffffff;
+    border-color: #1A3C6E; font-weight: 600;
   }
 
+  /* ── BUDGET ALERT BANNER ── */
+  .em-budget-banner {
+    margin: 0 16px 12px;
+    padding: 10px 14px; border-radius: 8px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; line-height: 1.4;
+  }
+  .em-budget-banner.amber {
+    background: #fffbeb; border: 1px solid #f59e0b;
+    color: #92400e;
+  }
+  .em-budget-banner.red {
+    background: #fef2f2; border: 1px solid #dc2626;
+    color: #991b1b;
+  }
+  .em-budget-banner-icon { font-size: 16px; flex-shrink: 0; }
+  .em-budget-banner-text { flex: 1; }
+  .em-budget-view-btn {
+    border: none; background: transparent; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
+    color: inherit; text-decoration: underline; white-space: nowrap;
+    padding: 0; flex-shrink: 0;
+  }
+  .em-budget-dismiss-btn {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 14px; color: inherit; opacity: 0.6;
+    padding: 2px 4px; flex-shrink: 0; line-height: 1;
+  }
+  .em-budget-dismiss-btn:hover { opacity: 1; }
+
+  /* ── SUMMARY BAR ── */
   .em-summary-bar {
-    display: flex; gap: 0; margin: 0 16px 12px;
-    background: #f8f9fa; border-radius: 12px; overflow: hidden;
+    display: flex; margin: 0 16px 12px;
+    background: #ffffff; border-radius: 12px; overflow: hidden;
+    border: 1px solid #e8ecf0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }
   .em-summary-item {
     flex: 1; padding: 12px 8px; text-align: center;
-    border-right: 1px solid #ececec;
+    border-right: 1px solid #f1f5f9;
   }
   .em-summary-item:last-child { border-right: none; }
   .em-summary-value { font-size: 15px; font-weight: 700; }
-  .em-summary-label { font-size: 10px; color: #999; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .em-summary-label {
+    font-size: 10px; color: #94a3b8; margin-top: 2px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
 
+  /* ── TRANSACTION LIST ── */
   .em-txn-list { padding: 0 16px; }
   .em-txn-row {
     display: flex; align-items: center; gap: 10px;
-    padding: 12px 0; border-bottom: 1px solid #f5f5f5;
-    cursor: pointer;
+    padding: 12px 0; border-bottom: 1px solid #f1f5f9;
+    cursor: pointer; background: transparent; transition: background 0.1s;
   }
+  .em-txn-row:hover { background: #fafbfc; margin: 0 -4px; padding: 12px 4px; border-radius: 8px; }
   .em-txn-row:last-child { border-bottom: none; }
   .em-txn-icon {
-    width: 38px; height: 38px; border-radius: 10px;
+    width: 40px; height: 40px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0;
-    background: #f5f5f5;
+    font-size: 18px; flex-shrink: 0; background: #f0f4ff;
   }
   .em-txn-centre { flex: 1; min-width: 0; }
-  .em-txn-cat { font-size: 14px; font-weight: 600; color: var(--color-text-primary, #111); }
-  .em-txn-meta { font-size: 11px; color: #aaa; margin-top: 1px; }
+  .em-txn-cat   { font-size: 14px; font-weight: 600; color: #1a1a2a; }
+  .em-txn-meta  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
   .em-txn-right { text-align: right; flex-shrink: 0; }
-  .em-txn-amount { font-size: 15px; font-weight: 700; }
-  .em-txn-src { font-size: 11px; color: #aaa; margin-top: 2px; }
+  .em-txn-amount{ font-size: 15px; font-weight: 700; }
+  .em-txn-src   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
   .em-txn-expand {
-    padding: 10px 14px 14px 58px;
-    background: #fafafa; border-radius: 0 0 12px 12px;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 10px 16px 14px 50px;
+    background: #f8f9fa; border-radius: 0 0 10px 10px;
+    border-bottom: 1px solid #f1f5f9;
   }
-  .em-txn-note { font-size: 12px; color: #666; margin-bottom: 10px; font-style: italic; }
-  .em-txn-actions { display: flex; gap: 8px; }
-  .em-txn-edit-btn, .em-txn-del-btn {
+  .em-txn-note { font-size: 12px; color: #64748b; margin-bottom: 10px; font-style: italic; }
+  .em-txn-del-btn {
     padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
     cursor: pointer; transition: all 0.12s; border: none;
+    background: #fef2f2; color: #dc2626; font-family: 'DM Sans', sans-serif;
   }
-  .em-txn-edit-btn { background: #f0f0f0; color: var(--color-text-primary, #111); }
-  .em-txn-del-btn  { background: #fff0f0; color: #F44336; }
-  .em-txn-edit-btn:hover { background: #e0e0e0; }
-  .em-txn-del-btn:hover  { background: #ffe0e0; }
+  .em-txn-del-btn:hover { background: #fee2e2; }
 
   .em-empty {
     text-align: center; padding: 48px 20px;
-    color: var(--color-text-muted, #999); font-size: 14px;
+    color: #94a3b8; font-size: 14px; line-height: 1.6;
   }
 
   /* ── SETUP TAB ── */
   .em-setup-section {
-    margin: 12px 16px; border: 1px solid #f0f0f0; border-radius: 14px; overflow: hidden;
+    margin: 10px 16px;
+    background: #ffffff; border: 1px solid #e8ecf0;
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }
   .em-setup-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px; cursor: pointer; user-select: none;
-    background: #fff;
+    transition: background 0.1s;
   }
-  .em-setup-header:hover { background: #fafafa; }
+  .em-setup-header:hover { background: #fafbfc; }
   .em-setup-header-left { display: flex; align-items: center; gap: 10px; }
-  .em-setup-icon { font-size: 20px; }
-  .em-setup-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary, #111); }
-  .em-setup-count { font-size: 11px; color: #aaa; }
-  .em-setup-chevron { font-size: 12px; color: #aaa; transition: transform 0.2s; }
+  .em-setup-icon  { font-size: 20px; }
+  .em-setup-title { font-size: 15px; font-weight: 600; color: #374151; }
+  .em-setup-count {
+    font-size: 11px; font-weight: 600; color: #1A3C6E;
+    background: #f0f4ff; padding: 2px 8px; border-radius: 10px; margin-top: 2px;
+    display: inline-block;
+  }
+  .em-setup-chevron { font-size: 12px; color: #94a3b8; transition: transform 0.2s; }
   .em-setup-chevron.open { transform: rotate(180deg); }
-  .em-setup-body { padding: 0 16px 16px; border-top: 1px solid #f5f5f5; }
+  .em-setup-body { padding: 4px 16px 16px; border-top: 1px solid #f1f5f9; }
 
   .em-setup-list-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 10px 0; border-bottom: 1px solid #f8f8f8;
+    padding: 10px 0; border-bottom: 1px solid #f8f9fa;
   }
   .em-setup-list-item:last-child { border-bottom: none; }
   .em-setup-item-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
-  .em-setup-item-name { flex: 1; font-size: 14px; color: var(--color-text-primary, #111); }
-  .em-setup-item-sub { font-size: 11px; color: #aaa; }
-  .em-setup-item-badge {
-    font-size: 10px; padding: 2px 8px; border-radius: 10px;
-    font-weight: 600;
-  }
-  .em-setup-actions { display: flex; align-items: center; gap: 6px; }
+  .em-setup-item-name { flex: 1; font-size: 14px; font-weight: 500; color: #1a1a2a; }
+  .em-setup-item-sub  { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+  .em-setup-actions   { display: flex; align-items: center; gap: 6px; }
+
   .em-icon-btn {
     border: none; background: transparent; cursor: pointer;
-    font-size: 14px; color: #aaa; padding: 4px; border-radius: 6px;
-    transition: color 0.12s, background 0.12s;
+    font-size: 14px; color: #94a3b8; padding: 5px; border-radius: 6px;
+    transition: color 0.12s, background 0.12s; line-height: 1;
   }
-  .em-icon-btn:hover { color: var(--color-primary, #1D9E75); background: rgba(29,158,117,0.08); }
-  .em-icon-btn.danger:hover { color: #F44336; background: #fff0f0; }
+  .em-icon-btn:hover        { color: #1A3C6E; background: #f0f4ff; }
+  .em-icon-btn.danger:hover { color: #dc2626; background: #fef2f2; }
 
   .em-add-form {
     margin-top: 12px; padding: 14px; background: #f8f9fa;
     border-radius: 12px; display: flex; flex-direction: column; gap: 10px;
+    border: 1px solid #e8ecf0;
   }
   .em-field-label {
-    font-size: 11px; font-weight: 600; color: #888;
+    font-size: 11px; font-weight: 600; color: #64748b;
     text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+    font-family: 'DM Sans', sans-serif;
   }
   .em-field-input {
-    width: 100%; padding: 9px 12px; border: 1.5px solid #e8e8e8; border-radius: 10px;
+    width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
     font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
-    box-sizing: border-box; transition: border-color 0.15s; background: #fff;
+    box-sizing: border-box; transition: border-color 0.15s; background: #ffffff;
+    color: #1a1a2a;
   }
-  .em-field-input:focus { border-color: var(--color-primary, #1D9E75); }
+  .em-field-input:focus { border-color: #1A3C6E; }
   .em-field-select {
-    width: 100%; padding: 9px 12px; border: 1.5px solid #e8e8e8; border-radius: 10px;
+    width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
     font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
-    box-sizing: border-box; transition: border-color 0.15s; background: #fff;
-    appearance: none; cursor: pointer;
+    box-sizing: border-box; transition: border-color 0.15s; background: #ffffff;
+    color: #1a1a2a; appearance: none; cursor: pointer;
   }
-  .em-field-select:focus { border-color: var(--color-primary, #1D9E75); }
+  .em-field-select:focus { border-color: #1A3C6E; }
+
   .em-form-row { display: flex; gap: 10px; }
   .em-form-row > * { flex: 1; min-width: 0; }
+
   .em-add-btn {
     padding: 10px; border: none; border-radius: 10px;
-    background: var(--color-primary, #1D9E75); color: #fff;
+    background: #1A3C6E; color: #ffffff;
     font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: background 0.15s;
   }
-  .em-add-btn:hover { background: var(--color-primary-dark, #16805e); }
+  .em-add-btn:hover:not(:disabled) { background: #15306b; }
   .em-add-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
   .em-cancel-btn {
-    padding: 10px; border: 1.5px solid #e8e8e8; border-radius: 10px;
-    background: #fff; color: var(--color-text-primary, #111);
+    padding: 10px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    background: #ffffff; color: #374151;
     font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: border-color 0.15s;
   }
-  .em-cancel-btn:hover { border-color: #ccc; }
+  .em-cancel-btn:hover { border-color: #94a3b8; }
+
   .em-add-trigger {
     margin-top: 12px; width: 100%; padding: 10px;
-    border: 1.5px dashed #ccc; border-radius: 10px; background: transparent;
+    border: 1.5px dashed #cbd5e1; border-radius: 10px; background: transparent;
     font-family: 'DM Sans', sans-serif; font-size: 13px;
-    color: var(--color-primary, #1D9E75); font-weight: 600;
-    cursor: pointer; transition: border-color 0.15s;
+    color: #1A3C6E; font-weight: 600; cursor: pointer; transition: border-color 0.15s;
   }
-  .em-add-trigger:hover { border-color: var(--color-primary, #1D9E75); }
+  .em-add-trigger:hover { border-color: #1A3C6E; background: #f0f4ff; }
 
   .em-colour-swatch {
     width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
-    border: 2px solid rgba(0,0,0,0.1);
+    border: 2px solid rgba(0,0,0,0.08);
   }
-  .em-toggle-switch {
-    position: relative; width: 36px; height: 20px; flex-shrink: 0;
-  }
-  .em-toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  /* Toggle switch */
+  .em-toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .em-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
   .em-toggle-slider {
     position: absolute; cursor: pointer; inset: 0;
-    background: #e0e0e0; border-radius: 20px; transition: background 0.2s;
+    background: #e2e8f0; border-radius: 20px; transition: background 0.2s;
   }
   .em-toggle-slider::before {
     content: ''; position: absolute;
     width: 14px; height: 14px; left: 3px; bottom: 3px;
     background: #fff; border-radius: 50%; transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
-  input:checked + .em-toggle-slider { background: var(--color-primary, #1D9E75); }
+  input:checked + .em-toggle-slider { background: #1A3C6E; }
   input:checked + .em-toggle-slider::before { transform: translateX(16px); }
 
-  /* ── ANALYTICS TAB ── */
+  /* ── ANALYTICS STUB ── */
   .em-stub {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 64px 20px; gap: 12px;
-    color: var(--color-text-muted, #999);
   }
-  .em-stub-icon { font-size: 48px; opacity: 0.5; }
-  .em-stub-title { font-size: 17px; font-weight: 600; color: var(--color-text-secondary, #555); }
-  .em-stub-sub { font-size: 13px; text-align: center; }
+  .em-stub-icon  { font-size: 52px; opacity: 0.35; }
+  .em-stub-title { font-size: 17px; font-weight: 700; color: #374151; }
+  .em-stub-sub   { font-size: 13px; text-align: center; color: #94a3b8; line-height: 1.6; max-width: 280px; }
 
   /* ── DUES TAB ── */
   .em-dues-list { padding: 12px 16px; }
   .em-due-row {
     display: flex; align-items: center; gap: 12px;
     padding: 14px; margin-bottom: 10px;
-    border: 1.5px solid #f0f0f0; border-radius: 14px;
-    background: #fff;
+    border: 1.5px solid #e8ecf0; border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }
-  .em-due-row.overdue  { border-color: #FFCDD2; background: #FFF9FA; }
-  .em-due-row.urgent   { border-color: #FFE0B2; background: #FFFBF5; }
-  .em-due-row.ok       { border-color: #C8E6C9; background: #F9FFF9; }
-  .em-due-left { flex: 1; min-width: 0; }
-  .em-due-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary, #111); }
-  .em-due-meta { font-size: 11px; color: #aaa; margin-top: 2px; }
+  .em-due-row.overdue { border-color: #fca5a5; background: #fff5f5; }
+  .em-due-row.urgent  { border-color: #fcd34d; background: #fffdf0; }
+  .em-due-row.ok      { border-color: #86efac; background: #f0fdf4; }
+  .em-due-left  { flex: 1; min-width: 0; }
+  .em-due-name  { font-size: 14px; font-weight: 600; color: #1a1a2a; }
+  .em-due-meta  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
   .em-due-right { text-align: right; flex-shrink: 0; }
-  .em-due-amt { font-size: 15px; font-weight: 700; }
+  .em-due-amt   { font-size: 15px; font-weight: 700; color: #1a1a2a; }
   .em-due-badge {
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 3px;
-    display: inline-block;
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    margin-top: 4px; display: inline-block;
   }
-  .em-due-badge.overdue { background: #FFCDD2; color: #C62828; }
-  .em-due-badge.urgent  { background: #FFE0B2; color: #E65100; }
-  .em-due-badge.ok      { background: #C8E6C9; color: #2E7D32; }
+  .em-due-badge.overdue { background: #fee2e2; color: #991b1b; }
+  .em-due-badge.urgent  { background: #fef3c7; color: #92400e; }
+  .em-due-badge.ok      { background: #dcfce7; color: #166534; }
   .em-mark-paid-btn {
-    padding: 6px 12px; border: none; border-radius: 8px;
-    background: var(--color-primary, #1D9E75); color: #fff;
-    font-size: 12px; font-weight: 600; cursor: pointer;
-    transition: background 0.12s; flex-shrink: 0;
+    padding: 7px 13px; border: none; border-radius: 8px;
+    background: #1A3C6E; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.12s; flex-shrink: 0;
   }
-  .em-mark-paid-btn:hover { background: var(--color-primary-dark, #16805e); }
+  .em-mark-paid-btn:hover:not(:disabled) { background: #15306b; }
+  .em-mark-paid-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   @media (max-width: 480px) {
     .em-summary-value { font-size: 13px; }
-    .em-page-title { font-size: 19px; }
-    .em-txn-amount { font-size: 14px; }
-    .em-form-row { flex-direction: column; }
+    .em-page-title    { font-size: 19px; }
+    .em-txn-amount    { font-size: 14px; }
+    .em-form-row      { flex-direction: column; }
+    .em-due-row       { flex-wrap: wrap; gap: 8px; }
+    .em-mark-paid-btn { width: 100%; }
   }
 `
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function TxnRow({ txn, categories, paymentSources, onDelete, onEdit }) {
+function TxnRow({ txn, categories, paymentSources, onDelete }) {
   const [expanded, setExpanded] = useState(false)
-  const cat = categories.find(c => c.id === txn.category_id)
-  const src = paymentSources.find(s => s.id === txn.payment_source_id)
-  const isExpense  = txn.txn_type === 'expense'
-  const isIncome   = txn.txn_type === 'income'
+  const cat       = categories.find(c => c.id === txn.category_id)
+  const src       = paymentSources.find(s => s.id === txn.payment_source_id)
+  const isExpense = txn.txn_type === 'expense'
+  const isIncome  = txn.txn_type === 'income'
 
   return (
     <>
       <div className="em-txn-row" onClick={() => setExpanded(e => !e)}>
-        <div className="em-txn-icon" style={{ background: cat ? cat.colour_hex + '22' : '#f5f5f5' }}>
+        <div
+          className="em-txn-icon"
+          style={{ background: cat ? cat.colour_hex + '22' : '#f0f4ff' }}
+        >
           {cat ? cat.icon_code : '💸'}
         </div>
         <div className="em-txn-centre">
@@ -320,31 +389,22 @@ function TxnRow({ txn, categories, paymentSources, onDelete, onEdit }) {
           </div>
         </div>
         <div className="em-txn-right">
-          <div
-            className="em-txn-amount"
-            style={{ color: isExpense ? '#F44336' : isIncome ? '#4CAF50' : '#2196F3' }}
-          >
+          <div className="em-txn-amount" style={{ color: isExpense ? '#dc2626' : isIncome ? '#16a34a' : '#2563eb' }}>
             {isExpense ? '−' : '+'} ₹{fmtAmt(txn.amount)}
           </div>
           {src && <div className="em-txn-src">{SOURCE_ICONS[src.source_type]} {src.source_name}</div>}
         </div>
       </div>
-
       {expanded && (
         <div className="em-txn-expand">
           {txn.notes && <div className="em-txn-note">"{txn.notes}"</div>}
-          <div className="em-txn-actions">
-            <button className="em-txn-del-btn" onClick={() => onDelete(txn.id)}>
-              Delete
-            </button>
-          </div>
+          <button className="em-txn-del-btn" onClick={() => onDelete(txn.id)}>Delete</button>
         </div>
       )}
     </>
   )
 }
 
-// Setup Section wrapper
 function SetupSection({ icon, title, count, children }) {
   const [open, setOpen] = useState(false)
   return (
@@ -364,7 +424,6 @@ function SetupSection({ icon, title, count, children }) {
   )
 }
 
-// Toggle switch
 function Toggle({ checked, onChange }) {
   return (
     <label className="em-toggle-switch">
@@ -377,10 +436,12 @@ function Toggle({ checked, onChange }) {
 // ── Section A: Family Members ─────────────────────────────────────────────────
 
 function FamilyMembersSection({ familyMembers }) {
-  const [members,    setMembers]    = useState(() => familyMembers.filter(m => m !== 'Self').map((n, i) => ({ id: i, name: n, relationship: '' })))
-  const [showForm,   setShowForm]   = useState(false)
-  const [name,       setName]       = useState('')
-  const [rel,        setRel]        = useState('Spouse')
+  const [members,  setMembers]  = useState(() =>
+    familyMembers.filter(m => m !== 'Self').map((n, i) => ({ id: i, name: n, relationship: '' }))
+  )
+  const [showForm, setShowForm] = useState(false)
+  const [name,     setName]     = useState('')
+  const [rel,      setRel]      = useState('Spouse')
 
   function handleAdd() {
     if (!name.trim()) return
@@ -392,7 +453,9 @@ function FamilyMembersSection({ familyMembers }) {
     <SetupSection icon="👨‍👩‍👧" title="Family Members" count={members.length}>
       <div style={{ paddingTop: 12 }}>
         {members.length === 0 && (
-          <div style={{ fontSize: 13, color: '#aaa', marginBottom: 8 }}>No family members added yet.</div>
+          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8, fontFamily: 'DM Sans' }}>
+            No family members added yet.
+          </div>
         )}
         {members.map(m => (
           <div key={m.id} className="em-setup-list-item">
@@ -401,12 +464,9 @@ function FamilyMembersSection({ familyMembers }) {
               <div className="em-setup-item-name">{m.name}</div>
               {m.relationship && <div className="em-setup-item-sub">{m.relationship}</div>}
             </div>
-            <div className="em-setup-actions">
-              <button className="em-icon-btn danger" onClick={() => setMembers(prev => prev.filter(x => x.id !== m.id))}>✕</button>
-            </div>
+            <button className="em-icon-btn danger" onClick={() => setMembers(p => p.filter(x => x.id !== m.id))}>✕</button>
           </div>
         ))}
-
         {showForm ? (
           <div className="em-add-form">
             <div>
@@ -435,14 +495,12 @@ function FamilyMembersSection({ familyMembers }) {
 // ── Section B: Payment Sources ────────────────────────────────────────────────
 
 function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }) {
-  const [showForm,   setShowForm]   = useState(false)
-  const [editId,     setEditId]     = useState(null)
-  const [form,       setForm]       = useState({ source_name: '', source_type: 'cash', last_four: '', credit_limit: '', billing_cycle_date: '' })
-  const [saving,     setSaving]     = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editId,   setEditId]   = useState(null)
+  const [form,     setForm]     = useState({ source_name:'', source_type:'cash', last_four:'', credit_limit:'', billing_cycle_date:'' })
+  const [saving,   setSaving]   = useState(false)
 
-  function resetForm() { setForm({ source_name: '', source_type: 'cash', last_four: '', credit_limit: '', billing_cycle_date: '' }) }
-
-  function txnCount(id) { return transactions.filter(t => t.payment_source_id === id).length }
+  function resetForm() { setForm({ source_name:'', source_type:'cash', last_four:'', credit_limit:'', billing_cycle_date:'' }) }
 
   async function handleSave() {
     if (!form.source_name.trim()) return
@@ -457,7 +515,7 @@ function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }
         display_order:      paymentSources.length,
       }
       if (editId) { await onUpdate(editId, payload); setEditId(null) }
-      else { await onAdd(payload) }
+      else        { await onAdd(payload) }
       resetForm(); setShowForm(false)
     } catch (err) {
       console.error('PaymentSourcesSection save error:', err)
@@ -468,13 +526,8 @@ function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }
 
   function startEdit(src) {
     setEditId(src.id)
-    setForm({
-      source_name:        src.source_name,
-      source_type:        src.source_type,
-      last_four:          src.last_four || '',
-      credit_limit:       src.credit_limit || '',
-      billing_cycle_date: src.billing_cycle_date || '',
-    })
+    setForm({ source_name:src.source_name, source_type:src.source_type,
+      last_four:src.last_four||'', credit_limit:src.credit_limit||'', billing_cycle_date:src.billing_cycle_date||'' })
     setShowForm(true)
   }
 
@@ -483,26 +536,19 @@ function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }
   return (
     <SetupSection icon="💳" title="Payment Sources" count={paymentSources.length}>
       <div style={{ paddingTop: 12 }}>
-        {paymentSources.map(src => {
-          const cnt = txnCount(src.id)
-          return (
-            <div key={src.id} className="em-setup-list-item">
-              <span className="em-setup-item-icon">{SOURCE_ICONS[src.source_type] || '💰'}</span>
-              <div style={{ flex: 1 }}>
-                <div className="em-setup-item-name">{src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}</div>
-                <div className="em-setup-item-sub">{SOURCE_TYPE_LABELS[src.source_type]}{src.credit_limit ? ` · ₹${fmtAmt(src.credit_limit)} limit` : ''}</div>
-              </div>
-              <div className="em-setup-actions">
-                <Toggle
-                  checked={src.is_active}
-                  onChange={v => onUpdate(src.id, { is_active: v })}
-                />
-                <button className="em-icon-btn" onClick={() => startEdit(src)}>✏</button>
-              </div>
+        {paymentSources.map(src => (
+          <div key={src.id} className="em-setup-list-item">
+            <span className="em-setup-item-icon">{SOURCE_ICONS[src.source_type]||'💰'}</span>
+            <div style={{ flex: 1 }}>
+              <div className="em-setup-item-name">{src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}</div>
+              <div className="em-setup-item-sub">{SOURCE_TYPE_LABELS[src.source_type]}{src.credit_limit ? ` · ₹${fmtAmt(src.credit_limit)} limit` : ''}</div>
             </div>
-          )
-        })}
-
+            <div className="em-setup-actions">
+              <Toggle checked={src.is_active} onChange={v => onUpdate(src.id, { is_active: v })} />
+              <button className="em-icon-btn" onClick={() => startEdit(src)}>✏</button>
+            </div>
+          </div>
+        ))}
         {showForm ? (
           <div className="em-add-form">
             <div>
@@ -553,15 +599,15 @@ function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }
   )
 }
 
-// ── Section C: Expense Categories ────────────────────────────────────────────
+// ── Section C: Expense Categories ─────────────────────────────────────────────
 
 function CategoriesSection({ categories, onAdd, onUpdate }) {
-  const [showForm,  setShowForm]  = useState(false)
-  const [editId,    setEditId]    = useState(null)
-  const [form,      setForm]      = useState({ category_name: '', icon_code: '', colour_hex: '#1A3C6E', budget_limit_monthly: '' })
-  const [saving,    setSaving]    = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editId,   setEditId]   = useState(null)
+  const [form,     setForm]     = useState({ category_name:'', icon_code:'', colour_hex:'#1A3C6E', budget_limit_monthly:'' })
+  const [saving,   setSaving]   = useState(false)
 
-  function resetForm() { setForm({ category_name: '', icon_code: '', colour_hex: '#1A3C6E', budget_limit_monthly: '' }) }
+  function resetForm() { setForm({ category_name:'', icon_code:'', colour_hex:'#1A3C6E', budget_limit_monthly:'' }) }
 
   async function handleSave() {
     if (!form.category_name.trim() || !form.icon_code.trim()) return
@@ -575,7 +621,7 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
         display_order:        categories.length,
       }
       if (editId) { await onUpdate(editId, payload); setEditId(null) }
-      else { await onAdd(payload) }
+      else        { await onAdd(payload) }
       resetForm(); setShowForm(false)
     } catch (err) {
       console.error('CategoriesSection save error:', err)
@@ -586,19 +632,15 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
 
   function startEdit(cat) {
     setEditId(cat.id)
-    setForm({
-      category_name:        cat.category_name,
-      icon_code:            cat.icon_code,
-      colour_hex:           cat.colour_hex,
-      budget_limit_monthly: cat.budget_limit_monthly || '',
-    })
+    setForm({ category_name:cat.category_name, icon_code:cat.icon_code,
+      colour_hex:cat.colour_hex, budget_limit_monthly:cat.budget_limit_monthly||'' })
     setShowForm(true)
   }
 
   return (
     <SetupSection icon="🏷️" title="Expense Categories" count={categories.length}>
       <div style={{ paddingTop: 12 }}>
-        {categories.map((cat, idx) => (
+        {categories.map(cat => (
           <div key={cat.id} className="em-setup-list-item">
             <span className="em-setup-item-icon">{cat.icon_code}</span>
             <div className="em-colour-swatch" style={{ background: cat.colour_hex }} />
@@ -609,15 +651,11 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
               )}
             </div>
             <div className="em-setup-actions">
-              <Toggle
-                checked={cat.is_active}
-                onChange={v => onUpdate(cat.id, { is_active: v })}
-              />
+              <Toggle checked={cat.is_active} onChange={v => onUpdate(cat.id, { is_active: v })} />
               <button className="em-icon-btn" onClick={() => startEdit(cat)}>✏</button>
             </div>
           </div>
         ))}
-
         {showForm ? (
           <div className="em-add-form">
             <div className="em-form-row">
@@ -637,7 +675,7 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
                 <div className="em-field-label">Colour</div>
                 <input type="color" value={form.colour_hex}
                   onChange={e => setForm(f => ({ ...f, colour_hex: e.target.value }))}
-                  style={{ width: '100%', height: 40, border: 'none', borderRadius: 10, cursor: 'pointer', padding: 2 }} />
+                  style={{ width:'100%', height:40, border:'none', borderRadius:10, cursor:'pointer', padding:2 }} />
               </div>
               <div>
                 <div className="em-field-label">Monthly budget (₹)</div>
@@ -660,34 +698,33 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
   )
 }
 
-// ── Section D: Recurring Items ────────────────────────────────────────────────
+// ── Section D: Recurring Items ─────────────────────────────────────────────────
 
 function RecurringSection({ recurringItems, categories, paymentSources, onAdd, onUpdate, onDelete }) {
-  const [showForm,  setShowForm]  = useState(false)
-  const [form,      setForm]      = useState({
-    item_name: '', recurring_type: 'subscription', amount: '', frequency: 'monthly',
-    due_day: '', payment_source_id: '', category_id: '',
-    reminder_days_before: 2, reminder_enabled: true, auto_log: false, notes: '',
+  const [showForm, setShowForm] = useState(false)
+  const [form,     setForm]     = useState({
+    item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly',
+    due_day:'', payment_source_id:'', category_id:'',
+    reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'',
   })
-  const [saving,    setSaving]    = useState(false)
+  const [saving, setSaving] = useState(false)
 
   function resetForm() {
-    setForm({ item_name: '', recurring_type: 'subscription', amount: '', frequency: 'monthly',
-      due_day: '', payment_source_id: '', category_id: '',
-      reminder_days_before: 2, reminder_enabled: true, auto_log: false, notes: '' })
+    setForm({ item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly',
+      due_day:'', payment_source_id:'', category_id:'',
+      reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'' })
   }
 
   async function handleSave() {
     if (!form.item_name.trim() || !form.amount) return
     setSaving(true)
     try {
-      const dueDayNum = form.frequency === 'monthly' && form.due_day ? Number(form.due_day) : null
       const payload = {
         item_name:            form.item_name.trim(),
         recurring_type:       form.recurring_type,
         amount:               Number(form.amount),
         frequency:            form.frequency,
-        due_day:              dueDayNum,
+        due_day:              (form.frequency === 'monthly' && form.due_day) ? Number(form.due_day) : null,
         payment_source_id:    form.payment_source_id || null,
         category_id:          form.category_id || null,
         reminder_days_before: Number(form.reminder_days_before),
@@ -709,7 +746,6 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
       <div style={{ paddingTop: 12 }}>
         {recurringItems.map(r => {
           const cat = categories.find(c => c.id === r.category_id)
-          const src = paymentSources.find(s => s.id === r.payment_source_id)
           return (
             <div key={r.id} className="em-setup-list-item">
               <span className="em-setup-item-icon">{cat ? cat.icon_code : '🔄'}</span>
@@ -727,7 +763,6 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
             </div>
           )
         })}
-
         {showForm ? (
           <div className="em-add-form">
             <div className="em-form-row">
@@ -786,12 +821,12 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
                 ))}
               </select>
             </div>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <div style={{ display:'flex', gap:16, alignItems:'center' }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, fontFamily:'DM Sans', color:'#374151', cursor:'pointer' }}>
                 <Toggle checked={form.reminder_enabled} onChange={v => setForm(f => ({ ...f, reminder_enabled: v }))} />
                 Remind me
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, fontFamily:'DM Sans', color:'#374151', cursor:'pointer' }}>
                 <Toggle checked={form.auto_log} onChange={v => setForm(f => ({ ...f, auto_log: v }))} />
                 Auto-log
               </label>
@@ -823,27 +858,26 @@ export default function ExpenseManager() {
     addRecurringItem, updateRecurringItem, deleteRecurringItem,
   } = useExpense()
 
-  const [tab,         setTab]         = useState('log')
-  const [filterMode,  setFilterMode]  = useState('this')   // 'this' | 'last' | 'custom'
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd,   setCustomEnd]   = useState(todayStr())
-  const [panelOpen,   setPanelOpen]   = useState(false)
-  const [markingId,   setMarkingId]   = useState(null)
+  const [tab,             setTab]             = useState('log')
+  const [filterMode,      setFilterMode]      = useState('this')
+  const [customStart,     setCustomStart]     = useState('')
+  const [customEnd,       setCustomEnd]       = useState(todayStr())
+  const [panelOpen,       setPanelOpen]       = useState(false)
+  const [markingId,       setMarkingId]       = useState(null)
+  const [alertDismissed,  setAlertDismissed]  = useState(false)
 
-  const width    = useWindowWidth()
-  const isMobile = width <= 480
+  useWindowWidth() // keep for future responsive use
 
   // Date range for filter
   const dateRange = useMemo(() => {
     if (filterMode === 'this') {
-      const p = monthPrefix(0)
-      return { start: p + '-01', end: todayStr() }
+      return { start: monthPrefix(0) + '-01', end: todayStr() }
     }
     if (filterMode === 'last') {
-      const p = monthPrefix(-1)
-      const d = new Date(); d.setMonth(d.getMonth() - 1)
-      const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()
-      return { start: p + '-01', end: `${p}-${String(lastDay).padStart(2,'0')}` }
+      const p  = monthPrefix(-1)
+      const d  = new Date(); d.setMonth(d.getMonth() - 1)
+      const ld = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()
+      return { start: p + '-01', end: `${p}-${String(ld).padStart(2,'0')}` }
     }
     return { start: customStart, end: customEnd }
   }, [filterMode, customStart, customEnd])
@@ -862,13 +896,33 @@ export default function ExpenseManager() {
     return { income, expense, net: income - expense }
   }, [filtered])
 
-  // Upcoming dues in next 30 days
-  const todayISO = todayStr()
-  const in30Days = new Date(); in30Days.setDate(in30Days.getDate() + 30)
-  const in30ISO  = in30Days.toISOString().slice(0,10)
-  const upcomingDues = recurringItems.filter(r =>
-    r.is_active && r.due_date_next && r.due_date_next <= in30ISO
-  ).sort((a, b) => (a.due_date_next || '').localeCompare(b.due_date_next || ''))
+  // Budget alerts — always current month, regardless of filter
+  const curMonthPrefix = monthPrefix(0)
+  const budgetAlerts = useMemo(() => {
+    return categories.filter(c => {
+      if (!c.is_active || !c.budget_limit_monthly) return false
+      const spent = transactions
+        .filter(t => t.category_id === c.id && t.txn_type === 'expense' && t.txn_date?.startsWith(curMonthPrefix))
+        .reduce((s, t) => s + Number(t.amount), 0)
+      return spent >= c.budget_limit_monthly * 0.75
+    }).map(c => {
+      const spent = transactions
+        .filter(t => t.category_id === c.id && t.txn_type === 'expense' && t.txn_date?.startsWith(curMonthPrefix))
+        .reduce((s, t) => s + Number(t.amount), 0)
+      return { ...c, spent, pct: spent / c.budget_limit_monthly }
+    })
+  }, [categories, transactions, curMonthPrefix])
+
+  const overBudget  = budgetAlerts.filter(a => a.pct >= 1)
+  const nearBudget  = budgetAlerts.filter(a => a.pct >= 0.75 && a.pct < 1)
+  const alertLevel  = overBudget.length > 0 ? 'red' : nearBudget.length > 0 ? 'amber' : null
+
+  // Upcoming dues
+  const todayISO  = todayStr()
+  const in30ISO   = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0,10) })()
+  const upcomingDues = recurringItems
+    .filter(r => r.is_active && r.due_date_next && r.due_date_next <= in30ISO)
+    .sort((a, b) => (a.due_date_next||'').localeCompare(b.due_date_next||''))
 
   async function handleMarkPaid(r) {
     setMarkingId(r.id)
@@ -892,7 +946,7 @@ export default function ExpenseManager() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', fontFamily: 'DM Sans', fontSize: 14, color: '#aaa' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', fontFamily:'DM Sans', fontSize:14, color:'#94a3b8' }}>
         Loading Expense Manager…
       </div>
     )
@@ -900,89 +954,94 @@ export default function ExpenseManager() {
 
   if (error) {
     return (
-      <div style={{ padding: 32, fontFamily: 'DM Sans', color: '#F44336' }}>
-        Error: {error} — <button onClick={reload} style={{ color: 'var(--color-primary)' }}>Retry</button>
+      <div style={{ padding:32, fontFamily:'DM Sans', color:'#dc2626', fontSize:14 }}>
+        Error: {error} — <button onClick={reload} style={{ color:'#1A3C6E', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Retry</button>
       </div>
     )
   }
 
   return (
     <>
-      <style>{emStyles}</style>
+      <style>{emCSS}</style>
       <div className="em-wrap">
 
         {/* Page header */}
         <div className="em-page-header">
           <span style={{ fontSize: 26 }}>💸</span>
           <div className="em-page-title">Expense Manager</div>
-          <button
-            onClick={() => setPanelOpen(true)}
-            style={{
-              padding: '8px 16px', border: 'none', borderRadius: 10,
-              background: 'var(--color-primary, #1D9E75)', color: '#fff',
-              fontFamily: 'DM Sans', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            + Log
-          </button>
+          <button className="em-log-btn" onClick={() => setPanelOpen(true)}>+ Log</button>
         </div>
 
         {/* Tabs */}
         <div className="em-tabs">
           {[['log','Log'],['setup','Setup'],['analytics','Analytics'],['dues','Dues']].map(([id, label]) => (
-            <button key={id} className={`em-tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
+            <button
+              key={id}
+              className={`em-tab${tab === id ? ' active' : ''}`}
+              onClick={() => setTab(id)}
+            >
               {label}
               {id === 'dues' && upcomingDues.length > 0 && (
-                <span style={{
-                  marginLeft: 5, background: '#F44336', color: '#fff',
-                  borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                }}>
-                  {upcomingDues.length}
-                </span>
+                <span className="em-tab-badge">{upcomingDues.length}</span>
+              )}
+              {id === 'log' && alertLevel && (
+                <span className="em-tab-badge">{budgetAlerts.length}</span>
               )}
             </button>
           ))}
         </div>
 
-        {/* ─── LOG TAB ─────────────────────────────────────────────────────── */}
+        {/* ─── LOG TAB ──────────────────────────────────────────────────────── */}
         {tab === 'log' && (
           <>
             <div className="em-filter-bar">
-              <button className={`em-filter-chip${filterMode === 'this' ? ' active' : ''}`}
-                onClick={() => setFilterMode('this')}>
+              <button className={`em-filter-chip${filterMode === 'this' ? ' active' : ''}`} onClick={() => setFilterMode('this')}>
                 {monthLabel(0)}
               </button>
-              <button className={`em-filter-chip${filterMode === 'last' ? ' active' : ''}`}
-                onClick={() => setFilterMode('last')}>
+              <button className={`em-filter-chip${filterMode === 'last' ? ' active' : ''}`} onClick={() => setFilterMode('last')}>
                 {monthLabel(-1)}
               </button>
-              <button className={`em-filter-chip${filterMode === 'custom' ? ' active' : ''}`}
-                onClick={() => setFilterMode('custom')}>
+              <button className={`em-filter-chip${filterMode === 'custom' ? ' active' : ''}`} onClick={() => setFilterMode('custom')}>
                 Custom
               </button>
             </div>
 
             {filterMode === 'custom' && (
-              <div style={{ display: 'flex', gap: 10, padding: '0 16px 12px', alignItems: 'center' }}>
-                <input type="date" className="em-field-input" style={{ flex: 1 }}
+              <div style={{ display:'flex', gap:10, padding:'0 16px 12px', alignItems:'center' }}>
+                <input type="date" className="em-field-input" style={{ flex:1 }}
                   value={customStart} onChange={e => setCustomStart(e.target.value)} />
-                <span style={{ color: '#aaa', fontSize: 13 }}>to</span>
-                <input type="date" className="em-field-input" style={{ flex: 1 }}
+                <span style={{ color:'#94a3b8', fontSize:13, fontFamily:'DM Sans' }}>to</span>
+                <input type="date" className="em-field-input" style={{ flex:1 }}
                   value={customEnd} onChange={e => setCustomEnd(e.target.value)} />
+              </div>
+            )}
+
+            {/* Budget alert banner — Part C */}
+            {alertLevel && !alertDismissed && (
+              <div className={`em-budget-banner ${alertLevel}`}>
+                <span className="em-budget-banner-icon">⚠</span>
+                <span className="em-budget-banner-text">
+                  {alertLevel === 'red'
+                    ? `Budget exceeded — ${overBudget.map(c => c.category_name).join(', ')} ${overBudget.length === 1 ? 'is' : 'are'} over limit`
+                    : `Budget alert — ${nearBudget.length} ${nearBudget.length === 1 ? 'category' : 'categories'} near limit this month`
+                  }
+                </span>
+                <button className="em-budget-view-btn" onClick={() => setTab('analytics')}>View →</button>
+                <button className="em-budget-dismiss-btn" onClick={() => setAlertDismissed(true)}>✕</button>
               </div>
             )}
 
             <div className="em-summary-bar">
               <div className="em-summary-item">
-                <div className="em-summary-value" style={{ color: '#4CAF50' }}>₹{fmtAmt(summary.income)}</div>
+                <div className="em-summary-value" style={{ color:'#16a34a' }}>₹{fmtAmt(summary.income)}</div>
                 <div className="em-summary-label">Income</div>
               </div>
               <div className="em-summary-item">
-                <div className="em-summary-value" style={{ color: '#F44336' }}>₹{fmtAmt(summary.expense)}</div>
+                <div className="em-summary-value" style={{ color:'#dc2626' }}>₹{fmtAmt(summary.expense)}</div>
                 <div className="em-summary-label">Expense</div>
               </div>
               <div className="em-summary-item">
-                <div className="em-summary-value" style={{ color: summary.net >= 0 ? '#4CAF50' : '#F44336' }}>
+                <div className="em-summary-value" style={{ color: summary.net >= 0 ? '#16a34a' : '#dc2626' }}>
                   ₹{fmtAmt(Math.abs(summary.net))}
                 </div>
                 <div className="em-summary-label">Net</div>
@@ -1000,7 +1059,6 @@ export default function ExpenseManager() {
                     categories={categories}
                     paymentSources={paymentSources}
                     onDelete={deleteTransaction}
-                    onEdit={() => {}}
                   />
                 ))
               )}
@@ -1008,33 +1066,17 @@ export default function ExpenseManager() {
           </>
         )}
 
-        {/* ─── SETUP TAB ───────────────────────────────────────────────────── */}
+        {/* ─── SETUP TAB ────────────────────────────────────────────────────── */}
         {tab === 'setup' && (
           <div style={{ paddingTop: 8 }}>
             <FamilyMembersSection familyMembers={familyMembers} />
-            <PaymentSourcesSection
-              paymentSources={paymentSources}
-              transactions={transactions}
-              onAdd={addPaymentSource}
-              onUpdate={updatePaymentSource}
-            />
-            <CategoriesSection
-              categories={categories}
-              onAdd={addCategory}
-              onUpdate={updateCategory}
-            />
-            <RecurringSection
-              recurringItems={recurringItems}
-              categories={categories}
-              paymentSources={paymentSources}
-              onAdd={addRecurringItem}
-              onUpdate={updateRecurringItem}
-              onDelete={deleteRecurringItem}
-            />
+            <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
+            <CategoriesSection categories={categories} onAdd={addCategory} onUpdate={updateCategory} />
+            <RecurringSection recurringItems={recurringItems} categories={categories} paymentSources={paymentSources} onAdd={addRecurringItem} onUpdate={updateRecurringItem} onDelete={deleteRecurringItem} />
           </div>
         )}
 
-        {/* ─── ANALYTICS TAB (stub) ────────────────────────────────────────── */}
+        {/* ─── ANALYTICS TAB (stub) ─────────────────────────────────────────── */}
         {tab === 'analytics' && (
           <div className="em-stub">
             <div className="em-stub-icon">👁</div>
@@ -1043,20 +1085,20 @@ export default function ExpenseManager() {
           </div>
         )}
 
-        {/* ─── DUES TAB ────────────────────────────────────────────────────── */}
+        {/* ─── DUES TAB ─────────────────────────────────────────────────────── */}
         {tab === 'dues' && (
           <div className="em-dues-list">
             {upcomingDues.length === 0 ? (
               <div className="em-empty">No upcoming dues in the next 30 days.</div>
             ) : (
               upcomingDues.map(r => {
-                const days  = daysUntil(r.due_date_next)
-                const cat   = categories.find(c => c.id === r.category_id)
-                const rowCls = days < 0 ? 'overdue' : days <= 3 ? 'urgent' : 'ok'
-                const badgeTxt = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`
+                const days   = daysUntil(r.due_date_next)
+                const cat    = categories.find(c => c.id === r.category_id)
+                const cls    = days < 0 ? 'overdue' : days <= 3 ? 'urgent' : 'ok'
+                const badge  = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`
                 return (
-                  <div key={r.id} className={`em-due-row ${rowCls}`}>
-                    <div style={{ fontSize: 22, width: 28, textAlign: 'center', flexShrink: 0 }}>
+                  <div key={r.id} className={`em-due-row ${cls}`}>
+                    <div style={{ fontSize:22, width:28, textAlign:'center', flexShrink:0 }}>
                       {cat ? cat.icon_code : '🔄'}
                     </div>
                     <div className="em-due-left">
@@ -1065,13 +1107,9 @@ export default function ExpenseManager() {
                     </div>
                     <div className="em-due-right">
                       <div className="em-due-amt">₹{fmtAmt(r.amount)}</div>
-                      <span className={`em-due-badge ${rowCls}`}>{badgeTxt}</span>
+                      <span className={`em-due-badge ${cls}`}>{badge}</span>
                     </div>
-                    <button
-                      className="em-mark-paid-btn"
-                      disabled={markingId === r.id}
-                      onClick={() => handleMarkPaid(r)}
-                    >
+                    <button className="em-mark-paid-btn" disabled={markingId === r.id} onClick={() => handleMarkPaid(r)}>
                       {markingId === r.id ? '…' : 'Mark Paid'}
                     </button>
                   </div>

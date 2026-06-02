@@ -3,188 +3,178 @@ import { NavLink } from 'react-router-dom'
 import { useExpense } from '../../context/ExpenseContext'
 import ExpenseEntryPanel from './ExpenseEntryPanel'
 
-const widgetStyle = `
+const widgetCSS = `
   .edw-wrap {
-    background: var(--color-bg, #fff);
-    border: 1px solid var(--color-border, #e8e8e8);
+    background: #ffffff;
+    border: 1px solid #e8ecf0;
     border-radius: 16px;
     padding: 20px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     font-family: 'DM Sans', sans-serif;
   }
   .edw-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 16px;
   }
-  .edw-header-left {
-    display: flex; align-items: center; gap: 8px;
-  }
+  .edw-header-left { display: flex; align-items: center; gap: 10px; }
   .edw-label {
-    font-size: 13px; font-weight: 600; color: var(--color-text-secondary, #555);
+    font-size: 13px; font-weight: 700; color: #374151;
   }
-  .edw-month {
-    font-size: 11px; color: var(--color-text-muted, #999);
-  }
+  .edw-month { font-size: 11px; color: #94a3b8; margin-top: 1px; }
   .edw-eye {
-    border: none; background: transparent; cursor: pointer;
-    font-size: 16px; color: var(--color-text-muted, #aaa);
-    padding: 4px; border-radius: 6px; transition: color 0.15s;
+    border: none; background: #f1f5f9; cursor: pointer;
+    font-size: 14px; color: #64748b;
+    padding: 6px; border-radius: 8px; transition: background 0.12s, color 0.12s;
+    line-height: 1; display: flex; align-items: center;
   }
-  .edw-eye:hover { color: var(--color-primary, #1D9E75); }
+  .edw-eye:hover { background: #e2e8f0; color: #1A3C6E; }
 
-  .edw-body-masked {
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .edw-blur-row {
-    display: flex; align-items: center; gap: 10px;
-  }
-  .edw-blur-label { font-size: 12px; color: #bbb; width: 60px; }
-  .edw-blur-bar {
-    height: 10px; border-radius: 5px; background: #e8e8e8; flex: 1;
-  }
-  .edw-blur-amt { font-size: 12px; color: #ddd; width: 50px; text-align: right; }
+  .edw-masked { display: flex; flex-direction: column; gap: 10px; }
+  .edw-blur-row { display: flex; align-items: center; gap: 10px; }
+  .edw-blur-label { font-size: 12px; color: #cbd5e1; width: 56px; flex-shrink: 0; }
+  .edw-blur-bar  { height: 10px; border-radius: 5px; background: #e2e8f0; }
+  .edw-blur-amt  { font-size: 12px; color: #e2e8f0; width: 50px; text-align: right; flex-shrink: 0; }
 
-  .edw-body-unmasked {}
   .edw-spend-row {
     display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;
   }
-  .edw-spend-amt {
-    font-size: 24px; font-weight: 700; color: var(--color-text-primary, #111);
-  }
-  .edw-spend-sub {
-    font-size: 12px; color: var(--color-text-muted, #999);
-  }
+  .edw-spend-amt { font-size: 26px; font-weight: 700; color: #1a1a2a; }
+  .edw-spend-sub { font-size: 12px; color: #94a3b8; }
+
   .edw-progress-bg {
-    height: 6px; background: #f0f0f0; border-radius: 3px; margin-bottom: 10px;
+    height: 6px; background: #f1f5f9; border-radius: 3px; margin-bottom: 12px;
+    overflow: hidden;
   }
   .edw-progress-fill {
     height: 100%; border-radius: 3px;
-    background: var(--color-primary, #1D9E75);
-    transition: width 0.4s;
+    transition: width 0.4s ease;
   }
-  .edw-dues-note {
-    font-size: 12px; color: var(--color-text-muted, #999); margin-bottom: 14px;
-  }
-  .edw-dues-note strong { color: #F44336; }
+  .edw-dues-note { font-size: 12px; color: #94a3b8; margin-bottom: 14px; }
+  .edw-dues-note strong { color: #dc2626; }
 
-  .edw-actions {
-    display: flex; gap: 10px;
-  }
+  .edw-actions { display: flex; gap: 10px; margin-top: 16px; }
   .edw-log-btn {
     flex: 1; padding: 10px; border: none; border-radius: 10px;
-    background: var(--color-primary, #1D9E75); color: #fff;
+    background: #1A3C6E; color: #ffffff;
     font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: background 0.15s;
   }
-  .edw-log-btn:hover { background: var(--color-primary-dark, #16805e); }
+  .edw-log-btn:hover { background: #15306b; }
   .edw-view-link {
-    flex: 1; padding: 10px; border: 1.5px solid var(--color-border, #e8e8e8);
-    border-radius: 10px; text-align: center;
+    flex: 1; padding: 10px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    text-align: center;
     font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
-    color: var(--color-text-primary, #111); text-decoration: none;
-    transition: border-color 0.15s;
+    color: #374151; text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
     display: flex; align-items: center; justify-content: center;
   }
-  .edw-view-link:hover { border-color: var(--color-primary, #1D9E75); color: var(--color-primary, #1D9E75); }
+  .edw-view-link:hover { border-color: #1A3C6E; color: #1A3C6E; }
 `
+
+// Fixed widths for masked bars (avoid Math.random re-render churn)
+const MASKED_BARS = [
+  { label: 'Expenses', flex: '55%' },
+  { label: 'Income',   flex: '38%' },
+  { label: 'Net',      flex: '46%' },
+]
 
 function currentMonthLabel() {
   return new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 }
 
+function todayMonthPrefix() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+}
+
 export default function ExpenseDashboardWidget() {
   const { transactions, categories, recurringItems, loading } = useExpense()
-  const [masked,     setMasked]     = useState(true)
-  const [panelOpen,  setPanelOpen]  = useState(false)
+  const [masked,    setMasked]    = useState(true)
+  const [panelOpen, setPanelOpen] = useState(false)
 
   if (loading) {
     return (
-      <div className="edw-wrap" style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontFamily: 'DM Sans', fontSize: 13, color: '#999' }}>Loading…</span>
+      <div
+        style={{
+          background: '#ffffff', border: '1px solid #e8ecf0', borderRadius: 16,
+          padding: 20, minHeight: 120, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontFamily: 'DM Sans', fontSize: 13, color: '#94a3b8',
+        }}
+      >
+        Loading…
       </div>
     )
   }
 
-  const now       = new Date()
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
-
-  const monthExpenses = transactions.filter(t =>
-    t.txn_type === 'expense' && t.txn_date?.startsWith(thisMonth)
-  )
-  const monthSpent = monthExpenses.reduce((sum, t) => sum + Number(t.amount), 0)
-
-  // Budget = sum of all active category monthly budgets
+  const thisMonth   = todayMonthPrefix()
+  const monthTxns   = transactions.filter(t => t.txn_date?.startsWith(thisMonth))
+  const monthSpent  = monthTxns.filter(t => t.txn_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
   const totalBudget = categories.filter(c => c.is_active && c.budget_limit_monthly)
-    .reduce((sum, c) => sum + Number(c.budget_limit_monthly), 0)
-
+    .reduce((s, c) => s + Number(c.budget_limit_monthly), 0)
   const pct = totalBudget > 0 ? Math.min((monthSpent / totalBudget) * 100, 100) : 0
 
-  // Upcoming dues in next 30 days
-  const today30 = new Date(); today30.setDate(today30.getDate() + 30)
-  const todayISO = now.toISOString().slice(0,10)
-  const upcomingDues = recurringItems.filter(r =>
-    r.is_active && r.due_date_next && r.due_date_next >= todayISO && r.due_date_next <= today30.toISOString().slice(0,10)
-  )
+  const todayISO  = new Date().toISOString().slice(0,10)
+  const in30ISO   = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0,10) })()
+  const duesCount = recurringItems.filter(r =>
+    r.is_active && r.due_date_next && r.due_date_next >= todayISO && r.due_date_next <= in30ISO
+  ).length
+
+  const progressColor = pct >= 90 ? '#dc2626' : pct >= 75 ? '#f59e0b' : '#16a34a'
 
   return (
     <>
-      <style>{widgetStyle}</style>
+      <style>{widgetCSS}</style>
       <div className="edw-wrap">
         <div className="edw-header">
           <div className="edw-header-left">
-            <span style={{ fontSize: 18 }}>💸</span>
+            <span style={{ fontSize: 20 }}>💸</span>
             <div>
               <div className="edw-label">Expense Manager</div>
               <div className="edw-month">{currentMonthLabel()}</div>
             </div>
           </div>
-          <button className="edw-eye" onClick={() => setMasked(m => !m)} title={masked ? 'Show' : 'Hide'}>
+          <button className="edw-eye" onClick={() => setMasked(m => !m)} title={masked ? 'Show amounts' : 'Hide amounts'}>
             {masked ? '👁' : '🙈'}
           </button>
         </div>
 
         {masked ? (
-          <div className="edw-body-masked">
-            {['Expenses','Income','Net'].map(label => (
-              <div key={label} className="edw-blur-row">
-                <span className="edw-blur-label">{label}</span>
-                <div className="edw-blur-bar" style={{ width: `${40 + Math.random()*40}%` }} />
+          <div className="edw-masked">
+            {MASKED_BARS.map(row => (
+              <div key={row.label} className="edw-blur-row">
+                <span className="edw-blur-label">{row.label}</span>
+                <div className="edw-blur-bar" style={{ flex: 1 }}>
+                  <div style={{ width: row.flex, height: '100%', background: '#e2e8f0', borderRadius: 5 }} />
+                </div>
                 <span className="edw-blur-amt">₹ ●●●</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="edw-body-unmasked">
+          <div>
             <div className="edw-spend-row">
-              <span className="edw-spend-amt">
-                ₹{monthSpent.toLocaleString('en-IN')}
-              </span>
+              <span className="edw-spend-amt">₹{monthSpent.toLocaleString('en-IN')}</span>
               {totalBudget > 0 && (
-                <span className="edw-spend-sub">
-                  of ₹{totalBudget.toLocaleString('en-IN')} budget
-                </span>
+                <span className="edw-spend-sub">of ₹{totalBudget.toLocaleString('en-IN')} budget</span>
               )}
             </div>
             {totalBudget > 0 && (
               <div className="edw-progress-bg">
                 <div
                   className="edw-progress-fill"
-                  style={{
-                    width: `${pct}%`,
-                    background: pct >= 90 ? '#F44336' : pct >= 75 ? '#FF9800' : 'var(--color-primary, #1D9E75)',
-                  }}
+                  style={{ width: `${pct}%`, background: progressColor }}
                 />
               </div>
             )}
-            {upcomingDues.length > 0 && (
+            {duesCount > 0 && (
               <div className="edw-dues-note">
-                <strong>{upcomingDues.length} due{upcomingDues.length > 1 ? 's' : ''}</strong> in the next 30 days
+                <strong>{duesCount} due{duesCount > 1 ? 's' : ''}</strong> in the next 30 days
               </div>
             )}
           </div>
         )}
 
-        <div className="edw-actions" style={{ marginTop: 16 }}>
+        <div className="edw-actions">
           <button className="edw-log-btn" onClick={() => setPanelOpen(true)}>
             + Log Expense
           </button>

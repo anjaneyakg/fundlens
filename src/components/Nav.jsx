@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useRole } from '../hooks/useRole'
 import useWindowWidth from '../hooks/useWindowWidth'
 import { useAdvisorMode } from '../context/AdvisorModeContext'
 import { useAdvisorTheme } from '../hooks/useAdvisorTheme'
+import { useExpense } from '../context/ExpenseContext'
 
 // ── PLAN UNIVERSE (kept for tool backward-compat) ─────────────────────────────
 export const PLAN_KEY = 'fundlens_plan_universe'
@@ -171,6 +172,14 @@ const navStyle = `
     background: var(--color-surface); color: var(--color-text-muted);
     border: 1px solid var(--color-border); border-radius: 10px;
     padding: 2px 7px; margin-left: 6px;
+  }
+
+  .fl-nav-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #dc2626; color: #fff;
+    font-family: 'DM Sans'; font-size: 9px; font-weight: 700;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    padding: 0 4px; margin-left: 5px; line-height: 1;
   }
 
   .fl-dropdown {
@@ -441,7 +450,7 @@ function ResearchDropdown({ currentPath, onClose }) {
   )
 }
 
-function NavTab({ label, type, path: tabPath, isGuest, currentPath, children, isActive: propActive }) {
+function NavTab({ label, type, path: tabPath, isGuest, currentPath, children, isActive: propActive, badge }) {
   const [open, setOpen]   = useState(false)
   const ref               = useRef(null)
   const navigate          = useNavigate()
@@ -488,6 +497,7 @@ function NavTab({ label, type, path: tabPath, isGuest, currentPath, children, is
     <div className="fl-tab" ref={ref}>
       <button className={btnClass} onClick={handleClick}>
         {label}
+        {badge > 0 && <span className="fl-nav-badge">{badge}</span>}
         {isLocked && <LockIcon />}
         {isDropdown && <span className={`fl-chevron${open ? ' open' : ''}`}>▾</span>}
       </button>
@@ -586,7 +596,7 @@ function UserMenu({ user, onSignOut, isAdmin, isAdvisor }) {
   )
 }
 
-function DrawerSection({ label, type, path: sectionPath, isGuest, groupIds, currentPath, onClose }) {
+function DrawerSection({ label, type, path: sectionPath, isGuest, groupIds, currentPath, onClose, badge }) {
   const [open, setOpen] = useState(false)
   const navigate        = useNavigate()
 
@@ -617,7 +627,10 @@ function DrawerSection({ label, type, path: sectionPath, isGuest, groupIds, curr
         disabled={type === 'disabled'}
         style={type === 'disabled' ? { color: 'var(--color-text-muted)', cursor: 'default' } : {}}
       >
-        <span>{label}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {label}
+          {badge > 0 && <span className="fl-nav-badge">{badge}</span>}
+        </span>
         <span className="fl-drawer-tab-right">
           {isLocked && <LockIcon />}
           {type === 'disabled' && <span className="fl-soon-pill">Soon</span>}
@@ -644,7 +657,7 @@ function MobileDrawer({
   open, onClose, currentPath,
   plan, onPlanChange,
   isGuest, isAdvisor, advisorMode, onAdvisorModeChange,
-  user, onSignOut,
+  user, onSignOut, budgetAlertCount,
 }) {
   const navigate = useNavigate()
 
@@ -668,7 +681,7 @@ function MobileDrawer({
 
         <div className="fl-drawer-body">
           {!isGuest && user && (
-            <DrawerSection label="Expenses" type="track" path="/expenses" isGuest={false} currentPath={currentPath} onClose={onClose} />
+            <DrawerSection label="Expenses" type="track" path="/expenses" isGuest={false} badge={budgetAlertCount} currentPath={currentPath} onClose={onClose} />
           )}
           <DrawerSection label="Plan"           type="plan"     isGuest={false}    groupIds={PLAN_GROUP_IDS}     currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Research"       type="research" isGuest={isGuest}  groupIds={RESEARCH_GROUP_IDS} currentPath={currentPath} onClose={onClose} />
@@ -751,10 +764,25 @@ export default function Nav() {
   const { advisorMode, setAdvisorMode } = useAdvisorMode()
   const { advisorLogo } = useAdvisorTheme()
   const width      = useWindowWidth()
+  const { transactions, categories } = useExpense()
 
   const [plan, setPlan]             = useState(getStoredPlan)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [logoError, setLogoError]   = useState(false)
+
+  // Budget alert count for nav badge — categories at ≥75% of monthly budget this month
+  const budgetAlertCount = useMemo(() => {
+    if (!user || isGuest || !categories.length) return 0
+    const now = new Date()
+    const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
+    return categories.filter(c => {
+      if (!c.is_active || !c.budget_limit_monthly) return false
+      const spent = transactions
+        .filter(t => t.category_id === c.id && t.txn_type === 'expense' && t.txn_date?.startsWith(prefix))
+        .reduce((s, t) => s + Number(t.amount), 0)
+      return spent >= c.budget_limit_monthly * 0.75
+    }).length
+  }, [transactions, categories, user, isGuest])
 
   // Reset logo error when advisor logo changes (e.g. on sign-out)
   useEffect(() => { setLogoError(false) }, [advisorLogo])
@@ -814,6 +842,7 @@ export default function Nav() {
                 isGuest={false}
                 currentPath={currentPath}
                 isActive={isExpensesActive}
+                badge={budgetAlertCount}
               />
             )}
 
@@ -949,6 +978,7 @@ export default function Nav() {
         onAdvisorModeChange={handleAdvisorMode}
         user={user}
         onSignOut={handleSignOut}
+        budgetAlertCount={budgetAlertCount}
       />
     </>
   )
