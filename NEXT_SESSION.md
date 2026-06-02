@@ -1,102 +1,94 @@
 # NEXT SESSION — FundLens
-Last updated: 02 Jun 2026 (EB-S1 visual fixes — light theme, toast feedback, budget badges)
+Last updated: 02 Jun 2026 (EB-S2 Analytics + Dues full implementation)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
-## EB-S1 visual fixes: DONE ✅ (02 Jun 2026)
-- Toast.jsx: reusable slide-down toast, success (#1A3C6E) / error (#dc2626), auto-dismiss 2.5s
-- ExpenseEntryPanel: light theme, 36px amount, save FSM (loading/success/error), toast on save, panel auto-closes 1.2s after success
-- ExpenseFAB: navy (#1A3C6E), safe-area bottom inset
-- ExpenseDashboardWidget: explicit light values, Log btn navy, fixed masked bars
-- ExpenseManager: #f8f9fa bg, tabs/chips/btns navy, budget alert banner (amber/red), session-dismiss
-- Nav: useExpense + budgetAlertCount computed via useMemo, red badge on Expenses tab desktop + mobile drawer
-Build: 965 modules, 0 errors, 0 new warnings.
+## EB-S2 status: DONE ✅ (02 Jun 2026)
+- ExpenseAnalytics.jsx: 8 sections (A–H), recharts 2.12.7
+  - A: mask/unmask pill toggle (grey charts + ₹ •••• when masked)
+  - B: period selector (This Month / Last Month / 3M / 6M / This Year / Custom)
+  - C: summary tiles (Income, Expense, Net with txn counts)
+  - D: category donut chart + budget utilisation list (green/amber/red bars)
+  - E: 6-month income/expense bar chart (always last 6 months, ignores period filter)
+  - F: payment source split pie + legend
+  - G: CC reconciliation (billing cycle, manual bill input, diff, Log Untracked, Mark Resolved)
+  - H: 12-month projection (ComposedChart: committed + variable stacked + total line, projection table)
+- ExpenseManager.jsx: Analytics tab wired, Dues tab full implementation
+  - Overdue section (red) + upcoming grouped by This Week / Next Week / Later
+  - Mark Paid: addTransaction + computeNextDue + updateRecurringItem + toast
+  - Snooze 3d: updateRecurringItem +3 days + toast
+  - Empty state: 🎉 All clear!
+Build: 966 modules, 0 errors, 0 new warnings.
 
-## EB-S1 status: DONE ✅ (01 Jun 2026)
-- migrations/005_expense_manager.sql — 4 tables (expense_payment_sources, expense_categories, expense_recurring, expense_transactions) with RLS
-- src/context/ExpenseContext.jsx — data layer, auto-default seeding (17 categories + Cash source)
-- src/components/expenses/ExpenseEntryPanel.jsx — slide-up entry panel
-- src/components/expenses/ExpenseFAB.jsx — fixed FAB, all post-login screens
-- src/components/expenses/ExpenseDashboardWidget.jsx — masked/unmasked widget
-- src/pages/ExpenseManager.jsx — /expenses, Log + Setup + Analytics (stub) + Dues tabs
-- App.jsx — ExpenseProvider wrapper, /expenses route, FAB for authenticated users
-- Nav.jsx — "Expenses" as first tab (desktop + mobile drawer)
-Build: 964 modules, 0 errors, 0 new warnings.
+## EB-S1 status: DONE ✅ (01 Jun 2026 + fixes 02 Jun 2026)
+- Full foundation: 4 tables, context, FAB, entry panel, widget, /expenses page
+- Visual fixes: light theme, Toast, save FSM, budget alert badges
 
 ---
 
-## ⚠️ REQUIRED MANUAL ACTIONS BEFORE TESTING EB-S1:
+## ⚠️ REQUIRED MANUAL ACTIONS BEFORE TESTING:
 
 1. Run `migrations/005_expense_manager.sql` in Supabase fundlens-prod SQL editor.
    Creates: expense_payment_sources, expense_categories, expense_recurring, expense_transactions.
-   All 4 tables have RLS: `auth.jwt() ->> 'sub' = user_id`.
 
 2. (Carry-over) Run `migrations/004_registration.sql` if not yet done.
-   Creates: promo_codes, regulatory_debarred, admin_notifications.
-   Also ALTERs advisor_profiles.
 
 3. (Carry-over) Verify `advisor_client_links` table exists in fundlens-prod.
 
 ---
 
 ## Current priority (do this next):
-Task: EB-S2 — Expense Manager Analytics
+Task: EB-S3 — Expense Manager UX Polish + Reimbursement Tracker
 
 Scope:
-- Full Analytics tab (replace stub): monthly snapshot, category breakdown donut, month-over-month trend
-- Masked/unmasked interaction with eye icon (integrate with ExpenseDashboardWidget mask state)
-- CC reconciliation panel: logged spend vs settled amount, billing cycle tracking
-- Budget utilisation alerts: per-category, shown in analytics + log tab header
-- 12-month cash outflow projection chart (Recharts)
-- "Quick Stats" header row on Log tab (upgrade current summary bar)
+- Subscription audit: list all active subscriptions from recurring items, flag ones not used in 60+ days
+- Unusual spend alerts: flag categories where this month's spend is 2x+ the 3-month average
+- Reimbursement tracker: filter transactions where is_reimbursable=true, status=pending; UI to mark received
+- Family member setup UX polish: persist to localStorage, better flow for adding members
+- Export to CSV: transactions in selected date range (no new table — front-end generation)
+- Mobile audit pass on ExpenseAnalytics (chart overflow, font sizes, grid layouts)
 
 ---
 
-## Expense Manager future sessions:
-- EB-S2: Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection)
-- EB-S3: Push notifications for recurring dues, 12-month projection, family member login/collaboration
-- EB-S4: CC statement import (PDF parse), export to CSV, advanced filters
+## Expense Manager sessions:
+- EB-S1: Foundation ✅
+- EB-S1 fixes: Light theme, toast, budget badges ✅
+- EB-S2: Analytics + Dues full implementation ✅
+- EB-S3: Subscription audit, unusual spend, reimbursement tracker, export ⏳ Pending
 
 ---
 
 ## Open issues to keep in mind:
 - ✅ EB-S1 — DONE (01 Jun 2026)
+- ✅ EB-S1 visual fixes — DONE (02 Jun 2026)
+- ✅ EB-S2 Analytics + Dues — DONE (02 Jun 2026)
 - ✅ PH3-S1 through PH3-S5 — ALL DONE
 - ✅ PH4-S5 bug fixes — ALL DONE (31 May 2026)
 - ✅ Node.js 24 upgrade — DONE (30 May 2026)
-- ✅ advisor_profiles RLS tightened — in migration 004 (run manually)
-- ✅ Build warnings (duplicate border/style) — FIXED in PH4-S5
 - ⚠ Run migrations/005_expense_manager.sql — REQUIRED before testing /expenses
-- ⚠ Run migrations/004_registration.sql — REQUIRED before testing /register and /accept-invite
-- ⚠ Verify advisor_client_links table exists in fundlens-prod with correct schema
-- ⚠ promo_messages — table exists but 0 rows; insert sample rows to test Promote UI
+- ⚠ Run migrations/004_registration.sql — REQUIRED before testing /register
+- ⚠ Verify advisor_client_links table exists in fundlens-prod
+- ⚠ promo_messages — 0 rows; insert sample rows to test carousel
 - ⚠ REINDEX needed: `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;`
+- Family members in Expense Manager: local state only, not persisted to DB (EB-S3 scope)
 - Supabase disk: 12 GB autoscaled · ~6.3 GB used
-- Family members in Expense Manager: stored as text in transactions — local Setup list, NOT persisted to DB yet (EB-S3 scope)
 
-## EB-S1 architectural notes (for future sessions):
-- ExpenseContext auto-seeds: fires ONLY if `expense_categories` count === 0 for user — idempotent
-- Last-used category/source: `localStorage` keys `eep_last_cat` / `eep_last_src`
-- Dues tab: `due_date_next` must be set on recurring items for them to appear — populate this field when adding
-- ExpenseFAB: visible when `user && !isGuest` — hidden from guests and on /admin routes
-- ExpenseDashboardWidget: importable in any future dashboard page — does NOT need its own provider (already wrapped by AppInner's ExpenseProvider)
-- Analytics tab: stub state, renders "coming soon" placeholder with 👁 icon
+## EB-S2 architectural notes (for future sessions):
+- ExpenseAnalytics: addTransaction prop needed for CC reconciliation "Log Untracked" — always pass from ExpenseManager
+- Section E monthly trend: uses ALL `transactions` (not `filtered`) so period selector doesn't affect it — intentional
+- CC billing cycle: `getCCBillingCycle(cc)` in ExpenseAnalytics.jsx — handles no billing_cycle_date (falls back to current month)
+- 12-month projection: categories covered by recurring items are EXCLUDED from variable estimate to avoid double-count
+- DueRow: `processing === r.id` pattern — only the processing item shows loading state, others disabled
+- `computeNextDue(r)`: advances by one cycle based on r.frequency — called after Mark Paid, before updateRecurringItem
 
 ## Session history:
 - Phase 2 (PL-1 → PL-16): all ✅ Done — 24 May 2026
-- Auth fix (24 May 2026): useAuth.jsx + api/admin.js + AdminLayout.jsx ✅
-- Nav Admin Console link fix (24 May 2026): Nav.jsx ✅
-- Node.js 24 upgrade (30 May 2026): FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 in 4 GHA workflows ✅
-- PH3-S1 Advisor Dashboard (30 May 2026): 5-widget dashboard, commit 07e15f1 ✅
-- PH3-S2 White-label branding (30 May 2026): AdvisorSettings + F5 PDF branding, commit 30cab63 ✅
-- PH3-S3 Promote module (30 May 2026): AdvisorPromote + promote_shortcut widget + Nav wiring + html2canvas, commit 0506b8b ✅
-- PH3-S4 Onboarding flow (31 May 2026): Register wizard, promo codes, debarred check, admin notifications, commit f909377 ✅
-- Auth bug fixes (31 May 2026): token guard in AdvisorApplications (4b16731), SERVICE_KEY fallback (802c422), debug logs (6f67e2a/780475c) ✅
-- PH3-S5 Client invitation flow (31 May 2026): api/advisor.js + AdvisorInviteClient + AcceptInvite + Register invite handling, commit 4092534 ✅
-- PH4-S5 Bug fixes (31 May 2026): CompareSchemes border/slug, FDvsMF style merge, SchemeMapping autocomplete, SIPCalculator mfapi migration ✅
+- PH3-S1 through PH3-S5: all ✅ Done — 30-31 May 2026
+- PH4-S5 Bug fixes: ✅ Done — 31 May 2026
 - EB-S1 Expense Manager foundation (01 Jun 2026): 4 tables, context, entry panel, FAB, widget, /expenses page ✅
 - EB-S1 visual fixes (02 Jun 2026): Toast, light theme, save FSM, budget alert badges ✅
-- Next: EB-S2 — Full Analytics tab
+- EB-S2 Analytics + Dues (02 Jun 2026): ExpenseAnalytics 8 sections, Dues Mark Paid/Snooze ✅
+- Next: EB-S3 — UX polish, reimbursement tracker, subscription audit, export

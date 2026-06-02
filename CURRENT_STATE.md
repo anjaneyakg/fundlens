@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 02 Jun 2026 · v43.0
+**Last updated:** 02 Jun 2026 · v44.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,38 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-S2 — Analytics + Dues Full Implementation ✅ (02 Jun 2026)
+
+| Item | Status |
+|---|---|
+| `src/components/expenses/ExpenseAnalytics.jsx` — new 400-line component, 8 sections (A–H), recharts 2.12.7 | ✅ Done |
+| Section A: Mask/unmask pill toggle — all ₹ values show as "₹ ••••" when masked; charts render grey | ✅ Done |
+| Section B: Period selector — This Month / Last Month / Last 3M / Last 6M / This Year / Custom Range | ✅ Done |
+| Section C: Summary tiles — Income, Expense, Net with txn counts | ✅ Done |
+| Section D: Category breakdown — donut (PieChart, top 5, grey when masked) + budget utilisation list (green/amber/red progress bars) | ✅ Done |
+| Section E: Monthly trend — BarChart, always last 6 months, Income (#10b981) / Expense (#dc2626) | ✅ Done |
+| Section F: Payment source split — PieChart by source_type + legend with ₹ and % | ✅ Done |
+| Section G: CC reconciliation — billing cycle detection, manual bill input, diff calculation, Log Untracked button (addTransaction), Mark Resolved (session state) | ✅ Done |
+| Section H: 12-month cash outflow projection — ComposedChart (stacked bars: committed #1A3C6E + variable #93c5fd + total line #dc2626), projection table below | ✅ Done |
+| `src/pages/ExpenseManager.jsx` — Analytics tab replaced with ExpenseAnalytics component; Dues tab full implementation | ✅ Done |
+| Dues tab: overdue section (red) + upcoming grouped by This Week / Next Week / Later | ✅ Done |
+| Mark Paid: addTransaction + computeNextDue (daily/weekly/monthly/yearly) + updateRecurringItem + toast | ✅ Done |
+| Snooze 3d: updateRecurringItem (due_date_next +3 days) + toast | ✅ Done |
+| Empty state: "🎉 All clear! No payments due in the next 30 days" | ✅ Done |
+| Vite build — 966 modules, 0 errors, 0 new warnings | ✅ Done |
+
+### EB-S2 Architecture Notes
+
+- ExpenseAnalytics receives `{ transactions, categories, paymentSources, recurringItems, addTransaction }` as props from ExpenseManager. Does NOT import useExpense — addTransaction passed down so the analytics component stays pure.
+- Monthly trend (Section E) always uses ALL transactions (last 6 calendar months), ignoring the period selector — intentional, gives stable 6-month view regardless of filter.
+- CC billing cycle: if `billing_cycle_date = N`, cycle starts on day N of the month containing today (or prior month if today < N). Logged CC spend is filtered to this cycle date range.
+- 12-month projection: committed = recurring items scaled to monthly equivalent. Variable = last 3-month average spend per category excluding categories already covered by a recurring item (to avoid double-counting). Yearly items only appear in their due month.
+- Dues tab badge count = all items with `due_date_next <= today+30` (includes overdue). Both `handleMarkPaid` and `handleSnooze` use `dueProcessing` state (item id) to disable all buttons while one operation is running.
+- `computeNextDue` advances due_date_next by one cycle after Mark Paid — item will reappear in the next cycle.
+- Toast in ExpenseManager uses `Date.now()` in key to force remount if two rapid actions fire.
 
 ---
 

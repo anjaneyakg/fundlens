@@ -1,7 +1,7 @@
 # FundLens — Platform State (Design, Auth & Frontend Track)
 
 **Owner:** Claude.ai (this session type)
-**Last updated:** 01 Jun 2026 (EB-S1 Expense Manager foundation done)
+**Last updated:** 02 Jun 2026 (EB-S2 Analytics + Dues full implementation)
 **Companion file:** `CURRENT_STATE.md` — pipeline, data, Supabase, scripts
 
 > At session start: fetch BOTH files from GitHub before doing anything.
@@ -96,7 +96,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | Session | Deliverable | Status |
 |---|---|---|
 | EB-S1 | 4 Supabase tables, ExpenseContext, entry panel, FAB, dashboard widget, /expenses page (Log + Setup + Analytics stub + Dues) | ✅ Done — 01 Jun 2026 |
-| EB-S2 | Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection) | ⏳ Pending |
+| EB-S2 | Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection) + Dues tab (Mark Paid, Snooze, grouping) | ✅ Done — 02 Jun 2026 |
 | EB-S3 | Push notifications, family collaboration, 12-month projection | ⏳ Pending |
 
 ### Phase 5 — Monetisation & Go-Live (Weeks 11–13)
