@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 02 Jun 2026 · v44.0
+**Last updated:** 02 Jun 2026 · v45.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,24 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## Dues Tab Bug Fix ✅ (02 Jun 2026)
+
+**Root cause:** `RecurringSection.handleSave()` never included `due_date_next` in the insert payload. The database row stored NULL for `due_date_next`. The Dues filter at line `r.is_active && r.due_date_next && ...` excluded all items with a null due date, so nothing appeared in the Dues tab — even though the item was correctly saved and visible in Analytics.
+
+| Fix | Change |
+|---|---|
+| FIX A — `due_date_next` on save | Added `computeInitialDueDate(frequency, dueDay)` helper. Computes the next occurrence: monthly uses `due_day` to pick this-month or next-month date; weekly = +7 days; daily = +1 day; yearly = +1 year. Called on form init, on frequency/due_day field change, and in `handleSave` payload. |
+| FIX A — "First due date" field | Added visible `<input type="date">` in the Add Recurring Item form, auto-populated by `computeInitialDueDate`, user-overrideable. Save button disabled until this field is filled. |
+| FIX B — Dues filter uses local time | Replaced `d.toISOString().slice(0,10)` (UTC) with `dateToDStr(d)` (local). All date comparisons now use `new Date(str + 'T00:00:00')` to force local parsing. `is_active === false` check (not truthy check) — items with undefined/null `is_active` are included. |
+| FIX C — Context already correct | `ExpenseContext.addRecurringItem` already includes `is_active: true` on insert — no change needed. |
+| FIX D — Debug logging | `console.log('Dues debug:')` fires when `recurringItems.length > 0` but `allDues.length === 0`, printing `name/due_date_next/is_active/frequency` for each item to help diagnose residual issues. |
+| Build | 966 modules, 0 errors, 0 new warnings. |
+
+### Impact on existing items (items saved before this fix)
+Items saved before this fix have `due_date_next = NULL` in the database. They still won't appear in the Dues tab until `due_date_next` is set. To fix existing items: go to Setup → Recurring Items → delete and re-add each item (new save flow will compute the date). Or update `due_date_next` directly in Supabase SQL editor.
 
 ---
 

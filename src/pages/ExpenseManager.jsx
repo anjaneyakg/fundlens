@@ -19,6 +19,11 @@ function fmtAmt(n) {
 
 function todayStr() {
   const d = new Date()
+  return dateToDStr(d)
+}
+
+// FIX B: always format dates from a Date object using local time — never toISOString()
+function dateToDStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
@@ -48,7 +53,37 @@ function computeNextDue(r) {
     case 'monthly':
     default:        d.setMonth(d.getMonth() + 1); break
   }
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return dateToDStr(d)
+}
+
+// FIX A: compute the first due_date_next from frequency + due_day
+// Called on form save and on frequency/due_day change so the date is always pre-filled
+function computeInitialDueDate(frequency, dueDay) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  if (frequency === 'daily') {
+    const d = new Date(today); d.setDate(d.getDate() + 1)
+    return dateToDStr(d)
+  }
+  if (frequency === 'weekly') {
+    const d = new Date(today); d.setDate(d.getDate() + 7)
+    return dateToDStr(d)
+  }
+  if (frequency === 'yearly') {
+    const d = new Date(today); d.setFullYear(d.getFullYear() + 1)
+    return dateToDStr(d)
+  }
+  // monthly
+  const bcd = parseInt(dueDay, 10)
+  if (bcd >= 1 && bcd <= 31) {
+    const dom = today.getDate()
+    const d = dom < bcd
+      ? new Date(today.getFullYear(), today.getMonth(), bcd)
+      : new Date(today.getFullYear(), today.getMonth() + 1, bcd)
+    return dateToDStr(d)
+  }
+  // monthly with no due_day — default to same day next month
+  const d = new Date(today); d.setMonth(d.getMonth() + 1)
+  return dateToDStr(d)
 }
 
 const SOURCE_ICONS = { credit_card:'💳', bank_account:'🏦', cash:'💵', upi_wallet:'📲', third_party:'🔗' }
@@ -212,6 +247,7 @@ const emCSS = `
     border: 1px solid #e8ecf0;
   }
   .em-field-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; font-family: 'DM Sans', sans-serif; }
+  .em-field-hint  { font-size: 11px; color: #94a3b8; margin-top: 3px; font-family: 'DM Sans', sans-serif; }
   .em-field-input {
     width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
     font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
@@ -304,13 +340,10 @@ const emCSS = `
     font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
     letter-spacing: 0.06em; margin: 14px 0 8px; font-family: 'DM Sans', sans-serif;
   }
-  .em-dues-empty {
-    text-align: center; padding: 48px 20px;
-    font-family: 'DM Sans', sans-serif;
-  }
-  .em-dues-empty-icon { font-size: 52px; margin-bottom: 12px; }
+  .em-dues-empty { text-align: center; padding: 48px 20px; font-family: 'DM Sans', sans-serif; }
+  .em-dues-empty-icon  { font-size: 52px; margin-bottom: 12px; }
   .em-dues-empty-title { font-size: 18px; font-weight: 700; color: #374151; margin-bottom: 6px; }
-  .em-dues-empty-sub { font-size: 13px; color: #94a3b8; }
+  .em-dues-empty-sub   { font-size: 13px; color: #94a3b8; }
 
   @media (max-width: 480px) {
     .em-summary-value { font-size: 13px; }
@@ -575,21 +608,68 @@ function CategoriesSection({ categories, onAdd, onUpdate }) {
   )
 }
 
-function RecurringSection({ recurringItems, categories, paymentSources, onAdd, onUpdate, onDelete }) {
-  const [showForm, setShowForm] = useState(false)
-  const [form,     setForm]     = useState({ item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly', due_day:'', payment_source_id:'', category_id:'', reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'' })
-  const [saving,   setSaving]   = useState(false)
+// ── RecurringSection — FIX A applied ─────────────────────────────────────────
+// due_date_next is now computed on save AND shown as an editable "First due date" field.
 
-  function resetForm() { setForm({ item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly', due_day:'', payment_source_id:'', category_id:'', reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'' }) }
+function RecurringSection({ recurringItems, categories, paymentSources, onAdd, onUpdate, onDelete }) {
+  const defaultDueDate = computeInitialDueDate('monthly', '')
+  const [showForm, setShowForm] = useState(false)
+  const [form,     setForm]     = useState({
+    item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly',
+    due_day:'', payment_source_id:'', category_id:'',
+    reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'',
+    due_date_next: defaultDueDate,   // FIX A: always pre-computed
+  })
+  const [saving, setSaving] = useState(false)
+
+  function resetForm() {
+    setForm({
+      item_name:'', recurring_type:'subscription', amount:'', frequency:'monthly',
+      due_day:'', payment_source_id:'', category_id:'',
+      reminder_days_before:2, reminder_enabled:true, auto_log:false, notes:'',
+      due_date_next: computeInitialDueDate('monthly', ''),
+    })
+  }
+
+  // Recompute due_date_next when frequency or due_day changes (unless user has already overridden)
+  function handleFrequencyChange(freq) {
+    const newDue = computeInitialDueDate(freq, form.due_day)
+    setForm(f => ({ ...f, frequency: freq, due_date_next: newDue }))
+  }
+
+  function handleDueDayChange(day) {
+    const newDue = computeInitialDueDate(form.frequency, day)
+    setForm(f => ({ ...f, due_day: day, due_date_next: newDue }))
+  }
 
   async function handleSave() {
-    if (!form.item_name.trim()||!form.amount) return
+    if (!form.item_name.trim() || !form.amount) return
     setSaving(true)
     try {
-      const payload = { item_name:form.item_name.trim(), recurring_type:form.recurring_type, amount:Number(form.amount), frequency:form.frequency, due_day:(form.frequency==='monthly'&&form.due_day)?Number(form.due_day):null, payment_source_id:form.payment_source_id||null, category_id:form.category_id||null, reminder_days_before:Number(form.reminder_days_before), reminder_enabled:form.reminder_enabled, auto_log:form.auto_log, notes:form.notes||null }
-      await onAdd(payload); resetForm(); setShowForm(false)
-    } catch (err) { console.error('RecurringSection save error:', err) }
-    finally { setSaving(false) }
+      // FIX A: always include a computed due_date_next — never null
+      const due_date_next = form.due_date_next || computeInitialDueDate(form.frequency, form.due_day)
+      const payload = {
+        item_name:            form.item_name.trim(),
+        recurring_type:       form.recurring_type,
+        amount:               Number(form.amount),
+        frequency:            form.frequency,
+        due_day:              (form.frequency === 'monthly' && form.due_day) ? Number(form.due_day) : null,
+        due_date_next,
+        payment_source_id:    form.payment_source_id || null,
+        category_id:          form.category_id || null,
+        reminder_days_before: Number(form.reminder_days_before),
+        reminder_enabled:     form.reminder_enabled,
+        auto_log:             form.auto_log,
+        notes:                form.notes || null,
+      }
+      await onAdd(payload)
+      resetForm()
+      setShowForm(false)
+    } catch (err) {
+      console.error('RecurringSection save error:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -599,10 +679,13 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
           const cat = categories.find(c => c.id === r.category_id)
           return (
             <div key={r.id} className="em-setup-list-item">
-              <span className="em-setup-item-icon">{cat?cat.icon_code:'🔄'}</span>
+              <span className="em-setup-item-icon">{cat ? cat.icon_code : '🔄'}</span>
               <div style={{ flex:1 }}>
                 <div className="em-setup-item-name">{r.item_name}</div>
-                <div className="em-setup-item-sub">₹{fmtAmt(r.amount)} · {r.frequency}{r.due_date_next?` · next: ${fmtDate(r.due_date_next)}`:''}</div>
+                <div className="em-setup-item-sub">
+                  ₹{fmtAmt(r.amount)} · {r.frequency}
+                  {r.due_date_next ? ` · next: ${fmtDate(r.due_date_next)}` : ' · no date set'}
+                </div>
               </div>
               <div className="em-setup-actions">
                 <Toggle checked={r.reminder_enabled} onChange={v => onUpdate(r.id, { reminder_enabled:v })} />
@@ -611,37 +694,82 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
             </div>
           )
         })}
+
         {showForm ? (
           <div className="em-add-form">
             <div className="em-form-row">
-              <div><div className="em-field-label">Name</div><input className="em-field-input" placeholder="e.g. Netflix" value={form.item_name} onChange={e => setForm(f => ({ ...f, item_name:e.target.value }))} /></div>
-              <div><div className="em-field-label">Type</div>
-                <select className="em-field-select" value={form.recurring_type} onChange={e => setForm(f => ({ ...f, recurring_type:e.target.value }))}>
-                  <option value="subscription">Subscription</option><option value="due">Due / Bill</option>
+              <div>
+                <div className="em-field-label">Name</div>
+                <input className="em-field-input" placeholder="e.g. Netflix" value={form.item_name}
+                  onChange={e => setForm(f => ({ ...f, item_name:e.target.value }))} />
+              </div>
+              <div>
+                <div className="em-field-label">Type</div>
+                <select className="em-field-select" value={form.recurring_type}
+                  onChange={e => setForm(f => ({ ...f, recurring_type:e.target.value }))}>
+                  <option value="subscription">Subscription</option>
+                  <option value="due">Due / Bill</option>
                 </select>
               </div>
             </div>
+
             <div className="em-form-row">
-              <div><div className="em-field-label">Amount (₹)</div><input className="em-field-input" type="number" placeholder="999" value={form.amount} onChange={e => setForm(f => ({ ...f, amount:e.target.value }))} /></div>
-              <div><div className="em-field-label">Frequency</div>
-                <select className="em-field-select" value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency:e.target.value }))}>
+              <div>
+                <div className="em-field-label">Amount (₹)</div>
+                <input className="em-field-input" type="number" placeholder="999" value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount:e.target.value }))} />
+              </div>
+              <div>
+                <div className="em-field-label">Frequency</div>
+                <select className="em-field-select" value={form.frequency}
+                  onChange={e => handleFrequencyChange(e.target.value)}>
                   {['daily','weekly','monthly','yearly'].map(v => <option key={v}>{v}</option>)}
                 </select>
               </div>
             </div>
-            {form.frequency==='monthly' && <div><div className="em-field-label">Due day of month</div><input className="em-field-input" type="number" min="1" max="31" placeholder="15" value={form.due_day} onChange={e => setForm(f => ({ ...f, due_day:e.target.value }))} /></div>}
-            <div><div className="em-field-label">Payment source</div>
-              <select className="em-field-select" value={form.payment_source_id} onChange={e => setForm(f => ({ ...f, payment_source_id:e.target.value }))}>
+
+            {form.frequency === 'monthly' && (
+              <div>
+                <div className="em-field-label">Due day of month</div>
+                <input className="em-field-input" type="number" min="1" max="31" placeholder="e.g. 5 for the 5th"
+                  value={form.due_day} onChange={e => handleDueDayChange(e.target.value)} />
+              </div>
+            )}
+
+            {/* FIX A: First due date — visible, editable, auto-computed */}
+            <div>
+              <div className="em-field-label">First due date</div>
+              <input
+                type="date"
+                className="em-field-input"
+                value={form.due_date_next}
+                onChange={e => setForm(f => ({ ...f, due_date_next: e.target.value }))}
+              />
+              <div className="em-field-hint">Auto-calculated — you can adjust it</div>
+            </div>
+
+            <div>
+              <div className="em-field-label">Payment source</div>
+              <select className="em-field-select" value={form.payment_source_id}
+                onChange={e => setForm(f => ({ ...f, payment_source_id:e.target.value }))}>
                 <option value="">— Select —</option>
-                {paymentSources.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{SOURCE_ICONS[s.source_type]} {s.source_name}</option>)}
+                {paymentSources.filter(s => s.is_active).map(s => (
+                  <option key={s.id} value={s.id}>{SOURCE_ICONS[s.source_type]} {s.source_name}</option>
+                ))}
               </select>
             </div>
-            <div><div className="em-field-label">Category</div>
-              <select className="em-field-select" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id:e.target.value }))}>
+
+            <div>
+              <div className="em-field-label">Category</div>
+              <select className="em-field-select" value={form.category_id}
+                onChange={e => setForm(f => ({ ...f, category_id:e.target.value }))}>
                 <option value="">— Select —</option>
-                {categories.filter(c => c.is_active).map(c => <option key={c.id} value={c.id}>{c.icon_code} {c.category_name}</option>)}
+                {categories.filter(c => c.is_active).map(c => (
+                  <option key={c.id} value={c.id}>{c.icon_code} {c.category_name}</option>
+                ))}
               </select>
             </div>
+
             <div style={{ display:'flex', gap:16, alignItems:'center' }}>
               <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, fontFamily:'DM Sans', color:'#374151', cursor:'pointer' }}>
                 <Toggle checked={form.reminder_enabled} onChange={v => setForm(f => ({ ...f, reminder_enabled:v }))} /> Remind me
@@ -650,8 +778,12 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
                 <Toggle checked={form.auto_log} onChange={v => setForm(f => ({ ...f, auto_log:v }))} /> Auto-log
               </label>
             </div>
+
             <div className="em-form-row">
-              <button className="em-add-btn" onClick={handleSave} disabled={!form.item_name.trim()||!form.amount||saving}>{saving?'Saving…':'Add'}</button>
+              <button className="em-add-btn" onClick={handleSave}
+                disabled={!form.item_name.trim() || !form.amount || !form.due_date_next || saving}>
+                {saving ? 'Saving…' : 'Add'}
+              </button>
               <button className="em-cancel-btn" onClick={() => { setShowForm(false); resetForm() }}>Cancel</button>
             </div>
           </div>
@@ -666,9 +798,9 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
 // ── DueRow component ──────────────────────────────────────────────────────────
 
 function DueRow({ r, categories, onMarkPaid, onSnooze, processing }) {
-  const cat  = categories.find(c => c.id === r.category_id)
-  const days = daysUntil(r.due_date_next || todayStr())
-  const cls  = days < 0 ? 'overdue' : days <= 3 ? 'urgent' : 'ok'
+  const cat   = categories.find(c => c.id === r.category_id)
+  const days  = daysUntil(r.due_date_next)
+  const cls   = days < 0 ? 'overdue' : days <= 3 ? 'urgent' : 'ok'
   const badge = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`
   const busy  = processing === r.id
 
@@ -678,14 +810,14 @@ function DueRow({ r, categories, onMarkPaid, onSnooze, processing }) {
       <div className="em-due-info">
         <div className="em-due-name">{r.item_name}</div>
         <div className="em-due-meta">
-          {r.due_date_next ? fmtDate(r.due_date_next) : 'No date set'} · {r.frequency}
+          {fmtDate(r.due_date_next)} · {r.frequency}
         </div>
         <span className={`em-due-badge ${cls}`}>{badge}</span>
       </div>
       <div className="em-due-amt">₹{fmtAmt(r.amount)}</div>
       <div className="em-due-actions">
-        <button className="em-due-pay-btn" disabled={busy} onClick={() => onMarkPaid(r)}>
-          {busy === 'pay' ? '…' : 'Mark Paid'}
+        <button className="em-due-pay-btn" disabled={!!processing} onClick={() => onMarkPaid(r)}>
+          {busy ? '…' : 'Mark Paid'}
         </button>
         <button className="em-due-snooze-btn" disabled={!!processing} onClick={() => onSnooze(r)}>
           Snooze 3d
@@ -713,10 +845,10 @@ export default function ExpenseManager() {
   const [customEnd,      setCustomEnd]      = useState(todayStr())
   const [panelOpen,      setPanelOpen]      = useState(false)
   const [alertDismissed, setAlertDismissed] = useState(false)
-  const [dueProcessing,  setDueProcessing]  = useState(null) // recurring item id being processed
+  const [dueProcessing,  setDueProcessing]  = useState(null)
   const [toast,          setToast]          = useState(null)
 
-  useWindowWidth() // available for future responsive branches
+  useWindowWidth()
 
   // Date range for Log filter
   const dateRange = useMemo(() => {
@@ -764,18 +896,33 @@ export default function ExpenseManager() {
   const overBudget = budgetAlerts.filter(a => a.pct >= 1)
   const alertLevel = overBudget.length > 0 ? 'red' : budgetAlerts.length > 0 ? 'amber' : null
 
-  // Dues — items due today or earlier + next 30 days
-  const todayISO = todayStr()
-  const in30ISO  = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0,10) })()
-  const allDues  = recurringItems
-    .filter(r => r.is_active && r.due_date_next && r.due_date_next <= in30ISO)
-    .sort((a, b) => (a.due_date_next||'').localeCompare(b.due_date_next||''))
+  // ── FIX B: Dues — local-time date comparisons, defensive is_active check ──
+  const todayD  = new Date(); todayD.setHours(0,0,0,0)
+  const in30D   = new Date(todayD); in30D.setDate(in30D.getDate() + 30)
+  const todayISO = dateToDStr(todayD)   // local date string, never UTC
 
-  const overdueDues   = allDues.filter(r => r.due_date_next < todayISO)
-  const upcomingDues  = allDues.filter(r => r.due_date_next >= todayISO)
-  const thisWeekDues  = upcomingDues.filter(r => daysUntil(r.due_date_next) <= 7)
-  const nextWeekDues  = upcomingDues.filter(r => daysUntil(r.due_date_next) > 7 && daysUntil(r.due_date_next) <= 14)
-  const laterDues     = upcomingDues.filter(r => daysUntil(r.due_date_next) > 14)
+  const allDues = recurringItems.filter(r => {
+    if (!r.due_date_next) return false          // skip items with no due date
+    if (r.is_active === false) return false     // only exclude explicit false; undefined/null → treat as active
+    const dueD = new Date(r.due_date_next + 'T00:00:00')  // local time parse
+    return dueD <= in30D
+  }).sort((a, b) => (a.due_date_next || '').localeCompare(b.due_date_next || ''))
+
+  // FIX D: diagnostic log when items exist but nothing passes the filter
+  if (recurringItems.length > 0 && allDues.length === 0) {
+    console.log('Dues debug — items exist but none pass filter:', recurringItems.map(i => ({
+      name: i.item_name,
+      due_date_next: i.due_date_next,
+      is_active: i.is_active,
+      frequency: i.frequency,
+    })))
+  }
+
+  const overdueDues  = allDues.filter(r => new Date(r.due_date_next + 'T00:00:00') < todayD)
+  const upcomingDues = allDues.filter(r => new Date(r.due_date_next + 'T00:00:00') >= todayD)
+  const thisWeekDues = upcomingDues.filter(r => daysUntil(r.due_date_next) <= 7)
+  const nextWeekDues = upcomingDues.filter(r => daysUntil(r.due_date_next) > 7 && daysUntil(r.due_date_next) <= 14)
+  const laterDues    = upcomingDues.filter(r => daysUntil(r.due_date_next) > 14)
   const totalDueBadge = allDues.length
 
   // ── Dues handlers ──────────────────────────────────────────────────────────
@@ -786,7 +933,7 @@ export default function ExpenseManager() {
       await addTransaction({
         txn_type:          'expense',
         amount:            r.amount,
-        category_id:       r.category_id  || null,
+        category_id:       r.category_id       || null,
         payment_source_id: r.payment_source_id || null,
         family_member:     'Self',
         txn_date:          todayISO,
@@ -809,8 +956,7 @@ export default function ExpenseManager() {
     try {
       const d = new Date((r.due_date_next || todayISO) + 'T00:00:00')
       d.setDate(d.getDate() + 3)
-      const newDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-      await updateRecurringItem(r.id, { due_date_next: newDate })
+      await updateRecurringItem(r.id, { due_date_next: dateToDStr(d) })
       setToast({ message: `Snoozed 3 days — ${r.item_name}`, type: 'success' })
     } catch (err) {
       console.error('handleSnooze error:', err)
@@ -951,11 +1097,10 @@ export default function ExpenseManager() {
               <div className="em-dues-empty">
                 <div className="em-dues-empty-icon">🎉</div>
                 <div className="em-dues-empty-title">All clear!</div>
-                <div className="em-dues-empty-sub">No payments due in the next 30 days</div>
+                <div className="em-dues-empty-sub">No payments due in the next 30 days.</div>
               </div>
             ) : (
               <>
-                {/* Overdue */}
                 {overdueDues.length > 0 && (
                   <>
                     <div className="em-dues-section-hdr overdue-hdr">⚠ Overdue</div>
@@ -965,7 +1110,6 @@ export default function ExpenseManager() {
                   </>
                 )}
 
-                {/* Upcoming — grouped by week */}
                 {upcomingDues.length > 0 && (
                   <>
                     <div className="em-dues-section-hdr" style={{ marginTop: overdueDues.length > 0 ? 20 : 0 }}>
