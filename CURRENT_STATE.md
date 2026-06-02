@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 02 Jun 2026 · v46.0
+**Last updated:** 03 Jun 2026 · v47.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -974,7 +974,7 @@ features never activated.
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
-| `nav_history` | ~25.2M (gap repair complete — 11.66M new rows added 24 May 2026) | ✅ Gap repair complete | 2006-01-01 → 2026-04-30 · 0 windows failed · REINDEX recommended |
+| `nav_history` | ~21.4M local CSV rows · ~22.5M in Supabase (gap repair 2 complete 03 Jun 2026) | ✅ Gap repair 2 complete | 2021 fully restored (365d) · 2026-Jan added (141d) · 2024/2025 at AMFI history limit |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
 
@@ -999,7 +999,7 @@ features never activated.
 | `cell_4d_v2.py` | v2.4 | ✅ Live | All 50 AMCs configured. Nippon 110/110. All P0 issues resolved. Ready to commit. |
 | `backfill_amc_map.py` | v3 | ✅ Live | One-time per historical month. |
 | `bulk_upload.py` | v1 | ✅ Live | Emergency batch upload only. |
-| `backfill_nav_history.py` | v1.4.0 | ✅ Live | T-1 auto end-date fix · --from/--to aliases · BATCH_UPSERT_SIZE=400 · INTER_BATCH_SLEEP=0.0 |
+| `backfill_nav_history.py` | v1.4.1 | ✅ Live | SUPABASE_KEY fallback chain (SERVICE_ROLE_KEY → KEY → SERVICE_KEY) · all prior v1.4.0 fixes |
 | `gap_repair.sh` | v1.0 | ✅ Done | Year-by-year gap repair 2006-2026 — run once. Pre-2006 dry-run: AMFI returns 0 rows (no data before 2006). |
 | `sync_amc_master.py` | v2.0 | ✅ Ready | Sync AMCs from FundInsight → amcs table. |
 | `populate_schemes_table.py` | v2.0 | ✅ Ready | Load scheme master from AMFI. |
