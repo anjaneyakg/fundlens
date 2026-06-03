@@ -241,6 +241,11 @@ const emCSS = `
     border-radius: 4px; font-size: 10px; font-weight: 700;
     padding: 2px 6px; margin-top: 2px;
   }
+  .em-split-badge {
+    display: inline-block; background: #f0f4ff; color: #1A3C6E;
+    border-radius: 4px; font-size: 10px; font-weight: 700;
+    padding: 2px 6px;
+  }
   .em-txn-expand {
     padding: 10px 16px 14px 50px; background: #f8f9fa;
     border-radius: 0 0 10px 10px; border-bottom: 1px solid #f1f5f9;
@@ -482,15 +487,277 @@ const emCSS = `
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onDelete, onUpdate, reimbProcessing }) {
-  const [expanded, setExpanded] = useState(false)
-  const cat       = categories.find(c => c.id === txn.category_id)
-  const src       = paymentSources.find(s => s.id === txn.payment_source_id)
-  const isExpense = txn.txn_type === 'expense'
-  const isIncome  = txn.txn_type === 'income'
-  const isPending = txn.is_reimbursable && txn.reimbursement_status === 'pending'
+// ── Split sheets ──────────────────────────────────────────────────────────────
+
+function SplitViewSheet({ txn, txnSplits, onClose, onToast }) {
+  const { updateSplitStatus } = useExpense()
+  const [processing, setProcessing] = useState(null)
+
+  const otherSplits     = txnSplits.filter(s => s.participant_type !== 'self')
+  const unsettledOthers = otherSplits.filter(s => s.settlement_status !== 'settled' && s.settlement_status !== 'waived')
+  const owedTotal       = unsettledOthers.reduce((sum, s) => sum + Number(s.share_amount), 0)
+  const allClear        = unsettledOthers.length === 0
+
+  async function handleSettle(id, status) {
+    setProcessing(id)
+    try {
+      await updateSplitStatus(id, status)
+      onToast({ message: status === 'settled' ? '✓ Marked as settled' : 'Marked as waived', type: 'success' })
+    } catch (err) {
+      console.error('SplitViewSheet handleSettle error:', err)
+      onToast({ message: 'Failed. Check connection.', type: 'error' })
+    } finally { setProcessing(null) }
+  }
+
+  return (
+    <>
+      <div style={{ position:'fixed', inset:0, zIndex:900, background:'rgba(0,0,0,0.45)' }} onClick={onClose} />
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', zIndex:901, width:'100%', maxWidth:480, background:'#ffffff', borderRadius:'20px 20px 0 0', padding:'20px 20px calc(20px + env(safe-area-inset-bottom,0))', maxHeight:'70vh', overflowY:'auto', boxShadow:'0 -4px 24px rgba(0,0,0,0.12)', fontFamily:'DM Sans' }}>
+        <div style={{ width:40, height:4, background:'#e2e8f0', borderRadius:2, margin:'0 auto 16px' }} />
+        <div style={{ fontSize:15, fontWeight:700, color:'#1a1a2a', marginBottom:4 }}>✂️ Split Expense</div>
+        <div style={{ fontSize:12, color:'#94a3b8', marginBottom:16 }}>₹{fmtAmt(txn.amount)} · {fmtDate(txn.txn_date)}</div>
+
+        {txnSplits.map(s => {
+          const isOther = s.participant_type !== 'self'
+          const settled = s.settlement_status === 'settled' || s.settlement_status === 'waived'
+          return (
+            <div key={s.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 0', borderBottom:'1px solid #f1f5f9' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2a', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                  {s.participant_name}
+                  {s.is_payer && <span style={{ fontSize:10, background:'#f0f4ff', color:'#1A3C6E', borderRadius:4, padding:'2px 6px', fontWeight:700 }}>Paid</span>}
+                </div>
+                <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>₹{fmtAmt(s.share_amount)}</div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'flex-end' }}>
+                {settled ? (
+                  <span style={{ fontSize:10, fontWeight:700, background: s.settlement_status==='settled'?'#dcfce7':'#f1f5f9', color: s.settlement_status==='settled'?'#166534':'#64748b', borderRadius:4, padding:'2px 6px' }}>
+                    {s.settlement_status === 'settled' ? '✓ Settled' : 'Waived'}
+                  </span>
+                ) : isOther ? (
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button
+                      disabled={processing === s.id}
+                      onClick={() => handleSettle(s.id, 'settled')}
+                      style={{ padding:'4px 10px', border:'none', borderRadius:6, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer' }}
+                    >{processing === s.id ? '…' : '✓ Settled'}</button>
+                    <button
+                      disabled={processing === s.id}
+                      onClick={() => handleSettle(s.id, 'waived')}
+                      style={{ padding:'4px 10px', border:'1px solid #e2e8f0', borderRadius:6, background:'#ffffff', color:'#64748b', fontFamily:'DM Sans', fontSize:11, cursor:'pointer' }}
+                    >Waive</button>
+                  </div>
+                ) : (
+                  <span style={{ fontSize:10, background:'#f1f5f9', color:'#64748b', borderRadius:4, padding:'2px 6px' }}>You</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        <div style={{ marginTop:16, padding:'10px 12px', borderRadius:8, background: allClear?'#f0fdf4':'#f8f9fa', border:'1px solid', borderColor: allClear?'#bbf7d0':'#e8ecf0' }}>
+          {allClear
+            ? <span style={{ fontSize:13, fontWeight:600, color:'#16a34a' }}>✓ Fully settled</span>
+            : <span style={{ fontSize:13, fontWeight:600, color:'#374151' }}>You are owed: ₹{fmtAmt(owedTotal)}</span>
+          }
+        </div>
+
+        <button onClick={onClose}
+          style={{ marginTop:12, width:'100%', padding:12, border:'1.5px solid #e2e8f0', borderRadius:10, background:'#ffffff', color:'#374151', fontFamily:'DM Sans', fontSize:13, fontWeight:600, cursor:'pointer' }}
+        >Close</button>
+      </div>
+    </>
+  )
+}
+
+function SplitEntrySheet({ txn, onClose, onToast }) {
+  const { friends, familyMembers, addSplits, addFriend } = useExpense()
+  const [splitParticipants, setSplitParticipants] = useState([
+    { id:'self', type:'self', name:'Self', amount:'', isPayer:true }
+  ])
+  const [splitMode,         setSplitMode]         = useState('equal')
+  const [showAddFriendForm, setShowAddFriendForm] = useState(false)
+  const [newFriendName,     setNewFriendName]     = useState('')
+  const [saving,            setSaving]            = useState(false)
+
+  const totalAmt = Number(txn.amount)
+
+  function toggleParticipant(id, type, name) {
+    setSplitParticipants(prev => {
+      const exists = prev.find(p => p.id === id)
+      if (exists) {
+        if (id === 'self') return prev
+        const updated = prev.filter(p => p.id !== id)
+        if (exists.isPayer && updated.length > 0) return updated.map((p, i) => i === 0 ? { ...p, isPayer:true } : p)
+        return updated
+      }
+      return [...prev, { id, type, name, amount:'', isPayer:false }]
+    })
+  }
+
+  function movePayer(id) {
+    setSplitParticipants(prev => prev.map(p => ({ ...p, isPayer: p.id === id })))
+  }
+
+  function setCustomAmt(id, val) {
+    setSplitParticipants(prev => prev.map(p => p.id === id ? { ...p, amount: val } : p))
+  }
+
+  const splitErr = (() => {
+    if (splitParticipants.length < 2) return 'Add at least one person'
+    if (!splitParticipants.some(p => p.isPayer)) return 'Select who paid'
+    if (splitMode === 'custom' && splitParticipants.length >= 2) {
+      const nonLastSum = splitParticipants.slice(0, -1).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+      if (nonLastSum > totalAmt) return 'Amounts exceed total'
+    }
+    return null
+  })()
+
+  async function handleSave() {
+    if (splitErr || saving) return
+    setSaving(true)
+    try {
+      let rows
+      if (splitMode === 'equal') {
+        const share = Math.round((totalAmt / splitParticipants.length) * 100) / 100
+        rows = splitParticipants.map(p => ({ participant_type:p.type, participant_name:p.name, share_amount:share, is_payer:p.isPayer }))
+      } else {
+        const nonLast = splitParticipants.slice(0, -1)
+        const lastP   = splitParticipants[splitParticipants.length - 1]
+        const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+        const remainder  = Math.round((totalAmt - nonLastSum) * 100) / 100
+        rows = [
+          ...nonLast.map(p => ({ participant_type:p.type, participant_name:p.name, share_amount:parseFloat(p.amount)||0, is_payer:p.isPayer })),
+          { participant_type:lastP.type, participant_name:lastP.name, share_amount:remainder, is_payer:lastP.isPayer },
+        ]
+      }
+      await addSplits(txn.id, rows)
+      onToast({ message: '✓ Split added', type: 'success' })
+      onClose()
+    } catch (err) {
+      console.error('SplitEntrySheet handleSave error:', err)
+      onToast({ message: 'Failed to save. Check connection.', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  const friendOptions = friends.filter(f => f.is_active)
+  const familyOptions = familyMembers.filter(m => m !== 'Self')
+  const nonLast    = splitParticipants.slice(0, -1)
+  const lastP      = splitParticipants[splitParticipants.length - 1]
+  const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+  const remainder  = Math.round((totalAmt - nonLastSum) * 100) / 100
+
+  return (
+    <>
+      <div style={{ position:'fixed', inset:0, zIndex:900, background:'rgba(0,0,0,0.45)' }} onClick={onClose} />
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', zIndex:901, width:'100%', maxWidth:480, background:'#ffffff', borderRadius:'20px 20px 0 0', padding:'20px 20px calc(20px + env(safe-area-inset-bottom,0))', maxHeight:'80vh', overflowY:'auto', boxShadow:'0 -4px 24px rgba(0,0,0,0.12)', fontFamily:'DM Sans' }}>
+        <div style={{ width:40, height:4, background:'#e2e8f0', borderRadius:2, margin:'0 auto 16px' }} />
+        <div style={{ fontSize:15, fontWeight:700, color:'#1a1a2a', marginBottom:4 }}>✂️ Split Expense</div>
+        <div style={{ fontSize:12, color:'#94a3b8', marginBottom:16 }}>₹{fmtAmt(txn.amount)} · {fmtDate(txn.txn_date)}</div>
+
+        {/* Participant chips */}
+        <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Who was there?</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
+          {familyOptions.map(m => {
+            const id = `fam-${m}`; const sel = splitParticipants.some(p => p.id === id)
+            return <button key={id} onClick={() => toggleParticipant(id, 'family', m)} style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}>{m}</button>
+          })}
+          {friendOptions.map(f => {
+            const sel = splitParticipants.some(p => p.id === f.id)
+            return <button key={f.id} onClick={() => toggleParticipant(f.id, 'friend', f.friend_name)} style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}>👤 {f.friend_name}</button>
+          })}
+          {!showAddFriendForm && (
+            <button onClick={() => setShowAddFriendForm(true)} style={{ padding:'6px 12px', borderRadius:20, border:'1.5px dashed #1A3C6E', background:'#ffffff', color:'#1A3C6E', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}>+ Add friend</button>
+          )}
+          {showAddFriendForm && (
+            <div style={{ display:'flex', gap:6, alignItems:'center', width:'100%' }}>
+              <input style={{ flex:1, padding:'6px 10px', border:'1.5px solid #1A3C6E', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', color:'#1a1a2a' }}
+                placeholder="Friend's name" value={newFriendName} onChange={e => setNewFriendName(e.target.value)} autoFocus
+              />
+              <button disabled={!newFriendName.trim()}
+                onClick={async () => {
+                  const name = newFriendName.trim(); if (!name) return
+                  try { await addFriend(name, null); toggleParticipant(`new-${name}-${Date.now()}`, 'friend', name); setNewFriendName(''); setShowAddFriendForm(false) }
+                  catch (err) { console.error('SplitEntrySheet addFriend error:', err) }
+                }}
+                style={{ padding:'6px 12px', border:'none', borderRadius:8, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >Add</button>
+              <button onClick={() => { setShowAddFriendForm(false); setNewFriendName('') }} style={{ padding:'6px 10px', border:'1.5px solid #e2e8f0', borderRadius:8, background:'#ffffff', color:'#64748b', fontFamily:'DM Sans', fontSize:12, cursor:'pointer' }}>✕</button>
+            </div>
+          )}
+        </div>
+
+        {splitParticipants.length < 2 && <div style={{ fontSize:12, color:'#94a3b8', marginBottom:12 }}>Tap people above to split with them</div>}
+
+        {splitParticipants.length >= 2 && (
+          <>
+            <div style={{ display:'flex', background:'#f1f5f9', borderRadius:8, padding:3, marginBottom:12 }}>
+              {['equal','custom'].map(m => (
+                <button key={m} onClick={() => setSplitMode(m)} style={{ flex:1, padding:'6px', border:'none', borderRadius:6, fontFamily:'DM Sans', fontSize:13, fontWeight:500, cursor:'pointer', background:splitMode===m?'#1A3C6E':'transparent', color:splitMode===m?'#ffffff':'#64748b', transition:'all 0.15s' }}>{m === 'equal' ? 'Equal' : 'Custom'}</button>
+              ))}
+            </div>
+
+            {splitMode === 'equal' && splitParticipants.map(p => (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                <span style={{ flex:1, fontSize:13, color:'#374151' }}>{p.name}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2a' }}>₹{(totalAmt / splitParticipants.length).toLocaleString('en-IN', { maximumFractionDigits:2 })}</span>
+                <button onClick={() => movePayer(p.id)} style={{ padding:'3px 10px', border:'none', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer', background:p.isPayer?'#1A3C6E':'#f1f5f9', color:p.isPayer?'#ffffff':'#94a3b8' }}>Payer</button>
+              </div>
+            ))}
+
+            {splitMode === 'custom' && (
+              <>
+                {nonLast.map(p => (
+                  <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                    <span style={{ flex:1, fontSize:13, color:'#374151' }}>{p.name}</span>
+                    <input type="number" inputMode="decimal" value={p.amount} onChange={e => setCustomAmt(p.id, e.target.value)} placeholder="₹"
+                      style={{ width:80, padding:'5px 8px', border:'1.5px solid #e2e8f0', borderRadius:8, fontSize:13, outline:'none', textAlign:'right', fontFamily:'DM Sans', color:'#1a1a2a' }}
+                    />
+                    <button onClick={() => movePayer(p.id)} style={{ padding:'3px 10px', border:'none', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer', background:p.isPayer?'#1A3C6E':'#f1f5f9', color:p.isPayer?'#ffffff':'#94a3b8' }}>Payer</button>
+                  </div>
+                ))}
+                {lastP && (
+                  <div key={lastP.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                    <span style={{ flex:1, fontSize:13, color:'#374151' }}>{lastP.name}</span>
+                    <span style={{ width:80, textAlign:'right', fontSize:13, fontWeight:600, color:remainder<0?'#dc2626':'#1a1a2a', fontFamily:'DM Sans' }}>₹{remainder.toLocaleString('en-IN', { maximumFractionDigits:2 })}</span>
+                    <button onClick={() => movePayer(lastP.id)} style={{ padding:'3px 10px', border:'none', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer', background:lastP.isPayer?'#1A3C6E':'#f1f5f9', color:lastP.isPayer?'#ffffff':'#94a3b8' }}>Payer</button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {splitErr && <div style={{ marginTop:8, fontSize:12, color:'#dc2626' }}>{splitErr}</div>}
+
+            <button disabled={!!splitErr || saving} onClick={handleSave}
+              style={{ marginTop:16, width:'100%', padding:12, border:'none', borderRadius:10, background:splitErr?'#e2e8f0':'#1A3C6E', color:splitErr?'#94a3b8':'#ffffff', fontFamily:'DM Sans', fontSize:14, fontWeight:700, cursor:splitErr?'not-allowed':'pointer', opacity: saving ? 0.7 : 1 }}
+            >{saving ? 'Saving…' : 'Save Split'}</button>
+          </>
+        )}
+
+        <button onClick={onClose} style={{ marginTop:8, width:'100%', padding:12, border:'1.5px solid #e2e8f0', borderRadius:10, background:'#ffffff', color:'#374151', fontFamily:'DM Sans', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+      </div>
+    </>
+  )
+}
+
+function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onDelete, onUpdate, reimbProcessing, splits, onToast }) {
+  const [expanded,   setExpanded]   = useState(false)
+  const [splitSheet, setSplitSheet] = useState(null) // null | 'view' | 'entry'
+
+  const cat        = categories.find(c => c.id === txn.category_id)
+  const src        = paymentSources.find(s => s.id === txn.payment_source_id)
+  const isExpense  = txn.txn_type === 'expense'
+  const isIncome   = txn.txn_type === 'income'
+  const isPending  = txn.is_reimbursable && txn.reimbursement_status === 'pending'
   const isReceived = txn.is_reimbursable && txn.reimbursement_status === 'received'
-  const busy = reimbProcessing === txn.id
+  const busy       = reimbProcessing === txn.id
+  const txnSplits  = splits.filter(s => s.transaction_id === txn.id)
+  const hasSplits  = txnSplits.length > 0
+
+  function handleSplitAction() {
+    setSplitSheet(hasSplits ? 'view' : 'entry')
+    setExpanded(false)
+  }
 
   return (
     <>
@@ -503,6 +770,7 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
             {cat ? cat.category_name : 'Uncategorised'}
             {isFlagged && <span className="em-unusual-badge">⚠ Unusual</span>}
             {isReceived && <span className="em-reimb-badge">✓ Received</span>}
+            {hasSplits && <span className="em-split-badge">✂ Split</span>}
           </div>
           <div className="em-txn-meta">
             {fmtDate(txn.txn_date)}
@@ -528,6 +796,12 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
           {txn.notes && <div className="em-txn-note">"{txn.notes}"</div>}
           <div className="em-txn-actions">
             <button className="em-txn-del-btn" onClick={() => onDelete(txn.id)}>Delete</button>
+            {isExpense && (
+              <button
+                style={{ padding:'6px 14px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', border:'none', background:'#f0f4ff', color:'#1A3C6E', fontFamily:'DM Sans' }}
+                onClick={handleSplitAction}
+              >✂️ {hasSplits ? 'View Split' : 'Split'}</button>
+            )}
             {!txn.is_reimbursable && (
               <button className="em-txn-reimb-btn" onClick={() => onUpdate(txn.id, { is_reimbursable: true, reimbursement_status: 'pending' })}>
                 Mark Reimbursable
@@ -540,6 +814,12 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
             )}
           </div>
         </div>
+      )}
+      {splitSheet === 'view' && (
+        <SplitViewSheet txn={txn} txnSplits={txnSplits} onClose={() => setSplitSheet(null)} onToast={onToast} />
+      )}
+      {splitSheet === 'entry' && (
+        <SplitEntrySheet txn={txn} onClose={() => setSplitSheet(null)} onToast={onToast} />
       )}
     </>
   )
@@ -1394,7 +1674,7 @@ function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove
 export default function ExpenseManager() {
   const {
     transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
-    friends, addFriend, removeFriend,
+    friends, splits, addFriend, removeFriend, addSplits, updateSplitStatus,
     loading, error, reload,
     addTransaction, deleteTransaction, updateTransaction,
     addCategory, updateCategory,
@@ -1799,6 +2079,8 @@ export default function ExpenseManager() {
                         onDelete={deleteTransaction}
                         onUpdate={handleReimbursableUpdate}
                         reimbProcessing={reimbProcessing}
+                        splits={splits}
+                        onToast={setToast}
                       />
                     ))
                   )}

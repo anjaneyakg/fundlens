@@ -218,6 +218,14 @@ const panelCSS = `
     color: #1A3C6E; margin-bottom: 10px;
   }
 
+  /* Toggle switch */
+  .eep-toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .eep-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .eep-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #e2e8f0; border-radius: 20px; transition: background 0.2s; }
+  .eep-toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .eep-toggle-switch input:checked + .eep-toggle-slider { background: #1A3C6E; }
+  .eep-toggle-switch input:checked + .eep-toggle-slider::before { transform: translateX(16px); }
+
   /* Bottom sheet (More categories / sources) */
   .eep-sheet-backdrop {
     position: fixed; inset: 0; z-index: 900;
@@ -269,7 +277,11 @@ const LSKEY_CAT = 'eep_last_cat'
 const LSKEY_SRC = 'eep_last_src'
 
 export default function ExpenseEntryPanel({ open, onClose }) {
-  const { categories, paymentSources, familyMembers, addTransaction, currencyPrefs, updateCurrencyRate } = useExpense()
+  const {
+    categories, paymentSources, familyMembers, friends,
+    addTransaction, addSplits, addFriend,
+    currencyPrefs, updateCurrencyRate,
+  } = useExpense()
 
   const [amount,     setAmount]     = useState('')
   const [txnType,    setTxnType]    = useState('expense')
@@ -280,15 +292,21 @@ export default function ExpenseEntryPanel({ open, onClose }) {
   const [note,       setNote]       = useState('')
   const [noteOpen,   setNoteOpen]   = useState(false)
 
-  // Save state: 'idle' | 'loading' | 'success' | 'error'
   const [saveState,      setSaveState]      = useState('idle')
   const [catSheet,       setCatSheet]       = useState(false)
   const [srcSheet,       setSrcSheet]       = useState(false)
-  const [toast,          setToast]          = useState(null)  // { message, type }
+  const [toast,          setToast]          = useState(null)
   const [selectedCurrency, setSelectedCurrency] = useState('INR')
   const [editRate,       setEditRate]       = useState(false)
   const [editRateVal,    setEditRateVal]    = useState('')
   const [savingRate,     setSavingRate]     = useState(false)
+
+  // Split state
+  const [splitOn,           setSplitOn]           = useState(false)
+  const [splitParticipants, setSplitParticipants] = useState([])
+  const [splitMode,         setSplitMode]         = useState('equal')
+  const [showAddFriendForm, setShowAddFriendForm] = useState(false)
+  const [newFriendName,     setNewFriendName]     = useState('')
 
   const amountRef = useRef(null)
 
@@ -344,11 +362,57 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     setSelectedCurrency('INR')
     setEditRate(false)
     setEditRateVal('')
+    setSplitOn(false)
+    setSplitParticipants([])
+    setSplitMode('equal')
+    setShowAddFriendForm(false)
+    setNewFriendName('')
   }
+
+  // ── Split helpers ─────────────────────────────────────────────────────────
+
+  function toggleParticipant(id, type, name) {
+    setSplitParticipants(prev => {
+      const exists = prev.find(p => p.id === id)
+      if (exists) {
+        if (id === 'self') return prev
+        const updated = prev.filter(p => p.id !== id)
+        if (exists.isPayer && updated.length > 0) {
+          return updated.map((p, i) => i === 0 ? { ...p, isPayer: true } : p)
+        }
+        return updated
+      }
+      return [...prev, { id, type, name, amount: '', isPayer: false }]
+    })
+  }
+
+  function movePayer(id) {
+    setSplitParticipants(prev => prev.map(p => ({ ...p, isPayer: p.id === id })))
+  }
+
+  function setCustomAmount(id, val) {
+    setSplitParticipants(prev => prev.map(p => p.id === id ? { ...p, amount: val } : p))
+  }
+
+  const totalAmt = parseFloat(amount) || 0
+
+  const splitErr = (() => {
+    if (!splitOn) return null
+    if (splitParticipants.length < 2) return 'Add at least one person to split with'
+    if (!splitParticipants.some(p => p.isPayer)) return 'Select who paid'
+    if (splitMode === 'custom' && splitParticipants.length >= 2) {
+      const nonLastSum = splitParticipants.slice(0, -1).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+      if (nonLastSum > totalAmt) return 'Amounts exceed total'
+    }
+    return null
+  })()
+
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     const rawAmt = parseFloat(amount)
     if (!rawAmt || rawAmt <= 0 || saveState === 'loading') return
+    if (splitOn && splitErr) return
     setSaveState('loading')
     const catName = categories.find(c => c.id === categoryId)?.category_name || 'Expense'
 
@@ -358,7 +422,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     const amt = isForeign ? Math.round(rawAmt * rate * 100) / 100 : rawAmt
 
     try {
-      await addTransaction({
+      const newTxn = await addTransaction({
         txn_type:          txnType,
         amount:            amt,
         category_id:       categoryId || null,
@@ -374,10 +438,48 @@ export default function ExpenseEntryPanel({ open, onClose }) {
       if (categoryId) localStorage.setItem(LSKEY_CAT, categoryId)
       if (sourceId)   localStorage.setItem(LSKEY_SRC, sourceId)
 
-      setSaveState('success')
-      setToast({ message: `Saved — ₹${amt.toLocaleString('en-IN')} · ${catName}`, type: 'success' })
+      if (splitOn && splitParticipants.length >= 2 && newTxn) {
+        let rows
+        if (splitMode === 'equal') {
+          const share = Math.round((amt / splitParticipants.length) * 100) / 100
+          rows = splitParticipants.map(p => ({
+            participant_type: p.type,
+            participant_name: p.name,
+            share_amount:     share,
+            is_payer:         p.isPayer,
+          }))
+        } else {
+          const nonLast = splitParticipants.slice(0, -1)
+          const lastP   = splitParticipants[splitParticipants.length - 1]
+          const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+          const remainder  = Math.round((amt - nonLastSum) * 100) / 100
+          rows = [
+            ...nonLast.map(p => ({
+              participant_type: p.type,
+              participant_name: p.name,
+              share_amount:     parseFloat(p.amount) || 0,
+              is_payer:         p.isPayer,
+            })),
+            {
+              participant_type: lastP.type,
+              participant_name: lastP.name,
+              share_amount:     remainder,
+              is_payer:         lastP.isPayer,
+            },
+          ]
+        }
+        try {
+          await addSplits(newTxn.id, rows)
+        } catch (splitSaveErr) {
+          console.error('ExpenseEntryPanel addSplits error:', splitSaveErr)
+        }
+        setSaveState('success')
+        setToast({ message: `✓ ₹${amt.toLocaleString('en-IN')} split among ${splitParticipants.length} people`, type: 'success' })
+      } else {
+        setSaveState('success')
+        setToast({ message: `Saved — ₹${amt.toLocaleString('en-IN')} · ${catName}`, type: 'success' })
+      }
 
-      // After showing success, close and reset
       setTimeout(() => {
         resetForNextEntry()
         setSaveState('idle')
@@ -391,7 +493,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     }
   }
 
-  const canSave = parseFloat(amount) > 0 && saveState !== 'loading' && saveState !== 'success'
+  const canSave = parseFloat(amount) > 0 && saveState !== 'loading' && saveState !== 'success' && !splitErr
 
   function SaveButtonContent() {
     if (saveState === 'loading') return <><span className="eep-spinner" /> Saving…</>
@@ -405,6 +507,150 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     saveState === 'error'   ? ' btn-error'   :
     saveState === 'loading' ? ' btn-loading'  : ''
   }`
+
+  // ── Split panel (inline) ──────────────────────────────────────────────────
+
+  const friendOptions  = friends.filter(f => f.is_active)
+  const familyOptions  = familyMembers.filter(m => m !== 'Self')
+
+  function SplitPanel() {
+    return (
+      <div style={{ marginBottom:16, padding:14, background:'#f8f9fa', borderRadius:12, border:'1px solid #e8ecf0' }}>
+        {/* Participant selector */}
+        <div className="eep-label" style={{ marginBottom:8 }}>Who was there?</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
+          {familyOptions.map(m => {
+            const id  = `fam-${m}`
+            const sel = splitParticipants.some(p => p.id === id)
+            return (
+              <button key={id}
+                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor: sel?'#1A3C6E':'#e2e8f0', background: sel?'#1A3C6E':'#f1f5f9', color: sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
+                onClick={() => toggleParticipant(id, 'family', m)}
+              >{m}</button>
+            )
+          })}
+          {friendOptions.map(f => {
+            const sel = splitParticipants.some(p => p.id === f.id)
+            return (
+              <button key={f.id}
+                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor: sel?'#1A3C6E':'#e2e8f0', background: sel?'#1A3C6E':'#f1f5f9', color: sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
+                onClick={() => toggleParticipant(f.id, 'friend', f.friend_name)}
+              >👤 {f.friend_name}{f.nickname ? ` (${f.nickname})` : ''}</button>
+            )
+          })}
+          {!showAddFriendForm && (
+            <button
+              style={{ padding:'6px 12px', borderRadius:20, border:'1.5px dashed #1A3C6E', background:'#ffffff', color:'#1A3C6E', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              onClick={() => setShowAddFriendForm(true)}
+            >+ Add friend</button>
+          )}
+          {showAddFriendForm && (
+            <div style={{ display:'flex', gap:6, alignItems:'center', width:'100%', marginTop:4 }}>
+              <input
+                style={{ flex:1, padding:'6px 10px', border:'1.5px solid #1A3C6E', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', color:'#1a1a2a' }}
+                placeholder="Friend's name"
+                value={newFriendName}
+                onChange={e => setNewFriendName(e.target.value)}
+                autoFocus
+              />
+              <button
+                disabled={!newFriendName.trim()}
+                onClick={async () => {
+                  const name = newFriendName.trim()
+                  if (!name) return
+                  try {
+                    await addFriend(name, null)
+                    toggleParticipant(`new-${name}-${Date.now()}`, 'friend', name)
+                    setNewFriendName('')
+                    setShowAddFriendForm(false)
+                  } catch (err) { console.error('ExpenseEntryPanel addFriend error:', err) }
+                }}
+                style={{ padding:'6px 12px', border:'none', borderRadius:8, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >Add</button>
+              <button
+                onClick={() => { setShowAddFriendForm(false); setNewFriendName('') }}
+                style={{ padding:'6px 10px', border:'1.5px solid #e2e8f0', borderRadius:8, background:'#ffffff', color:'#64748b', fontFamily:'DM Sans', fontSize:12, cursor:'pointer' }}
+              >✕</button>
+            </div>
+          )}
+        </div>
+
+        {splitParticipants.length < 2 && (
+          <div style={{ fontSize:12, color:'#94a3b8', fontFamily:'DM Sans', marginBottom:4 }}>Tap people above to add them to the split</div>
+        )}
+
+        {splitParticipants.length >= 2 && (
+          <>
+            {/* Mode toggle */}
+            <div style={{ display:'flex', background:'#f1f5f9', borderRadius:8, padding:3, marginBottom:12 }}>
+              {['equal','custom'].map(m => (
+                <button key={m}
+                  onClick={() => setSplitMode(m)}
+                  style={{ flex:1, padding:'6px', border:'none', borderRadius:6, fontFamily:'DM Sans', fontSize:13, fontWeight:500, cursor:'pointer', background: splitMode===m?'#1A3C6E':'transparent', color: splitMode===m?'#ffffff':'#64748b', transition:'all 0.15s' }}
+                >{m === 'equal' ? 'Equal' : 'Custom'}</button>
+              ))}
+            </div>
+
+            {/* Equal mode rows */}
+            {splitMode === 'equal' && (() => {
+              const share = totalAmt / splitParticipants.length
+              return splitParticipants.map(p => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                  <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{p.name}</span>
+                  <span style={{ fontFamily:'DM Sans', fontSize:13, fontWeight:600, color:'#1a1a2a' }}>₹{share.toLocaleString('en-IN', { maximumFractionDigits:2 })}</span>
+                  <button
+                    style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: p.isPayer?'#1A3C6E':'#f1f5f9', color: p.isPayer?'#ffffff':'#94a3b8' }}
+                    onClick={() => movePayer(p.id)}
+                  >Payer</button>
+                </div>
+              ))
+            })()}
+
+            {/* Custom mode rows */}
+            {splitMode === 'custom' && (() => {
+              const nonLast    = splitParticipants.slice(0, -1)
+              const lastP      = splitParticipants[splitParticipants.length - 1]
+              const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+              const remainder  = Math.round((totalAmt - nonLastSum) * 100) / 100
+              return (
+                <>
+                  {nonLast.map(p => (
+                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                      <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{p.name}</span>
+                      <input type="number" inputMode="decimal"
+                        style={{ width:80, padding:'5px 8px', border:'1.5px solid #e2e8f0', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', textAlign:'right', color:'#1a1a2a' }}
+                        value={p.amount} onChange={e => setCustomAmount(p.id, e.target.value)} placeholder="₹"
+                      />
+                      <button
+                        style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: p.isPayer?'#1A3C6E':'#f1f5f9', color: p.isPayer?'#ffffff':'#94a3b8' }}
+                        onClick={() => movePayer(p.id)}
+                      >Payer</button>
+                    </div>
+                  ))}
+                  {lastP && (
+                    <div key={lastP.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                      <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{lastP.name}</span>
+                      <span style={{ width:80, textAlign:'right', fontFamily:'DM Sans', fontSize:13, fontWeight:600, color: remainder < 0 ? '#dc2626' : '#1a1a2a' }}>
+                        ₹{remainder.toLocaleString('en-IN', { maximumFractionDigits:2 })}
+                      </span>
+                      <button
+                        style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: lastP.isPayer?'#1A3C6E':'#f1f5f9', color: lastP.isPayer?'#ffffff':'#94a3b8' }}
+                        onClick={() => movePayer(lastP.id)}
+                      >Payer</button>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            {splitErr && (
+              <div style={{ marginTop:8, fontSize:12, color:'#dc2626', fontFamily:'DM Sans' }}>{splitErr}</div>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -431,7 +677,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         </div>
 
         <div className="eep-body">
-          {/* Currency chip row — only shown when foreign currencies are configured */}
+          {/* Currency chip row */}
           {currencyPrefs.length > 0 && (
             <>
               <div className="eep-label">Currency</div>
@@ -476,7 +722,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             />
           </div>
 
-          {/* FX rate row + live INR preview — only for foreign currency */}
+          {/* FX rate row + preview */}
           {selectedCurrency !== 'INR' && currencyPrefs.length > 0 && (() => {
             const pref = currencyPrefs.find(c => c.currency_code === selectedCurrency)
             const rate = pref?.fx_rate_to_inr || 1
@@ -536,7 +782,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               <button
                 key={val}
                 className={`eep-type-btn${txnType === val ? ` active ${cls}` : ''}`}
-                onClick={() => setTxnType(val)}
+                onClick={() => { setTxnType(val); if (val !== 'expense') { setSplitOn(false); setSplitParticipants([]) } }}
                 disabled={saveState === 'loading' || saveState === 'success'}
               >
                 {label}
@@ -633,6 +879,29 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               autoFocus
             />
           )}
+
+          {/* Split toggle — expense only */}
+          {txnType === 'expense' && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0 12px', borderTop:'1px solid #f1f5f9', marginTop:4 }}>
+              <span style={{ fontFamily:'DM Sans', fontSize:13, fontWeight:500, color:'#374151' }}>Split this expense?</span>
+              <label className="eep-toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={splitOn}
+                  onChange={e => {
+                    const on = e.target.checked
+                    setSplitOn(on)
+                    if (on) setSplitParticipants([{ id:'self', type:'self', name:'Self', amount:'', isPayer:true }])
+                    else { setSplitParticipants([]); setSplitMode('equal'); setShowAddFriendForm(false); setNewFriendName('') }
+                  }}
+                />
+                <span className="eep-toggle-slider" />
+              </label>
+            </div>
+          )}
+
+          {/* Split panel */}
+          {txnType === 'expense' && splitOn && <SplitPanel />}
 
           {/* Save */}
           <button
