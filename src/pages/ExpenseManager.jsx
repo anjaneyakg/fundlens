@@ -2187,6 +2187,9 @@ export default function ExpenseManager() {
             recurringItems={recurringItems}
             addTransaction={addTransaction}
             updateRecurringItem={updateRecurringItem}
+            splits={splits}
+            friends={friends}
+            updateSplitStatus={updateSplitStatus}
           />
         )}
 

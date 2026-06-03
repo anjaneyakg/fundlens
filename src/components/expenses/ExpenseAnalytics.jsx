@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import {
-  PieChart, Pie, Cell, Label,
+  PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
   ResponsiveContainer, ComposedChart, Line,
 } from 'recharts'
@@ -250,11 +250,37 @@ const analyticsCSS = `
     .ea-sub-row { flex-wrap: wrap; }
     .ea-sub-annual { display: none; }
   }
+
+  /* Section J — Friends & Splits */
+  .ea-friend-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9; font-family: 'DM Sans', sans-serif;
+  }
+  .ea-friend-row:last-child { border-bottom: none; }
+  .ea-friend-name { flex: 1; font-size: 13px; font-weight: 600; color: #1a1a2a; }
+  .ea-friend-amt  { font-size: 14px; font-weight: 700; }
+  .ea-friend-settle-btn {
+    padding: 5px 12px; border: none; border-radius: 6px;
+    background: #1A3C6E; color: #ffffff;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: background 0.12s; white-space: nowrap;
+  }
+  .ea-friend-settle-btn:hover:not(:disabled) { background: #15306b; }
+  .ea-friend-settle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ea-friend-table { width: 100%; border-collapse: collapse; font-family: 'DM Sans', sans-serif; font-size: 12px; margin-top: 12px; }
+  .ea-friend-table th { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; text-align: left; border-bottom: 1px solid #e8ecf0; }
+  .ea-friend-table td { padding: 6px 8px; color: #374151; border-bottom: 1px solid #f8f9fa; }
+  .ea-friend-table td:not(:first-child) { text-align: right; font-weight: 600; }
+  .ea-friend-table tr:last-child td { border-bottom: none; }
 `
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ExpenseAnalytics({ transactions, categories, paymentSources, recurringItems, updateRecurringItem }) {
+export default function ExpenseAnalytics({
+  transactions, categories, paymentSources, recurringItems,
+  updateRecurringItem,
+  splits = [], friends = [], updateSplitStatus,
+}) {
   const width = useWindowWidth()
 
   // Section A — Mask state
@@ -266,8 +292,11 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
   const [customEnd,   setCustomEnd]   = useState(todayStr())
 
   // Section H — Subscription audit state
-  const [deactivating,  setDeactivating]  = useState(null)
-  const [deactivatedIds,setDeactivatedIds]= useState(new Set())
+  const [deactivating,   setDeactivating]   = useState(null)
+  const [deactivatedIds, setDeactivatedIds] = useState(new Set())
+
+  // Section J — Friends & Splits
+  const [settling, setSettling] = useState(null)
 
   // Toast
   const [toast, setToast] = useState(null)
@@ -404,7 +433,7 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
         const monthly = r.frequency === 'monthly' ? r.amount
           : r.frequency === 'yearly'  ? r.amount / 12
           : r.frequency === 'weekly'  ? r.amount * 4.3
-          : r.amount * 30  // daily
+          : r.amount * 30
         return { ...r, monthly }
       })
       .sort((a, b) => b.monthly - a.monthly)
@@ -426,6 +455,63 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
     } finally {
       setDeactivating(null)
     }
+  }
+
+  // ── Section J — Friends & Splits ──────────────────────────────────────────
+
+  const friendBalances = useMemo(() => {
+    const byName = {}
+    splits
+      .filter(s => s.participant_type === 'friend' && s.settlement_status !== 'settled' && s.settlement_status !== 'waived')
+      .forEach(s => {
+        if (!byName[s.participant_name]) byName[s.participant_name] = { name: s.participant_name, total: 0, items: [] }
+        byName[s.participant_name].total += Number(s.share_amount)
+        byName[s.participant_name].items.push(s)
+      })
+    return Object.values(byName).filter(f => f.total > 0).sort((a, b) => b.total - a.total)
+  }, [splits])
+
+  const totalOutstanding = friendBalances.reduce((sum, f) => sum + f.total, 0)
+
+  const splitHistory = useMemo(() => {
+    const months = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i)
+      const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+      const monthTxnIds = new Set(
+        transactions.filter(t => t.txn_date?.startsWith(prefix)).map(t => t.id)
+      )
+      const monthSplits = splits.filter(s => monthTxnIds.has(s.transaction_id) && s.participant_type !== 'self')
+      const totalSplit   = monthSplits.reduce((sum, s) => sum + Number(s.share_amount), 0)
+      const totalSettled = monthSplits.filter(s => s.settlement_status === 'settled').reduce((sum, s) => sum + Number(s.share_amount), 0)
+      months.push({ month: d.toLocaleString('en-IN', { month: 'short' }), totalSplit, totalSettled })
+    }
+    return months
+  }, [splits, transactions])
+
+  const perFriendTable = useMemo(() => {
+    const byName = {}
+    splits.filter(s => s.participant_type === 'friend').forEach(s => {
+      if (!byName[s.participant_name]) byName[s.participant_name] = { name: s.participant_name, totalSplit: 0, settled: 0 }
+      byName[s.participant_name].totalSplit += Number(s.share_amount)
+      if (s.settlement_status === 'settled') byName[s.participant_name].settled += Number(s.share_amount)
+    })
+    return Object.values(byName).map(f => ({
+      ...f,
+      outstanding: f.totalSplit - f.settled,
+    })).sort((a, b) => b.outstanding - a.outstanding)
+  }, [splits])
+
+  async function handleMarkAllSettled(friendName, items) {
+    if (!updateSplitStatus) return
+    setSettling(friendName)
+    try {
+      await Promise.all(items.map(s => updateSplitStatus(s.id, 'settled')))
+      setToast({ message: `✓ All splits with ${friendName} marked as settled`, type: 'success' })
+    } catch (err) {
+      console.error('ExpenseAnalytics handleMarkAllSettled error:', err)
+      setToast({ message: 'Failed. Check connection.', type: 'error' })
+    } finally { setSettling(null) }
   }
 
   const isMobile = width <= 480
@@ -493,7 +579,6 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
         <div className="ea-card">
           <div className="ea-card-title">🏷️ Category Breakdown</div>
 
-          {/* Donut chart */}
           <div className="ea-donut-wrap">
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
@@ -519,7 +604,6 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
             </div>
           </div>
 
-          {/* Legend */}
           {!masked && catBreakdown.slice(0,5).map((c, i) => (
             <div key={c.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontFamily:'DM Sans', fontSize:12 }}>
               <div style={{ width:10, height:10, borderRadius:'50%', background:CHART_COLORS[i%CHART_COLORS.length], flexShrink:0 }} />
@@ -528,15 +612,14 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
             </div>
           ))}
 
-          {/* Budget utilisation list */}
           {catBreakdown.length > 0 && (
             <>
               <div style={{ fontSize:12, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', margin:'14px 0 8px', fontFamily:'DM Sans' }}>
                 Budget Utilisation
               </div>
               {catBreakdown.map(c => {
-                const pct    = c.budget ? Math.min((c.amount / c.budget) * 100, 120) : 0
-                const fill   = c.budget ? (c.amount >= c.budget ? '#dc2626' : c.amount >= c.budget * 0.75 ? '#f59e0b' : '#10b981') : '#94a3b8'
+                const pct  = c.budget ? Math.min((c.amount / c.budget) * 100, 120) : 0
+                const fill = c.budget ? (c.amount >= c.budget ? '#dc2626' : c.amount >= c.budget * 0.75 ? '#f59e0b' : '#10b981') : '#94a3b8'
                 return (
                   <div key={c.id} className="ea-cat-row">
                     <span className="ea-cat-icon">{c.icon}</span>
@@ -624,13 +707,12 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
               <YAxis tickFormatter={fmtAxis} tick={{ fontFamily:'DM Sans', fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} width={40} />
               <Tooltip content={mkTooltip(masked)} />
               <Legend wrapperStyle={{ fontFamily:'DM Sans', fontSize:12 }} />
-              <Bar dataKey="committed" name="Committed"   stackId="a" fill={masked ? '#e2e8f0' : '#1A3C6E'} radius={[0,0,0,0]} />
+              <Bar dataKey="committed" name="Committed"     stackId="a" fill={masked ? '#e2e8f0' : '#1A3C6E'} radius={[0,0,0,0]} />
               <Bar dataKey="variable"  name="Est. Variable" stackId="a" fill={masked ? '#e2e8f0' : '#93c5fd'} radius={[3,3,0,0]} />
               <Line type="monotone" dataKey="total" name="Total" stroke={masked ? '#e2e8f0' : '#dc2626'} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
 
-          {/* Projection table */}
           <div style={{ overflowX:'auto' }}>
             <table className="ea-proj-table">
               <thead>
@@ -666,8 +748,8 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
             </div>
 
             {subscriptions.map(r => {
-              const cat      = categories.find(c => c.id === r.category_id)
-              const busy     = deactivating === r.id
+              const cat       = categories.find(c => c.id === r.category_id)
+              const busy      = deactivating === r.id
               const freqLabel = r.frequency === 'monthly' ? '/mo'
                 : r.frequency === 'yearly'  ? '/yr'
                 : r.frequency === 'weekly'  ? '/wk'
@@ -710,6 +792,102 @@ export default function ExpenseAnalytics({ transactions, categories, paymentSour
             </div>
           </div>
         )}
+
+        {/* ── Section J: Friends & Splits ─────────────────────────────── */}
+        <div className="ea-card">
+          <div className="ea-card-title">👥 Friends & Splits</div>
+
+          {splits.length === 0 ? (
+            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:13, fontFamily:'DM Sans', padding:'20px 0', lineHeight:1.6 }}>
+              No split expenses yet. Use the split feature when logging shared expenses.
+            </div>
+          ) : (
+            <>
+              {/* Part A — Outstanding from Friends */}
+              <div style={{ fontSize:12, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10, fontFamily:'DM Sans' }}>
+                Outstanding from Friends
+              </div>
+
+              {friendBalances.length === 0 ? (
+                <div style={{ fontSize:13, fontWeight:600, color:'#16a34a', fontFamily:'DM Sans', marginBottom:16 }}>
+                  ✓ All splits settled
+                </div>
+              ) : (
+                <>
+                  {friendBalances.map(f => (
+                    <div key={f.name} className="ea-friend-row">
+                      <span style={{ fontSize:16, flexShrink:0 }}>👤</span>
+                      <span className="ea-friend-name">{f.name}</span>
+                      <span className="ea-friend-amt" style={{ color: masked ? '#94a3b8' : '#f59e0b' }}>
+                        {masked ? '₹ ••••' : `₹${fmtAmt(f.total)}`}
+                      </span>
+                      {updateSplitStatus && (
+                        <button
+                          className="ea-friend-settle-btn"
+                          disabled={settling === f.name}
+                          onClick={() => handleMarkAllSettled(f.name, f.items)}
+                        >
+                          {settling === f.name ? '…' : '✓ Mark All Settled'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ marginTop:10, fontSize:13, fontWeight:700, color: masked ? '#94a3b8' : '#f59e0b', fontFamily:'DM Sans' }}>
+                    Total outstanding: {masked ? '₹ ••••' : `₹${fmtAmt(totalOutstanding)}`}
+                  </div>
+                </>
+              )}
+
+              {/* Part B — Split History Chart */}
+              <div style={{ fontSize:12, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', margin:'18px 0 10px', fontFamily:'DM Sans' }}>
+                Split History — Last 6 Months
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={splitHistory} barGap={2} barCategoryGap="30%">
+                  <XAxis dataKey="month" tick={{ fontFamily:'DM Sans', fontSize:12, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={fmtAxis} tick={{ fontFamily:'DM Sans', fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} width={40} />
+                  <Tooltip content={mkTooltip(masked)} />
+                  <Legend wrapperStyle={{ fontFamily:'DM Sans', fontSize:12 }} />
+                  <Bar dataKey="totalSplit"   name="Split"   fill={masked ? '#e2e8f0' : '#1A3C6E'} radius={[4,4,0,0]} />
+                  <Bar dataKey="totalSettled" name="Settled" fill={masked ? '#e2e8f0' : '#10b981'} radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Part C — Per-friend table */}
+              {perFriendTable.length > 0 && (
+                <>
+                  <div style={{ fontSize:12, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', margin:'18px 0 6px', fontFamily:'DM Sans' }}>
+                    Per-Friend Summary
+                  </div>
+                  <div style={{ overflowX:'auto' }}>
+                    <table className="ea-friend-table">
+                      <thead>
+                        <tr>
+                          <th>Friend</th>
+                          <th>Total Split</th>
+                          <th>Settled</th>
+                          <th>Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {perFriendTable.map(f => (
+                          <tr key={f.name}>
+                            <td style={{ fontWeight:500 }}>👤 {f.name}</td>
+                            <td>{masked ? '••••' : `₹${fmtAmt(f.totalSplit)}`}</td>
+                            <td style={{ color:'#16a34a' }}>{masked ? '••••' : `₹${fmtAmt(f.settled)}`}</td>
+                            <td style={{ color: f.outstanding > 0 ? '#f59e0b' : '#16a34a', fontWeight:700 }}>
+                              {masked ? '••••' : `₹${fmtAmt(f.outstanding)}`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
 
       </div>
     </>
