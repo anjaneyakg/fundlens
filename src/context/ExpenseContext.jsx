@@ -40,12 +40,10 @@ export function ExpenseProvider({ children }) {
   const [currencyPrefs,   setCurrencyPrefs]   = useState([])
   const [friends,         setFriends]         = useState([])
   const [splits,          setSplits]          = useState([])
+  const [familyMembers,   setFamilyMembers]   = useState([])
   const [loading,         setLoading]         = useState(true)
   const [error,           setError]           = useState(null)
 
-  const familyMembers     = ['Self', ...Array.from(
-    new Set(transactions.map(t => t.family_member).filter(m => m && m !== 'Self'))
-  )]
   const expenseCategories = categories.filter(c => c.category_type !== 'income' && c.is_active !== false)
   const incomeHeads       = categories.filter(c => c.category_type === 'income' && c.is_active !== false)
 
@@ -93,12 +91,20 @@ export function ExpenseProvider({ children }) {
       setCategories(cats)
       setPaymentSources(srcs)
 
+      const { data: fmData, error: fmErr } = await client
+        .from('expense_family_members')
+        .select('*')
+        .eq('is_active', true)
+        .order('name')
+      if (fmErr) console.error('ExpenseContext loadAll family_members error:', fmErr?.message, fmErr?.code)
+      setFamilyMembers(fmData || [])
+
       const { data: friendsData, error: friendsErr } = await client
         .from('expense_friends')
         .select('*')
         .eq('is_active', true)
         .order('friend_name')
-      if (friendsErr) console.error('ExpenseContext loadAll friends error:', friendsErr)
+      if (friendsErr) console.error('ExpenseContext loadAll friends error:', friendsErr?.message, friendsErr?.code)
       setFriends(friendsData || [])
 
       const { data: splitsData, error: splitsErr } = await client
@@ -116,7 +122,7 @@ export function ExpenseProvider({ children }) {
 
   useEffect(() => {
     if (user && token) loadAll()
-    else { setTransactions([]); setCategories([]); setPaymentSources([]); setRecurringItems([]); setFriends([]); setSplits([]); setLoading(false) }
+    else { setTransactions([]); setCategories([]); setPaymentSources([]); setRecurringItems([]); setFriends([]); setSplits([]); setFamilyMembers([]); setLoading(false) }
   }, [user, token, loadAll])
 
   async function insertDefaultCategories(client, uid) {
@@ -311,15 +317,42 @@ export function ExpenseProvider({ children }) {
 
   // ── Friends ───────────────────────────────────────────────────────────────────
 
+  // ── Family members ────────────────────────────────────────────────────────────
+
+  async function addFamilyMember(name, relationship) {
+    const client = sb()
+    if (!client || !user) return
+    const { error: err } = await client
+      .from('expense_family_members')
+      .insert([{ user_id: user.uid, name: name.trim(), relationship: relationship || null, is_active: true }])
+    if (err) { console.error('addFamilyMember error:', err.message, err.code, err.details); throw err }
+    const { data, error: reloadErr } = await client.from('expense_family_members').select('*').eq('is_active', true).order('name')
+    if (reloadErr) console.error('addFamilyMember reload error:', reloadErr.message)
+    setFamilyMembers(data || [])
+  }
+
+  async function removeFamilyMember(id) {
+    const client = sb()
+    if (!client) return
+    const { error: err } = await client
+      .from('expense_family_members')
+      .update({ is_active: false })
+      .eq('id', id)
+    if (err) { console.error('removeFamilyMember error:', err.message, err.code); throw err }
+    const { data, error: reloadErr } = await client.from('expense_family_members').select('*').eq('is_active', true).order('name')
+    if (reloadErr) console.error('removeFamilyMember reload error:', reloadErr.message)
+    setFamilyMembers(data || [])
+  }
+
   async function addFriend(friend_name, nickname) {
     const client = sb()
     if (!client || !user) return
     const { error: err } = await client
       .from('expense_friends')
-      .insert([{ user_id: user.uid, friend_name, nickname: nickname || null, is_active: true }])
-    if (err) { console.error('addFriend error:', err); throw err }
+      .insert([{ user_id: user.uid, friend_name: friend_name.trim(), nickname: nickname?.trim() || null, is_active: true }])
+    if (err) { console.error('addFriend error:', err.message, 'code:', err.code, 'details:', err.details); throw err }
     const { data, error: reloadErr } = await client.from('expense_friends').select('*').eq('is_active', true).order('friend_name')
-    if (reloadErr) console.error('addFriend reload error:', reloadErr)
+    if (reloadErr) console.error('addFriend reload error:', reloadErr.message)
     setFriends(data || [])
   }
 
@@ -368,7 +401,8 @@ export function ExpenseProvider({ children }) {
 
   const value = {
     transactions, categories, expenseCategories, incomeHeads,
-    paymentSources, recurringItems, currencyPrefs, familyMembers,
+    paymentSources, recurringItems, currencyPrefs,
+    familyMembers, addFamilyMember, removeFamilyMember,
     friends, splits,
     loading, error, reload: loadAll,
     addTransaction, updateTransaction, deleteTransaction,

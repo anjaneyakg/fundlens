@@ -719,12 +719,13 @@ function EditEntrySheet({ txn, onClose, onToast }) {
           </div>
 
           {/* Family member */}
-          {txnType !== 'transfer_in' && familyMembers.length > 1 && (
+          {txnType !== 'transfer_in' && (
             <div>
               <div className="ees-field-label">{txnType === 'income' ? 'Earned by' : 'For / Paid by'}</div>
               <div className="ees-chips">
+                <button className={`ees-chip${member==='Self'?' sel':''}`} onClick={() => setMember('Self')}>Self</button>
                 {familyMembers.map(m => (
-                  <button key={m} className={`ees-chip${member===m?' sel':''}`} onClick={() => setMember(m)}>{m}</button>
+                  <button key={m.id} className={`ees-chip${member===m.name?' sel':''}`} onClick={() => setMember(m.name)}>{m.name}</button>
                 ))}
               </div>
             </div>
@@ -917,7 +918,7 @@ function SplitEntrySheet({ txn, onClose, onToast }) {
   }
 
   const friendOptions = friends.filter(f => f.is_active)
-  const familyOptions = familyMembers.filter(m => m !== 'Self')
+  const familyOptions = familyMembers  // objects {id, name, relationship}, no Self
   const nonLast    = splitParticipants.slice(0, -1)
   const lastP      = splitParticipants[splitParticipants.length - 1]
   const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
@@ -935,8 +936,8 @@ function SplitEntrySheet({ txn, onClose, onToast }) {
         <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Who was there?</div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
           {familyOptions.map(m => {
-            const id = `fam-${m}`; const sel = splitParticipants.some(p => p.id === id)
-            return <button key={id} onClick={() => toggleParticipant(id, 'family', m)} style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}>{m}</button>
+            const id = `fam-${m.name}`; const sel = splitParticipants.some(p => p.id === id)
+            return <button key={m.id} onClick={() => toggleParticipant(id, 'family', m.name)} style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}>{m.name}</button>
           })}
           {friendOptions.map(f => {
             const sel = splitParticipants.some(p => p.id === f.id)
@@ -1123,28 +1124,54 @@ function Toggle({ checked, onChange }) {
   )
 }
 
-function FamilyMembersSection({ familyMembers }) {
-  const [members,  setMembers]  = useState(() => familyMembers.filter(m => m !== 'Self').map((n, i) => ({ id: i, name: n, relationship: '' })))
+function FamilyMembersSection({ familyMembers, onAdd, onRemove, onToast }) {
   const [showForm, setShowForm] = useState(false)
   const [name,     setName]     = useState('')
   const [rel,      setRel]      = useState('Spouse')
-  function handleAdd() {
+  const [saving,   setSaving]   = useState(false)
+  const [removing, setRemoving] = useState(null)
+
+  async function handleAdd() {
     if (!name.trim()) return
-    setMembers(p => [...p, { id: Date.now(), name: name.trim(), relationship: rel }])
-    setName(''); setRel('Spouse'); setShowForm(false)
+    setSaving(true)
+    try {
+      await onAdd(name.trim(), rel)
+      onToast({ message: `✓ ${name.trim()} added`, type: 'success' })
+      setName(''); setRel('Spouse'); setShowForm(false)
+    } catch (err) {
+      console.error('FamilyMembersSection handleAdd error:', err)
+      if (err.code === '42P01') onToast({ message: 'Table not found — run SQL migration', type: 'error' })
+      else if (err.code === '42501') onToast({ message: 'Permission denied — check RLS policy', type: 'error' })
+      else if (err.code === '23505') onToast({ message: `${name.trim()} already exists`, type: 'error' })
+      else onToast({ message: 'Failed to add: ' + (err.message || 'Check connection'), type: 'error' })
+    } finally { setSaving(false) }
   }
+
+  async function handleRemove(m) {
+    setRemoving(m.id)
+    try {
+      await onRemove(m.id)
+      onToast({ message: `${m.name} removed`, type: 'success' })
+    } catch (err) {
+      console.error('FamilyMembersSection handleRemove error:', err)
+      onToast({ message: 'Failed to remove. Check connection.', type: 'error' })
+    } finally { setRemoving(null) }
+  }
+
   return (
-    <SetupSection icon="👨‍👩‍👧" title="Family Members" count={members.length}>
+    <SetupSection icon="👨‍👩‍👧" title="Family Members" count={familyMembers.length}>
       <div style={{ paddingTop:12 }}>
-        {members.length === 0 && <div style={{ fontSize:13, color:'#94a3b8', marginBottom:8, fontFamily:'DM Sans' }}>No family members added yet.</div>}
-        {members.map(m => (
+        {familyMembers.length === 0 && <div style={{ fontSize:13, color:'#94a3b8', marginBottom:8, fontFamily:'DM Sans' }}>No family members added yet.</div>}
+        {familyMembers.map(m => (
           <div key={m.id} className="em-setup-list-item">
             <span className="em-setup-item-icon">👤</span>
             <div style={{ flex:1 }}>
               <div className="em-setup-item-name">{m.name}</div>
               {m.relationship && <div className="em-setup-item-sub">{m.relationship}</div>}
             </div>
-            <button className="em-icon-btn danger" onClick={() => setMembers(p => p.filter(x => x.id !== m.id))}>✕</button>
+            <button className="em-icon-btn danger" disabled={removing === m.id} onClick={() => handleRemove(m)}>
+              {removing === m.id ? '…' : '🗑'}
+            </button>
           </div>
         ))}
         {showForm ? (
@@ -1156,7 +1183,7 @@ function FamilyMembersSection({ familyMembers }) {
               </select>
             </div>
             <div className="em-form-row">
-              <button className="em-add-btn" onClick={handleAdd} disabled={!name.trim()}>Add</button>
+              <button className="em-add-btn" onClick={handleAdd} disabled={!name.trim() || saving}>{saving ? 'Adding…' : 'Add'}</button>
               <button className="em-cancel-btn" onClick={() => setShowForm(false)}>Cancel</button>
             </div>
           </div>
@@ -1439,7 +1466,10 @@ function FriendsSection({ friends, addFriend, removeFriend, onToast, onReload })
       onToast({ message: `✓ ${name} added`, type: 'success' })
     } catch (err) {
       console.error('FriendsSection handleAdd error:', err)
-      onToast({ message: 'Failed to add. Check connection.', type: 'error' })
+      if (err.code === '42P01') onToast({ message: 'Table not found — run SQL migration', type: 'error' })
+      else if (err.code === '42501') onToast({ message: 'Permission denied — check RLS policy', type: 'error' })
+      else if (err.code === '23505') onToast({ message: `${name} is already a friend`, type: 'error' })
+      else onToast({ message: 'Failed to add: ' + (err.message || 'Check connection'), type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -2024,7 +2054,8 @@ function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove
 export default function ExpenseManager() {
   const {
     transactions, categories, expenseCategories, incomeHeads,
-    paymentSources, recurringItems, currencyPrefs, familyMembers,
+    paymentSources, recurringItems, currencyPrefs,
+    familyMembers, addFamilyMember, removeFamilyMember,
     friends, splits, addFriend, removeFriend, addSplits, updateSplitStatus,
     loading, error, reload,
     addTransaction, deleteTransaction, updateTransaction,
@@ -2542,7 +2573,7 @@ export default function ExpenseManager() {
         {/* ─── SETUP TAB ────────────────────────────────────────────────────── */}
         {tab === 'setup' && (
           <div style={{ paddingTop:8 }}>
-            <FamilyMembersSection familyMembers={familyMembers} />
+            <FamilyMembersSection familyMembers={familyMembers} onAdd={addFamilyMember} onRemove={removeFamilyMember} onToast={setToast} />
             <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
             <CategoriesSection categories={expenseCategories} onAdd={addCategory} onUpdate={updateCategory} />
             <IncomeHeadsSection incomeHeads={incomeHeads} onAdd={addCategory} onUpdate={updateCategory} onToast={setToast} />

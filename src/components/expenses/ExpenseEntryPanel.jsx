@@ -541,7 +541,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
   // ── Split panel (inline) ──────────────────────────────────────────────────
 
   const friendOptions = friends.filter(f => f.is_active)
-  const familyOptions = familyMembers.filter(m => m !== 'Self')
+  const familyOptions = familyMembers  // now objects {id, name, relationship}, no Self in array
 
   function SplitPanel() {
     return (
@@ -549,12 +549,12 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         <div className="eep-label" style={{ marginBottom:8 }}>Who was there?</div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
           {familyOptions.map(m => {
-            const id = `fam-${m}`; const sel = splitParticipants.some(p => p.id === id)
+            const id = `fam-${m.name}`; const sel = splitParticipants.some(p => p.id === id)
             return (
-              <button key={id}
+              <button key={m.id}
                 style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
-                onClick={() => toggleParticipant(id, 'family', m)}
-              >{m}</button>
+                onClick={() => toggleParticipant(id, 'family', m.name)}
+              >{m.name}</button>
             )
           })}
           {friendOptions.map(f => {
@@ -789,8 +789,8 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               <div className="eep-chips">
                 {/* Self always present */}
                 <button className={`eep-chip${member==='Self'?' selected':''}`} onClick={() => setMember('Self')}>Self</button>
-                {familyMembers.filter(m => m !== 'Self').map(m => (
-                  <button key={m} className={`eep-chip${member===m?' selected':''}`} onClick={() => setMember(m)}>{m}</button>
+                {familyMembers.map(m => (
+                  <button key={m.id} className={`eep-chip${member===m.name?' selected':''}`} onClick={() => setMember(m.name)}>{m.name}</button>
                 ))}
               </div>
             </>
@@ -803,10 +803,10 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               <div className="eep-label">Transferred from</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
                 {familyOptions.map(m => (
-                  <button key={m}
-                    className={`eep-chip${transferFrom===m?' selected':''}`}
-                    onClick={() => { setTransferFrom(m); setTransferFromOther('') }}
-                  >{m}</button>
+                  <button key={m.id}
+                    className={`eep-chip${transferFrom===m.name?' selected':''}`}
+                    onClick={() => { setTransferFrom(m.name); setTransferFromOther('') }}
+                  >{m.name}</button>
                 ))}
                 {friendOptions.map(f => (
                   <button key={f.id}
