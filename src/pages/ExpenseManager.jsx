@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useExpense } from '../context/ExpenseContext'
+import { useAuth } from '../hooks/useAuth'
+import { createSupabaseClient } from '../lib/supabaseClient'
 import ExpenseEntryPanel from '../components/expenses/ExpenseEntryPanel'
 import ExpenseAnalytics  from '../components/expenses/ExpenseAnalytics'
 import Toast             from '../components/common/Toast'
@@ -828,6 +830,182 @@ function RecurringSection({ recurringItems, categories, paymentSources, onAdd, o
   )
 }
 
+function FriendsSection({ friends, addFriend, removeFriend, onToast, onReload }) {
+  const { token } = useAuth()
+  const [editId,      setEditId]      = useState(null)
+  const [editForm,    setEditForm]    = useState({ friend_name: '', nickname: '' })
+  const [confirmRmId, setConfirmRmId] = useState(null)
+  const [removing,    setRemoving]    = useState(null)
+  const [showAddForm, setShowAddForm] = useState(true)
+  const [newName,     setNewName]     = useState('')
+  const [newNickname, setNewNickname] = useState('')
+  const [saving,      setSaving]      = useState(false)
+
+  function startEdit(f) {
+    setEditId(f.id)
+    setEditForm({ friend_name: f.friend_name, nickname: f.nickname || '' })
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm.friend_name.trim() || !token) return
+    setSaving(true)
+    try {
+      const client = createSupabaseClient(token)
+      const { error: err } = await client
+        .from('expense_friends')
+        .update({ friend_name: editForm.friend_name.trim(), nickname: editForm.nickname.trim() || null })
+        .eq('id', editId)
+      if (err) { console.error('FriendsSection handleSaveEdit error:', err); throw err }
+      setEditId(null)
+      setEditForm({ friend_name: '', nickname: '' })
+      await onReload()
+    } catch (err) {
+      console.error('FriendsSection handleSaveEdit error:', err)
+      onToast({ message: 'Failed to save. Check connection.', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  async function handleRemove(f) {
+    setRemoving(f.id)
+    try {
+      await removeFriend(f.id)
+      setConfirmRmId(null)
+      onToast({ message: `${f.friend_name} removed`, type: 'success' })
+    } catch (err) {
+      console.error('FriendsSection handleRemove error:', err)
+      onToast({ message: 'Failed to remove. Check connection.', type: 'error' })
+    } finally { setRemoving(null) }
+  }
+
+  async function handleAdd() {
+    if (!newName.trim()) return
+    setSaving(true)
+    const name = newName.trim()
+    try {
+      await addFriend(name, newNickname.trim() || null)
+      setNewName('')
+      setNewNickname('')
+      setShowAddForm(false)
+      onToast({ message: `✓ ${name} added`, type: 'success' })
+    } catch (err) {
+      console.error('FriendsSection handleAdd error:', err)
+      onToast({ message: 'Failed to add. Check connection.', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <SetupSection icon="👥" title="Friends" count={friends.length}>
+      <div style={{ paddingTop: 12 }}>
+        {friends.length === 0 && editId === null && (
+          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8, fontFamily: 'DM Sans' }}>No friends added yet.</div>
+        )}
+        {friends.map(f => (
+          <div key={f.id} className="em-setup-list-item">
+            {editId === f.id ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="em-form-row">
+                  <div>
+                    <div className="em-field-label">Name</div>
+                    <input
+                      className="em-field-input"
+                      value={editForm.friend_name}
+                      onChange={e => setEditForm(p => ({ ...p, friend_name: e.target.value }))}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <div className="em-field-label">Nickname (optional)</div>
+                    <input
+                      className="em-field-input"
+                      value={editForm.nickname}
+                      onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="em-form-row">
+                  <button className="em-add-btn" onClick={handleSaveEdit} disabled={!editForm.friend_name.trim() || saving}>
+                    {saving ? 'Saving…' : '✓ Save'}
+                  </button>
+                  <button className="em-cancel-btn" onClick={() => { setEditId(null); setEditForm({ friend_name: '', nickname: '' }) }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : confirmRmId === f.id ? (
+              <>
+                <span className="em-setup-item-icon">👤</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: '#dc2626', fontFamily: 'DM Sans', marginBottom: 6 }}>
+                    Remove {f.friend_name}? Past splits keep their name.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="em-cancel-btn" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setConfirmRmId(null)}>Cancel</button>
+                    <button
+                      className="em-txn-del-btn"
+                      style={{ padding: '5px 12px', fontSize: 12 }}
+                      disabled={removing === f.id}
+                      onClick={() => handleRemove(f)}
+                    >
+                      {removing === f.id ? '…' : 'Remove'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="em-setup-item-icon">👤</span>
+                <div style={{ flex: 1 }}>
+                  <div className="em-setup-item-name">{f.friend_name}</div>
+                  {f.nickname && <div className="em-setup-item-sub">{f.nickname}</div>}
+                </div>
+                <div className="em-setup-actions">
+                  <button className="em-icon-btn" onClick={() => startEdit(f)}>✏</button>
+                  <button className="em-icon-btn danger" onClick={() => setConfirmRmId(f.id)}>🗑</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+
+        {showAddForm ? (
+          <div className="em-add-form">
+            <div className="em-form-row">
+              <div>
+                <div className="em-field-label">Name</div>
+                <input
+                  className="em-field-input"
+                  placeholder="e.g. Rahul"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                />
+              </div>
+              <div>
+                <div className="em-field-label">Nickname (optional)</div>
+                <input
+                  className="em-field-input"
+                  placeholder="e.g. Buddy"
+                  value={newNickname}
+                  onChange={e => setNewNickname(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="em-form-row">
+              <button className="em-add-btn" onClick={handleAdd} disabled={!newName.trim() || saving}>
+                {saving ? 'Adding…' : 'Add'}
+              </button>
+              <button className="em-cancel-btn" onClick={() => { setShowAddForm(false); setNewName(''); setNewNickname('') }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="em-add-trigger" onClick={() => setShowAddForm(true)}>+ Add Friend</button>
+        )}
+      </div>
+    </SetupSection>
+  )
+}
+
 function DueRow({ r, categories, onMarkPaid, onSnooze, processing }) {
   const cat   = categories.find(c => c.id === r.category_id)
   const days  = daysUntil(r.due_date_next)
@@ -1216,6 +1394,7 @@ function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove
 export default function ExpenseManager() {
   const {
     transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
+    friends, addFriend, removeFriend,
     loading, error, reload,
     addTransaction, deleteTransaction, updateTransaction,
     addCategory, updateCategory,
@@ -1712,6 +1891,7 @@ export default function ExpenseManager() {
             <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
             <CategoriesSection categories={categories} onAdd={addCategory} onUpdate={updateCategory} />
             <RecurringSection recurringItems={recurringItems} categories={categories} paymentSources={paymentSources} onAdd={addRecurringItem} onUpdate={updateRecurringItem} onDelete={deleteRecurringItem} />
+            <FriendsSection friends={friends} addFriend={addFriend} removeFriend={removeFriend} onToast={setToast} onReload={reload} />
             <ForeignCurrenciesSection currencyPrefs={currencyPrefs} onAdd={addCurrencyPref} onUpdateRate={updateCurrencyRate} onRemove={removeCurrencyPref} onToast={setToast} />
           </div>
         )}

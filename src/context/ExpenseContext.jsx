@@ -38,6 +38,8 @@ export function ExpenseProvider({ children }) {
   const [paymentSources,  setPaymentSources]  = useState([])
   const [recurringItems,  setRecurringItems]  = useState([])
   const [currencyPrefs,   setCurrencyPrefs]   = useState([])
+  const [friends,         setFriends]         = useState([])
+  const [splits,          setSplits]          = useState([])
   const [loading,         setLoading]         = useState(true)
   const [error,           setError]           = useState(null)
 
@@ -88,6 +90,20 @@ export function ExpenseProvider({ children }) {
 
       setCategories(cats)
       setPaymentSources(srcs)
+
+      const { data: friendsData, error: friendsErr } = await client
+        .from('expense_friends')
+        .select('*')
+        .eq('is_active', true)
+        .order('friend_name')
+      if (friendsErr) console.error('ExpenseContext loadAll friends error:', friendsErr)
+      setFriends(friendsData || [])
+
+      const { data: splitsData, error: splitsErr } = await client
+        .from('expense_splits')
+        .select('*')
+      if (splitsErr) console.error('ExpenseContext loadAll splits error:', splitsErr)
+      setSplits(splitsData || [])
     } catch (err) {
       console.error('ExpenseContext loadAll error:', err)
       setError(err.message)
@@ -98,7 +114,7 @@ export function ExpenseProvider({ children }) {
 
   useEffect(() => {
     if (user && token) loadAll()
-    else { setTransactions([]); setCategories([]); setPaymentSources([]); setRecurringItems([]); setLoading(false) }
+    else { setTransactions([]); setCategories([]); setPaymentSources([]); setRecurringItems([]); setFriends([]); setSplits([]); setLoading(false) }
   }, [user, token, loadAll])
 
   async function insertDefaultCategories(client, uid) {
@@ -291,14 +307,73 @@ export function ExpenseProvider({ children }) {
     setCurrencyPrefs(prev => prev.filter(c => c.id !== id))
   }
 
+  // ── Friends ───────────────────────────────────────────────────────────────────
+
+  async function addFriend(friend_name, nickname) {
+    const client = sb()
+    if (!client || !user) return
+    const { error: err } = await client
+      .from('expense_friends')
+      .insert([{ user_id: user.uid, friend_name, nickname: nickname || null, is_active: true }])
+    if (err) { console.error('addFriend error:', err); throw err }
+    const { data, error: reloadErr } = await client.from('expense_friends').select('*').eq('is_active', true).order('friend_name')
+    if (reloadErr) console.error('addFriend reload error:', reloadErr)
+    setFriends(data || [])
+  }
+
+  async function removeFriend(id) {
+    const client = sb()
+    if (!client) return
+    const { error: err } = await client
+      .from('expense_friends')
+      .update({ is_active: false })
+      .eq('id', id)
+    if (err) { console.error('removeFriend error:', err); throw err }
+    const { data, error: reloadErr } = await client.from('expense_friends').select('*').eq('is_active', true).order('friend_name')
+    if (reloadErr) console.error('removeFriend reload error:', reloadErr)
+    setFriends(data || [])
+  }
+
+  // ── Splits ────────────────────────────────────────────────────────────────────
+
+  async function addSplits(transaction_id, splitRows) {
+    const client = sb()
+    if (!client || !user) return
+    const rows = splitRows.map(r => ({ ...r, transaction_id }))
+    const { error: err } = await client
+      .from('expense_splits')
+      .insert(rows)
+    if (err) { console.error('addSplits error:', err); throw err }
+    const { data, error: reloadErr } = await client.from('expense_splits').select('*')
+    if (reloadErr) console.error('addSplits reload error:', reloadErr)
+    setSplits(data || [])
+  }
+
+  async function updateSplitStatus(id, status) {
+    const client = sb()
+    if (!client) return
+    const patch = { settlement_status: status }
+    if (status === 'settled') patch.settled_at = new Date().toISOString()
+    const { error: err } = await client
+      .from('expense_splits')
+      .update(patch)
+      .eq('id', id)
+    if (err) { console.error('updateSplitStatus error:', err); throw err }
+    const { data, error: reloadErr } = await client.from('expense_splits').select('*')
+    if (reloadErr) console.error('updateSplitStatus reload error:', reloadErr)
+    setSplits(data || [])
+  }
+
   const value = {
     transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
+    friends, splits,
     loading, error, reload: loadAll,
     addTransaction, updateTransaction, deleteTransaction,
     addCategory, updateCategory,
     addPaymentSource, updatePaymentSource,
     addRecurringItem, updateRecurringItem, deleteRecurringItem,
     addCurrencyPref, updateCurrencyRate, removeCurrencyPref,
+    addFriend, removeFriend, addSplits, updateSplitStatus,
   }
 
   return <ExpenseContext.Provider value={value}>{children}</ExpenseContext.Provider>
