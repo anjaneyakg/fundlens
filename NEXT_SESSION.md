@@ -1,18 +1,18 @@
 # NEXT SESSION — FundLens
-Last updated: 03 Jun 2026 (compute_returns.py v1.1 — NFO inception detection)
+Last updated: 03 Jun 2026 (compute_returns.py v1.1 final — NFO revert)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
-## compute_returns.py status: DONE ✅ (03 Jun 2026) — v1.1
-- `FundInsight/pipeline/compute_returns.py` v1.1
+## compute_returns.py status: DONE ✅ (03 Jun 2026) — v1.1 FINAL
+- `FundInsight/pipeline/compute_returns.py` v1.1 (final — no further changes expected)
 - `FundInsight/.github/workflows/daily_returns_sync.yml` — Mon–Fri 18:00 UTC (30 min after daily_nav_sync)
 - Reads nav_history via psycopg2 (10 queries/batch: 9 standard anchors + 1 inception)
-- NFO inception detection: earliest NAV = face value (10/100/1000) → inception = first_nav_date − 5 days
+- Inception: uses earliest nav_history date directly. For pre-2006 funds this is 2006-04-01 (AMFI data limit) — by design, not a bug.
 - Writes to scheme_returns via supabase-py upsert ON CONFLICT (scheme_id, as_of_date)
-- **First run NOT yet done** — run `--dry-run --verbose` first to confirm output, then full run
+- **Only remaining step: run full batch** — `python pipeline/compute_returns.py` from FundInsight/ with .env loaded
 
 ## EB-Fix-6 status: DONE ✅ (03 Jun 2026, commit 1224ebc)
 - Income label: "PAYMENT SOURCE" → "INTO ACCOUNT" in entry panel
