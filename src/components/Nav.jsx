@@ -656,7 +656,7 @@ function DrawerSection({ label, type, path: sectionPath, isGuest, groupIds, curr
 function MobileDrawer({
   open, onClose, currentPath,
   plan, onPlanChange,
-  isGuest, isAdvisor, advisorMode, onAdvisorModeChange,
+  isGuest, isAdvisor, isAdmin, advisorMode, onAdvisorModeChange,
   user, onSignOut, budgetAlertCount,
 }) {
   const navigate = useNavigate()
@@ -686,6 +686,9 @@ function MobileDrawer({
           <DrawerSection label="Plan"           type="plan"     isGuest={false}    groupIds={PLAN_GROUP_IDS}     currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Research"       type="research" isGuest={isGuest}  groupIds={RESEARCH_GROUP_IDS} currentPath={currentPath} onClose={onClose} />
           <DrawerSection label="Track"          type="track"    isGuest={isGuest}  currentPath={currentPath} onClose={onClose} />
+          {(isAdvisor || isAdmin) && (
+            <DrawerSection label="Advisor" type="track" path="/advisor/clients" isGuest={false} currentPath={currentPath} onClose={onClose} />
+          )}
           <DrawerSection label="Save & Invest"  type="disabled" isGuest={false}    currentPath={currentPath} onClose={onClose} />
           {advisorMode && isAdvisor && (
             <DrawerSection label="Promote" type="track" path="/advisor/promote" isGuest={false} currentPath={currentPath} onClose={onClose} />
@@ -874,6 +877,17 @@ export default function Nav() {
               isActive={isTrackActive}
             />
 
+            {(isAdvisor || isAdmin) && (
+              <NavTab
+                label="Advisor"
+                type="track"
+                path="/advisor/clients"
+                isGuest={false}
+                currentPath={currentPath}
+                isActive={currentPath.startsWith('/advisor/clients')}
+              />
+            )}
+
             <NavTab
               label="Save & Invest"
               type="disabled"
@@ -974,6 +988,7 @@ export default function Nav() {
         onPlanChange={handlePlanChange}
         isGuest={isGuest}
         isAdvisor={isAdvisor}
+        isAdmin={isAdmin}
         advisorMode={advisorMode}
         onAdvisorModeChange={handleAdvisorMode}
         user={user}

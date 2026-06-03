@@ -65,6 +65,8 @@ import AdvisorClientView       from './advisor/AdvisorClientView.jsx';
 import AdvisorSettings         from './advisor/AdvisorSettings.jsx';
 import AdvisorPromote          from './advisor/AdvisorPromote.jsx';
 import AdvisorInviteClient     from './advisor/AdvisorInviteClient.jsx';
+import AdvisorClients          from './pages/advisor/AdvisorDashboard.jsx';
+import AdvisorApply            from './pages/advisor/AdvisorApply.jsx';
 import { useAuth }             from './hooks/useAuth';
 import { useRole }             from './hooks/useRole';
 
@@ -171,6 +173,8 @@ function AppInner() {
           path="/advisor/clients/invite"
           element={<ProtectedRoute requiredRole="advisor"><AdvisorInviteClient /></ProtectedRoute>}
         />
+        <Route path="/advisor/clients" element={<AdvisorClients />} />
+        <Route path="/advisor/apply"   element={<AdvisorApply />} />
 
         {/* ── Admin routes — Admin required ── */}
         <Route
