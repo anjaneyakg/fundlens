@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v48.0
+**Last updated:** 03 Jun 2026 · v49.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,22 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## NAV-B: 2024 & 2025 Gap Repair ✅ (03 Jun 2026)
+
+Root cause: `backfill_nav_history.py` code was correct (DD-Mon-YYYY URL format, WINDOW_DAYS=89 window math). The gap existed because both years were never successfully backfilled — earlier repair runs were interrupted when Supabase was down. No code change was needed.
+
+Diagnostic dry-run confirmed: URL `?frmdt=01-Jan-2024&todt=31-Jan-2024` returns 160,812 rows (HTTP 200).
+
+| Year | Windows | AMFI rows fetched | Rows inserted | Days confirmed |
+|---|---|---|---|---|
+| 2024 | 5/5 (0 failed) | 1,938,994 | 1,896,696 | 366 (full leap year) |
+| 2025 | 5/5 (0 failed) | 2,110,963 | 2,092,229 | 365 (full year) |
+| **Total new** | **10/10** | **4,049,957** | **3,988,925** | |
+
+Local CSVs re-downloaded (`download_nav_local.py --year 2024/2025`); gap analysis re-run: **22,706,950 total local rows (2006–2026)**. Supabase total now ~26.5M rows.
 
 ---
 
@@ -996,10 +1012,9 @@ features never activated.
 | 2 | ✅ Run `migrations/003_promo_messages.sql` in fundlens-prod | ~~Supabase IO timeout~~ | Done 24 May 2026; populate STATIC_PROMOS rows when content is ready |
 | 3 | ✅ Vercel env vars (`VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) | ~~Missing~~ | All three set 24 May 2026 |
 | 4 | Tighten `advisor_profiles` RLS policies (currently `USING true`) | Phase 3 scope | Do in PH3-S1 or PH3-S2 |
-| 5 | Get DB password from Supabase dashboard → Settings → Database → Connection string, add `SUPABASE_DB_PASSWORD=<pw>` to FundInsight/.env | None | Required to run download_nav_local.py and reindex_nav.py |
-| 6 | Run `python pipeline/download_nav_local.py` from FundInsight/ after adding SUPABASE_DB_PASSWORD | After #5 | ~45-90 min. Downloads 25M rows to FundInsight/data/nav_local/. Then run nav_gap_analysis.py. |
-| 7 | Run `python pipeline/reindex_nav.py` from FundInsight/ (can run in parallel with download) | After #5 | ~20-60 min. REINDEX CONCURRENTLY all nav_history indexes. Recovers ~1–1.5 GB bloat. |
-| 8 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
+| 5 | ✅ `download_nav_local.py` and `nav_gap_analysis.py` working | ~~Pending credentials~~ | Done 03 Jun 2026 — SUPABASE_DB_PASSWORD already in FundInsight/.env |
+| 6 | Run `python pipeline/reindex_nav.py` from FundInsight/ | None | ~20-60 min. REINDEX CONCURRENTLY all nav_history indexes. Recovers ~1–1.5 GB bloat. |
+| 7 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
 
 ---
 
@@ -1020,7 +1035,7 @@ features never activated.
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
-| `nav_history` | ~21.4M local CSV rows · ~22.5M in Supabase (gap repair 2 complete 03 Jun 2026) | ✅ Gap repair 2 complete | 2021 fully restored (365d) · 2026-Jan added (141d) · 2024/2025 at AMFI history limit |
+| `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
 
@@ -1054,9 +1069,9 @@ features never activated.
 | `pipeline_cell1.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Raises SystemExit on import. |
 | `pipeline_cell2.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Gist pipeline discontinued. |
 | `db_connect.py` *(FI)* | v1.0 | ✅ Ready | FundInsight/pipeline/ — shared psycopg2 helper. Requires SUPABASE_DB_PASSWORD in .env. |
-| `download_nav_local.py` *(FI)* | v1.0 | ⏳ Pending credentials | FundInsight/pipeline/ — downloads nav_history year-by-year to data/nav_local/. ~45-90 min full run. |
-| `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending credentials | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
-| `nav_gap_analysis.py` *(FI)* | v1.0 | ⏳ Needs local CSVs | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Run after download. |
+| `download_nav_local.py` *(FI)* | v1.0 | ✅ Live | FundInsight/pipeline/ — downloads nav_history year-by-year to data/nav_local/. Run from FundInsight/ with .env loaded. |
+| `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
+| `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
 
 ---
 
