@@ -1,10 +1,21 @@
 # NEXT SESSION — FundLens
-Last updated: 03 Jun 2026 (EB-Fix-3 complete — CC reconcile moved, currency prefs, multi-currency entry)
+Last updated: 03 Jun 2026 (compute_returns.py v1.0 + daily_returns_sync cron)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
+
+## compute_returns.py status: DONE ✅ (03 Jun 2026)
+- `FundInsight/pipeline/compute_returns.py` v1.0 written
+- `FundInsight/.github/workflows/daily_returns_sync.yml` — Mon–Fri 18:00 UTC (30 min after daily_nav_sync)
+- Reads nav_history via psycopg2 (10 queries/batch: 9 standard anchors + 1 inception)
+- Writes to scheme_returns via supabase-py upsert ON CONFLICT (scheme_id, as_of_date)
+- **First run NOT yet done** — scheme_returns table has 0 rows
+
+## EB-Fix-6 status: DONE ✅ (03 Jun 2026, commit 1224ebc)
+- Income label: "PAYMENT SOURCE" → "INTO ACCOUNT" in entry panel
+- Transfer-in: FROM ACCOUNT chip row added above TRANSFERRED FROM people row
 
 ## EB-Fix-3 status: DONE ✅ (03 Jun 2026)
 - CC Reconciliation removed from Analytics tab entirely (Section G deleted)
@@ -35,31 +46,45 @@ All SQL already run manually before EB-Fix-3 session:
 
 ---
 
-## Current priority (do this next):
-Task: EB-Fix-4 — Split Expense + Friends List + Friend Analytics
+## Current priority (do this FIRST next session):
 
-Scope:
-- **Split expense**: Log an expense shared between multiple people (e.g., ₹1000 restaurant bill split 3 ways). UI: "Split" toggle in entry panel; enter N participants + their share. Saves multiple expense_transactions (one per person). Optional: "Send request" to a friend.
-- **Friends list**: New sub-table `expense_friends` (id, user_id, friend_name, phone_or_email, notes, created_at). CRUD in Setup tab (Section G — Friends). Display friends as chips in the Split expense flow.
-- **Friend analytics**: In Analytics tab or Log tab, show outstanding split balances — who owes you and how much. Aggregate from split transactions.
+### Step 0 — Run compute_returns.py (before any other work)
+```bash
+cd ~/Documents/FundInsight
+# Activate venv: source .venv/Scripts/activate  (Git Bash)
+python pipeline/compute_returns.py --dry-run --verbose
+# Confirm output matches expected format, then:
+python pipeline/compute_returns.py
+# Verify scheme_returns row count in Supabase after full run
+```
 
-No SQL needed at session start — new tables (`expense_friends`, `expense_splits`) will be created in that session's manual SQL block.
+### Step 1 — Cell C: Scheme Reconciler (main pipeline task)
 
-Read at session start: ExpenseManager.jsx, ExpenseEntryPanel.jsx, ExpenseContext.jsx (only these three).
+Context:
+- `scheme_portfolios` table has 0 rows. Blocked on Cell C.
+- Feb 2026: 115,469 rows in `holdings_raw_4d_2026-02.csv` (47 AMCs)
+- Mar 2026: 119,308 rows in `holdings_raw_4d_2026-03.csv` (48 AMCs)
+- Cell C goal: fuzzy-match holding names in the CSV to AMFI scheme master → populate `scheme_code_amfi`
+- After Cell C: build `merge_holdings.py` → `master_holdings.csv` → Phase C Supabase upsert
+
+Read at session start: `cell_4d_v2.py`, `amcList.js` (scheme master reference), the two CSV output files.
 
 ---
 
 ## Open issues to keep in mind:
 - ✅ EB-S1 through EB-S3 — ALL DONE
 - ✅ EB-Fix-3 — DONE (03 Jun 2026)
+- ✅ EB-Fix-6 — DONE (03 Jun 2026, commit 1224ebc) — income label + transfer_in FROM ACCOUNT row
 - ✅ PH3-S1 through PH3-S5 — ALL DONE
 - ✅ PH4-S5 bug fixes — ALL DONE (31 May 2026)
 - ✅ Node.js 24 upgrade — DONE (30 May 2026)
+- ⚠ scheme_returns table: 0 rows — run `python pipeline/compute_returns.py` from FundInsight/ (first run)
+- ⚠ Add SUPABASE_DB_PASSWORD to FundInsight repo GHA secrets (for daily_returns_sync.yml)
 - ⚠ Run migrations/005_expense_manager.sql — REQUIRED before testing /expenses
 - ⚠ Run migrations/004_registration.sql — REQUIRED before testing /register
 - ⚠ Verify advisor_client_links table exists in fundlens-prod
 - ⚠ promo_messages — 0 rows; insert sample rows to test carousel
-- ⚠ REINDEX needed: `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;`
+- ⚠ REINDEX: **do NOT use Supabase browser SQL editor (times out)**. Run: `cd ~/Documents/FundInsight && python pipeline/reindex_nav.py`
 - Family members in Expense Manager: local state only, NOT persisted to DB (EB-S4 future scope)
 - ExpenseEntryPanel: `is_reimbursable` toggle NOT added. Users can mark via expanded TxnRow in Log tab.
 - Supabase disk: 12 GB autoscaled · ~6.3 GB used
@@ -72,4 +97,6 @@ Read at session start: ExpenseManager.jsx, ExpenseEntryPanel.jsx, ExpenseContext
 - Dues tab bug fix (02 Jun 2026) ✅
 - EB-S3 Reimbursement + alerts + subscription + CSV (02 Jun 2026) ✅
 - EB-Fix-3 CC reconcile to Log tab, CC settlement persistence, multi-currency FX (03 Jun 2026) ✅
-- Next: EB-Fix-4 — Split expense + friends list + friend analytics
+- EB-Fix-6 Income label + transfer_in FROM ACCOUNT row (03 Jun 2026) ✅
+- compute_returns.py v1.0 + daily_returns_sync.yml cron (03 Jun 2026) ✅
+- Next: Run compute_returns.py --dry-run, then full run; then Cell C — Scheme Reconciler

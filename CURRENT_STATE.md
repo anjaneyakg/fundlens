@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v50.0
+**Last updated:** 03 Jun 2026 · v51.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -1004,14 +1004,14 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Run migrations/004_registration.sql** in Supabase fundlens-prod SQL editor before testing PH3-S4/S5 |
-| P0 | **Phase 3 + PH4-S5 complete** — Next: PH4-S6 Mobile responsive audit (375px, useWindowWidth() everywhere) |
+| P0 | **Run compute_returns.py --dry-run** from FundInsight/ to validate output, then run full `python pipeline/compute_returns.py` (first population of scheme_returns table) |
+| P0 | **Cell C — Scheme Reconciler** — fuzzy-match holdings_raw names → AMFI scheme master → populate scheme_code_amfi in scheme_portfolios |
+| P1 | **merge_holdings.py** — merge Feb+Mar 2026 CSVs (holdings_raw_4d_2026-02.csv + 2026-03.csv) → master_holdings.csv |
+| P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C + merge_holdings.py) |
+| P1 | **AIrrow sentiment archive cron** (T-89 days to August launch — URGENT) |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
-| P1 | **NAV REINDEX** — Run `REINDEX INDEX CONCURRENTLY nav_history_scheme_id_nav_date_idx;` in Supabase SQL editor to recover ~1–1.5 GB index bloat |
-| P0 | **GitHub Actions secrets** — Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo secrets to activate daily_nav_sync cron |
-| P1 | **PH1-S4** ✅ Done — daily_nav_sync.py replaces pipeline_cell1.py + pipeline_cell2.py (Gist pipeline retired) |
-| P2 | **Test advisor_client_links** — Run manual test INSERT to verify ClientListWidget populates |
+| P0 | **GitHub Actions secrets** — Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD` to FundInsight repo secrets to activate daily_returns_sync cron |
 
 ---
 
@@ -1024,8 +1024,8 @@ features never activated.
 | 3 | ✅ Vercel env vars (`VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) | ~~Missing~~ | All three set 24 May 2026 |
 | 4 | Tighten `advisor_profiles` RLS policies (currently `USING true`) | Phase 3 scope | Do in PH3-S1 or PH3-S2 |
 | 5 | ✅ `download_nav_local.py` and `nav_gap_analysis.py` working | ~~Pending credentials~~ | Done 03 Jun 2026 — SUPABASE_DB_PASSWORD already in FundInsight/.env |
-| 6 | Run `python pipeline/reindex_nav.py` from FundInsight/ | None | ~20-60 min. REINDEX CONCURRENTLY all nav_history indexes. Recovers ~1–1.5 GB bloat. |
-| 7 | Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to FundLens repo GitHub Actions secrets | None | Required to activate daily_nav_sync.yml cron (Mon–Fri 11:30PM IST) |
+| 6 | Run `python pipeline/reindex_nav.py` from FundInsight/ | None | ~20-60 min. REINDEX CONCURRENTLY all nav_history indexes. Recovers ~1–1.5 GB bloat. **Do NOT use Supabase browser SQL editor — times out.** Run: `cd ~/Documents/FundInsight && python pipeline/reindex_nav.py` |
+| 7 | Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD` to FundInsight repo GitHub Actions secrets | None | Required to activate daily_returns_sync.yml cron (Mon–Fri 23:30 IST) |
 
 ---
 
@@ -1049,6 +1049,7 @@ features never activated.
 | `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
+| `scheme_returns` | 0 | ⏳ Pending first run | Run `python pipeline/compute_returns.py` from FundInsight/ to populate |
 
 **Storage:** 12 GB autoscaled · ~6.3 GB used · Supabase key migrated to sb_secret format (legacy JWT disabled)
 **Supabase tier:** Pro ($25/mo) ✅ approved
@@ -1083,6 +1084,17 @@ features never activated.
 | `download_nav_local.py` *(FI)* | v1.0 | ✅ Live | FundInsight/pipeline/ — downloads nav_history year-by-year to data/nav_local/. Run from FundInsight/ with .env loaded. |
 | `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
 | `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
+| `compute_returns.py` *(FI)* | v1.0 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). |
+
+---
+
+## GitHub Actions — FundInsight
+
+| Workflow | Schedule | Purpose | Secrets Required |
+|---|---|---|---|
+| `bse_index_daily.yml` | Mon–Fri 17:00+18:30 IST | BSE index OHLC → bse_index_data | SUPABASE_URL, SUPABASE_SERVICE_KEY |
+| `daily_nav_sync.yml` | Mon–Fri 23:00 IST (17:30 UTC) | Daily NAV → nav_history | SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY |
+| `daily_returns_sync.yml` | Mon–Fri 23:30 IST (18:00 UTC) | 9-period returns → scheme_returns | SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_DB_PASSWORD |
 
 ---
 
