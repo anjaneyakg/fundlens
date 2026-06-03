@@ -1,18 +1,20 @@
 # NEXT SESSION — FundLens
-Last updated: 03 Jun 2026 (compute_returns.py v1.1 final — NFO revert)
+Last updated: 04 Jun 2026 (compute_returns.py IO optimisation — single query/batch)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/PLATFORM_STATE.md
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/NEXT_SESSION.md
 
-## compute_returns.py status: DONE ✅ (03 Jun 2026) — v1.1 FINAL
-- `FundInsight/pipeline/compute_returns.py` v1.1 (final — no further changes expected)
+## compute_returns.py status: DONE ✅ (04 Jun 2026) — v1.1 IO-optimised
+- `FundInsight/pipeline/compute_returns.py` v1.1 (IO-optimised, ready for full run)
 - `FundInsight/.github/workflows/daily_returns_sync.yml` — Mon–Fri 18:00 UTC (30 min after daily_nav_sync)
-- Reads nav_history via psycopg2 (10 queries/batch: 9 standard anchors + 1 inception)
-- Inception: uses earliest nav_history date directly. For pre-2006 funds this is 2006-04-01 (AMFI data limit) — by design, not a bug.
-- Writes to scheme_returns via supabase-py upsert ON CONFLICT (scheme_id, as_of_date)
-- **Only remaining step: run full batch** — `python pipeline/compute_returns.py` from FundInsight/ with .env loaded
+- IO incident 03 Jun: 9 queries/batch × 33 batches exhausted Supabase Disk IO budget
+- Fix: 1 combined query/batch via unnest+DISTINCT ON (9× fewer DB round trips)
+- Batch size 200 (down from 500), 2s sleep between batches
+- IO budget resets at midnight UTC (05:30 IST). **Run full batch on 04 Jun after 05:30 IST.**
+- Command: `cd ~/Documents/FundInsight && python pipeline/compute_returns.py`
+- Dry-run first is optional — script has been tested, only the full batch remains
 
 ## EB-Fix-6 status: DONE ✅ (03 Jun 2026, commit 1224ebc)
 - Income label: "PAYMENT SOURCE" → "INTO ACCOUNT" in entry panel
