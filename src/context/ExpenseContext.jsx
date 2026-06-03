@@ -43,9 +43,11 @@ export function ExpenseProvider({ children }) {
   const [loading,         setLoading]         = useState(true)
   const [error,           setError]           = useState(null)
 
-  const familyMembers = ['Self', ...Array.from(
+  const familyMembers     = ['Self', ...Array.from(
     new Set(transactions.map(t => t.family_member).filter(m => m && m !== 'Self'))
   )]
+  const expenseCategories = categories.filter(c => c.category_type !== 'income' && c.is_active !== false)
+  const incomeHeads       = categories.filter(c => c.category_type === 'income' && c.is_active !== false)
 
   const sb = useCallback(() => {
     if (!token) return null
@@ -184,7 +186,7 @@ export function ExpenseProvider({ children }) {
   async function addCategory(payload) {
     const client = sb()
     if (!client || !user) return
-    const row = { ...payload, user_id: user.uid, is_default: false, is_active: true }
+    const row = { category_type: 'expense', ...payload, user_id: user.uid, is_default: false, is_active: true }
     const { data, error: err } = await client.from('expense_categories').insert([row]).select()
     if (err) { console.error('addCategory error:', err); throw err }
     setCategories(prev => [...prev, data[0]])
@@ -365,7 +367,8 @@ export function ExpenseProvider({ children }) {
   }
 
   const value = {
-    transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
+    transactions, categories, expenseCategories, incomeHeads,
+    paymentSources, recurringItems, currencyPrefs, familyMembers,
     friends, splits,
     loading, error, reload: loadAll,
     addTransaction, updateTransaction, deleteTransaction,

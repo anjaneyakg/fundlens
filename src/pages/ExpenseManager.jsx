@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useExpense } from '../context/ExpenseContext'
 import { useAuth } from '../hooks/useAuth'
 import { createSupabaseClient } from '../lib/supabaseClient'
@@ -246,6 +246,42 @@ const emCSS = `
     border-radius: 4px; font-size: 10px; font-weight: 700;
     padding: 2px 6px;
   }
+  /* ── TXN ROW MENU BUTTON ── */
+  .em-txn-menu-btn {
+    flex-shrink: 0; width: 32px; height: 32px; border: none; background: transparent;
+    cursor: pointer; font-size: 18px; color: #94a3b8; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.12s, background 0.12s; line-height: 1; padding: 0;
+    letter-spacing: -1px;
+  }
+  .em-txn-menu-btn:hover { color: #1A3C6E; background: #f0f4ff; }
+  /* ── EDIT ENTRY SHEET ── */
+  .ees-field-label {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+    color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .ees-input {
+    width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+    box-sizing: border-box; background: #ffffff; color: #1a1a2a; transition: border-color 0.15s;
+  }
+  .ees-input:focus { border-color: #1A3C6E; }
+  .ees-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .ees-chips::-webkit-scrollbar { display: none; }
+  .ees-chip {
+    flex-shrink: 0; padding: 6px 12px; border-radius: 20px;
+    border: 1.5px solid #e2e8f0; background: #f1f5f9;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.12s; white-space: nowrap; color: #475569;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .ees-chip.sel { border-color: #1A3C6E; background: #1A3C6E; color: #ffffff; font-weight: 600; }
+  .ees-toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .ees-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .ees-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #e2e8f0; border-radius: 20px; transition: background 0.2s; }
+  .ees-toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .ees-toggle-switch input:checked + .ees-toggle-slider { background: #16a34a; }
+  .ees-toggle-switch input:checked + .ees-toggle-slider::before { transform: translateX(16px); }
   .em-txn-expand {
     padding: 10px 16px 14px 50px; background: #f8f9fa;
     border-radius: 0 0 10px 10px; border-bottom: 1px solid #f1f5f9;
@@ -486,6 +522,246 @@ const emCSS = `
 `
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+// ── Action menu ───────────────────────────────────────────────────────────────
+
+function ActionRow({ icon, label, color, disabled, onClick }) {
+  return (
+    <button disabled={disabled} onClick={onClick}
+      style={{ display:'flex', alignItems:'center', gap:14, width:'100%', padding:'0 20px', height:48, border:'none', background:'transparent', cursor:disabled?'not-allowed':'pointer', opacity:disabled?0.5:1, fontFamily:'DM Sans', fontSize:14, color:color||'#1a1a2a', textAlign:'left', borderTop:'1px solid #f8f9fa' }}>
+      <span style={{ fontSize:18, width:24, flexShrink:0, textAlign:'center' }}>{icon}</span>
+      <span style={{ fontWeight:500 }}>{label}</span>
+    </button>
+  )
+}
+
+function ActionSheet({ txn, cat, onClose, onEdit, onSplit, hasSplits, onUpdate, onDelete, onToast }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [processing,    setProcessing]    = useState(null)
+
+  const isExpense = txn.txn_type === 'expense'
+  const isPending = txn.is_reimbursable && txn.reimbursement_status === 'pending'
+
+  async function doAction(action) {
+    if (processing) return
+    setProcessing(action)
+    try {
+      if (action === 'reimbursable') {
+        await onUpdate(txn.id, { is_reimbursable: true, reimbursement_status: 'pending' })
+        onToast({ message: '✓ Marked as reimbursable', type: 'success' })
+        onClose()
+      } else if (action === 'received') {
+        await onUpdate(txn.id, { reimbursement_status: 'received' })
+        onToast({ message: '✓ Reimbursement received', type: 'success' })
+        onClose()
+      }
+    } catch (err) {
+      console.error('ActionSheet doAction error:', err)
+      onToast({ message: 'Failed. Check connection.', type: 'error' })
+    } finally { setProcessing(null) }
+  }
+
+  async function doDelete() {
+    setProcessing('delete')
+    try {
+      await onDelete(txn.id)
+      onToast({ message: 'Entry deleted', type: 'success' })
+      onClose()
+    } catch (err) {
+      console.error('ActionSheet doDelete error:', err)
+      onToast({ message: 'Failed to delete. Check connection.', type: 'error' })
+      setProcessing(null)
+    }
+  }
+
+  return (
+    <>
+      <div style={{ position:'fixed', inset:0, zIndex:900, background:'rgba(0,0,0,0.45)' }} onClick={onClose} />
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', zIndex:901, width:'100%', maxWidth:480, background:'#ffffff', borderRadius:'20px 20px 0 0', maxHeight:'70vh', overflow:'hidden', boxShadow:'0 -4px 24px rgba(0,0,0,0.12)', fontFamily:'DM Sans', paddingBottom:'env(safe-area-inset-bottom,0)' }}>
+        <div style={{ width:40, height:4, background:'#e2e8f0', borderRadius:2, margin:'12px auto 0' }} />
+        <div style={{ padding:'12px 20px', borderBottom:'1px solid #f1f5f9', color:'#64748b', fontSize:14 }}>
+          {cat ? cat.icon_code : '💸'} {cat ? cat.category_name : 'Uncategorised'} · ₹{fmtAmt(txn.amount)}
+        </div>
+
+        {confirmDelete ? (
+          <div style={{ padding:'16px 20px' }}>
+            <div style={{ fontSize:13, color:'#374151', fontFamily:'DM Sans', marginBottom:16 }}>
+              Delete this ₹{fmtAmt(txn.amount)} entry? Cannot be undone.
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirmDelete(false)}
+                style={{ flex:1, padding:12, border:'1.5px solid #e2e8f0', borderRadius:10, background:'#ffffff', color:'#374151', fontFamily:'DM Sans', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                Cancel
+              </button>
+              <button disabled={processing === 'delete'} onClick={doDelete}
+                style={{ flex:1, padding:12, border:'none', borderRadius:10, background:'#dc2626', color:'#ffffff', fontFamily:'DM Sans', fontSize:13, fontWeight:700, cursor:'pointer', opacity:processing==='delete'?0.7:1 }}>
+                {processing === 'delete' ? '…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ActionRow icon="✏️" label="Edit this entry" onClick={onEdit} />
+            {isExpense && <ActionRow icon="✂️" label={hasSplits ? 'View Split' : 'Split this expense'} onClick={onSplit} />}
+            {isExpense && !txn.is_reimbursable && <ActionRow icon="↩️" label="Mark as Reimbursable" disabled={!!processing} onClick={() => doAction('reimbursable')} />}
+            {isPending && <ActionRow icon="✓" label="Mark as Received" disabled={!!processing} onClick={() => doAction('received')} />}
+            <ActionRow icon="🗑️" label="Delete entry" color="#dc2626" onClick={() => setConfirmDelete(true)} />
+          </>
+        )}
+
+        <button onClick={onClose}
+          style={{ display:'block', width:'100%', padding:14, background:'#f8f9fa', border:'none', borderTop:'1px solid #f1f5f9', color:'#374151', fontFamily:'DM Sans', fontSize:14, fontWeight:600, cursor:'pointer', textAlign:'center' }}>
+          Cancel
+        </button>
+      </div>
+    </>
+  )
+}
+
+function EditEntrySheet({ txn, onClose, onToast }) {
+  const { expenseCategories, incomeHeads, paymentSources, familyMembers, updateTransaction } = useExpense()
+
+  const [amount,         setAmount]         = useState(String(txn.amount))
+  const [txnType,        setTxnType]        = useState(txn.txn_type)
+  const [categoryId,     setCategoryId]     = useState(txn.category_id || null)
+  const [sourceId,       setSourceId]       = useState(txn.payment_source_id || null)
+  const [member,         setMember]         = useState(txn.family_member || 'Self')
+  const [txnDate,        setTxnDate]        = useState(txn.txn_date || '')
+  const [note,           setNote]           = useState(txn.notes || '')
+  const [isReimbursable, setIsReimbursable] = useState(!!txn.is_reimbursable)
+  const [saving,         setSaving]         = useState(false)
+
+  const activeSrcs    = paymentSources.filter(s => s.is_active)
+  const activeExpCats = expenseCategories.filter(c => c.is_active !== false)
+  const activeIncHeads= incomeHeads.filter(c => c.is_active !== false)
+  const cats = txnType === 'income' ? activeIncHeads : activeExpCats
+
+  async function handleUpdate() {
+    const rawAmt = parseFloat(amount)
+    if (!rawAmt || rawAmt <= 0 || saving) return
+    setSaving(true)
+    try {
+      await updateTransaction(txn.id, {
+        amount:               rawAmt,
+        txn_type:             txnType,
+        category_id:          txnType === 'transfer_in' ? null : (categoryId || null),
+        payment_source_id:    sourceId || null,
+        family_member:        member || 'Self',
+        txn_date:             txnDate,
+        notes:                note || null,
+        is_reimbursable:      txnType === 'expense' ? isReimbursable : false,
+        reimbursement_status: txnType === 'expense' && isReimbursable ? (txn.reimbursement_status || 'pending') : null,
+      })
+      onToast({ message: '✓ Entry updated', type: 'success' })
+      onClose()
+    } catch (err) {
+      console.error('EditEntrySheet handleUpdate error:', err)
+      onToast({ message: 'Failed to update. Check connection.', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  const sheetStyle = { position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', zIndex:901, width:'100%', maxWidth:480, background:'#ffffff', borderRadius:'20px 20px 0 0', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 -4px 24px rgba(0,0,0,0.12)', fontFamily:'DM Sans', paddingBottom:'env(safe-area-inset-bottom,0)' }
+
+  return (
+    <>
+      <div style={{ position:'fixed', inset:0, zIndex:900, background:'rgba(0,0,0,0.45)' }} onClick={onClose} />
+      <div style={sheetStyle}>
+        <div style={{ width:40, height:4, background:'#e2e8f0', borderRadius:2, margin:'12px auto 0' }} />
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 20px 10px', borderBottom:'1px solid #f1f5f9' }}>
+          <span style={{ fontSize:15, fontWeight:700, color:'#1a1a2a' }}>Edit Entry</span>
+          <button onClick={onClose} style={{ border:'none', background:'#f1f5f9', borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:13, color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+        </div>
+
+        <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:14 }}>
+          {/* Amount */}
+          <div>
+            <div className="ees-field-label">Amount (₹)</div>
+            <input className="ees-input" type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} style={{ fontSize:22, fontWeight:700 }} />
+          </div>
+
+          {/* Type */}
+          <div>
+            <div className="ees-field-label">Type</div>
+            <div style={{ display:'flex', background:'#f1f5f9', borderRadius:10, padding:3, gap:2 }}>
+              {[['expense','Expense'],['income','Income'],['transfer_in','Transfer In']].map(([v,l]) => (
+                <button key={v} onClick={() => { setTxnType(v); setCategoryId(null) }}
+                  style={{ flex:1, padding:'7px 4px', border:'none', borderRadius:8, fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer', background:txnType===v?'#ffffff':'transparent', color:txnType===v?'#1A3C6E':'#64748b', boxShadow:txnType===v?'0 1px 4px rgba(0,0,0,0.1)':'none', transition:'all 0.15s', whiteSpace:'nowrap' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category / Income Head */}
+          {txnType !== 'transfer_in' && cats.length > 0 && (
+            <div>
+              <div className="ees-field-label">{txnType === 'income' ? 'Income Head' : 'Category'}</div>
+              <div className="ees-chips">
+                {cats.map(c => (
+                  <button key={c.id} className={`ees-chip${categoryId===c.id?' sel':''}`} onClick={() => setCategoryId(c.id)}>
+                    <span>{c.icon_code}</span><span>{c.category_name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Payment source */}
+          <div>
+            <div className="ees-field-label">{txnType === 'transfer_in' ? 'Into account' : 'Payment Source'}</div>
+            <div className="ees-chips">
+              {activeSrcs.map(s => (
+                <button key={s.id} className={`ees-chip${sourceId===s.id?' sel':''}`} onClick={() => setSourceId(s.id)}>
+                  {s.source_name}{s.last_four?` ···${s.last_four}`:''}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Family member */}
+          {txnType !== 'transfer_in' && familyMembers.length > 1 && (
+            <div>
+              <div className="ees-field-label">{txnType === 'income' ? 'Earned by' : 'For / Paid by'}</div>
+              <div className="ees-chips">
+                {familyMembers.map(m => (
+                  <button key={m} className={`ees-chip${member===m?' sel':''}`} onClick={() => setMember(m)}>{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Date */}
+          <div>
+            <div className="ees-field-label">Date</div>
+            <input className="ees-input" type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} />
+          </div>
+
+          {/* Note */}
+          <div>
+            <div className="ees-field-label">Note (optional)</div>
+            <input className="ees-input" type="text" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} />
+          </div>
+
+          {/* Reimbursable */}
+          {txnType === 'expense' && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 0' }}>
+              <span style={{ fontSize:13, fontWeight:500, color:'#374151', fontFamily:'DM Sans' }}>Reimbursable expense?</span>
+              <label className="ees-toggle-switch">
+                <input type="checkbox" checked={isReimbursable} onChange={e => setIsReimbursable(e.target.checked)} />
+                <span className="ees-toggle-slider" />
+              </label>
+            </div>
+          )}
+
+          <button disabled={!parseFloat(amount) || saving} onClick={handleUpdate}
+            style={{ padding:14, border:'none', borderRadius:12, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:15, fontWeight:700, cursor:'pointer', opacity:(!parseFloat(amount)||saving)?0.5:1, marginTop:4 }}>
+            {saving ? 'Updating…' : 'Update Entry'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
 
 // ── Split sheets ──────────────────────────────────────────────────────────────
 
@@ -741,8 +1017,9 @@ function SplitEntrySheet({ txn, onClose, onToast }) {
 }
 
 function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onDelete, onUpdate, reimbProcessing, splits, onToast }) {
-  const [expanded,   setExpanded]   = useState(false)
-  const [splitSheet, setSplitSheet] = useState(null) // null | 'view' | 'entry'
+  const [actionSheet, setActionSheet] = useState(false)
+  const [editSheet,   setEditSheet]   = useState(false)
+  const [splitSheet,  setSplitSheet]  = useState(null) // null | 'view' | 'entry'
 
   const cat        = categories.find(c => c.id === txn.category_id)
   const src        = paymentSources.find(s => s.id === txn.payment_source_id)
@@ -750,18 +1027,17 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
   const isIncome   = txn.txn_type === 'income'
   const isPending  = txn.is_reimbursable && txn.reimbursement_status === 'pending'
   const isReceived = txn.is_reimbursable && txn.reimbursement_status === 'received'
-  const busy       = reimbProcessing === txn.id
   const txnSplits  = splits.filter(s => s.transaction_id === txn.id)
   const hasSplits  = txnSplits.length > 0
 
   function handleSplitAction() {
+    setActionSheet(false)
     setSplitSheet(hasSplits ? 'view' : 'entry')
-    setExpanded(false)
   }
 
   return (
     <>
-      <div className="em-txn-row" onClick={() => setExpanded(e => !e)}>
+      <div className="em-txn-row">
         <div className="em-txn-icon" style={{ background: cat ? cat.colour_hex + '22' : '#f0f4ff' }}>
           {cat ? cat.icon_code : '💸'}
         </div>
@@ -770,12 +1046,13 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
             {cat ? cat.category_name : 'Uncategorised'}
             {isFlagged && <span className="em-unusual-badge">⚠ Unusual</span>}
             {isReceived && <span className="em-reimb-badge">✓ Received</span>}
+            {isPending && <span className="em-reimb-badge" style={{ background:'#fef3c7', color:'#92400e' }}>↩ Reimb.</span>}
             {hasSplits && <span className="em-split-badge">✂ Split</span>}
           </div>
           <div className="em-txn-meta">
             {fmtDate(txn.txn_date)}
             {txn.family_member && txn.family_member !== 'Self' ? ` · ${txn.family_member}` : ''}
-            {isPending ? ' · Pending reimbursement' : ''}
+            {txn.notes ? ` · ${txn.notes.slice(0, 40)}${txn.notes.length > 40 ? '…' : ''}` : ''}
           </div>
         </div>
         <div className="em-txn-right">
@@ -790,30 +1067,23 @@ function TxnRow({ txn, categories, paymentSources, currencyPrefs, isFlagged, onD
           )}
           {src && <div className="em-txn-src">{SOURCE_ICONS[src.source_type]} {src.source_name}</div>}
         </div>
+        <button className="em-txn-menu-btn" onClick={e => { e.stopPropagation(); setActionSheet(true) }}>⋮</button>
       </div>
-      {expanded && (
-        <div className="em-txn-expand">
-          {txn.notes && <div className="em-txn-note">"{txn.notes}"</div>}
-          <div className="em-txn-actions">
-            <button className="em-txn-del-btn" onClick={() => onDelete(txn.id)}>Delete</button>
-            {isExpense && (
-              <button
-                style={{ padding:'6px 14px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', border:'none', background:'#f0f4ff', color:'#1A3C6E', fontFamily:'DM Sans' }}
-                onClick={handleSplitAction}
-              >✂️ {hasSplits ? 'View Split' : 'Split'}</button>
-            )}
-            {!txn.is_reimbursable && (
-              <button className="em-txn-reimb-btn" onClick={() => onUpdate(txn.id, { is_reimbursable: true, reimbursement_status: 'pending' })}>
-                Mark Reimbursable
-              </button>
-            )}
-            {isPending && (
-              <button className="em-txn-received-btn" disabled={busy} onClick={() => onUpdate(txn.id, { reimbursement_status: 'received' })}>
-                {busy ? '…' : '✓ Mark Received'}
-              </button>
-            )}
-          </div>
-        </div>
+
+      {actionSheet && (
+        <ActionSheet
+          txn={txn} cat={cat}
+          hasSplits={hasSplits}
+          onClose={() => setActionSheet(false)}
+          onEdit={() => { setActionSheet(false); setEditSheet(true) }}
+          onSplit={handleSplitAction}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onToast={onToast}
+        />
+      )}
+      {editSheet && (
+        <EditEntrySheet txn={txn} onClose={() => setEditSheet(false)} onToast={onToast} />
       )}
       {splitSheet === 'view' && (
         <SplitViewSheet txn={txn} txnSplits={txnSplits} onClose={() => setSplitSheet(null)} onToast={onToast} />
@@ -1286,6 +1556,86 @@ function FriendsSection({ friends, addFriend, removeFriend, onToast, onReload })
   )
 }
 
+function IncomeHeadsSection({ incomeHeads, onAdd, onUpdate, onToast }) {
+  const { token } = useAuth()
+  const { reload } = useExpense()
+  const [showForm,  setShowForm]  = useState(false)
+  const [form,      setForm]      = useState({ category_name:'', icon_code:'', colour_hex:'#1A3C6E' })
+  const [saving,    setSaving]    = useState(false)
+  const [editId,    setEditId]    = useState(null)
+  const [editName,  setEditName]  = useState('')
+  const [editSaving,setEditSaving]= useState(false)
+
+  async function handleAdd() {
+    if (!form.category_name.trim() || !form.icon_code.trim()) return
+    setSaving(true)
+    try {
+      await onAdd({ category_name: form.category_name.trim(), icon_code: form.icon_code.trim(), colour_hex: form.colour_hex, category_type: 'income', display_order: incomeHeads.length + 100 })
+      setForm({ category_name:'', icon_code:'', colour_hex:'#1A3C6E' })
+      setShowForm(false)
+    } catch (err) { console.error('IncomeHeadsSection handleAdd error:', err) }
+    finally { setSaving(false) }
+  }
+
+  async function handleSaveEdit(head) {
+    if (!editName.trim() || !token) return
+    setEditSaving(true)
+    try {
+      await onUpdate(head.id, { category_name: editName.trim() })
+      setEditId(null)
+      setEditName('')
+    } catch (err) { console.error('IncomeHeadsSection handleSaveEdit error:', err) }
+    finally { setEditSaving(false) }
+  }
+
+  return (
+    <SetupSection icon="💰" title="Income Heads" count={incomeHeads.length}>
+      <div style={{ paddingTop:12 }}>
+        {incomeHeads.length === 0 && <div style={{ fontSize:13, color:'#94a3b8', marginBottom:8, fontFamily:'DM Sans' }}>No income heads added yet.</div>}
+        {incomeHeads.map(h => (
+          <div key={h.id} className="em-setup-list-item">
+            <span className="em-setup-item-icon">{h.icon_code}</span>
+            {editId === h.id ? (
+              <div style={{ flex:1, display:'flex', gap:8, alignItems:'center' }}>
+                <input className="em-field-input" value={editName} onChange={e => setEditName(e.target.value)} autoFocus style={{ flex:1 }} />
+                <button className="em-add-btn" style={{ padding:'6px 12px', fontSize:12 }} disabled={!editName.trim()||editSaving} onClick={() => handleSaveEdit(h)}>
+                  {editSaving ? '…' : '✓'}
+                </button>
+                <button className="em-cancel-btn" style={{ padding:'6px 10px', fontSize:12 }} onClick={() => { setEditId(null); setEditName('') }}>✕</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ flex:1 }}>
+                  <div className="em-setup-item-name">{h.category_name}</div>
+                </div>
+                <div className="em-setup-actions">
+                  <Toggle checked={h.is_active !== false} onChange={v => onUpdate(h.id, { is_active: v })} />
+                  <button className="em-icon-btn" onClick={() => { setEditId(h.id); setEditName(h.category_name) }}>✏</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {showForm ? (
+          <div className="em-add-form">
+            <div className="em-form-row">
+              <div><div className="em-field-label">Name</div><input className="em-field-input" placeholder="e.g. Rental Income" value={form.category_name} onChange={e => setForm(f => ({ ...f, category_name:e.target.value }))} /></div>
+              <div><div className="em-field-label">Icon</div><input className="em-field-input" placeholder="🏠" value={form.icon_code} onChange={e => setForm(f => ({ ...f, icon_code:e.target.value }))} /></div>
+            </div>
+            <div><div className="em-field-label">Colour</div><input type="color" value={form.colour_hex} onChange={e => setForm(f => ({ ...f, colour_hex:e.target.value }))} style={{ width:'100%', height:40, border:'none', borderRadius:10, cursor:'pointer', padding:2 }} /></div>
+            <div className="em-form-row">
+              <button className="em-add-btn" disabled={!form.category_name.trim()||!form.icon_code.trim()||saving} onClick={handleAdd}>{saving?'Saving…':'Add'}</button>
+              <button className="em-cancel-btn" onClick={() => setShowForm(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button className="em-add-trigger" onClick={() => setShowForm(true)}>+ Add Income Head</button>
+        )}
+      </div>
+    </SetupSection>
+  )
+}
+
 function DueRow({ r, categories, onMarkPaid, onSnooze, processing }) {
   const cat   = categories.find(c => c.id === r.category_id)
   const days  = daysUntil(r.due_date_next)
@@ -1673,7 +2023,8 @@ function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove
 
 export default function ExpenseManager() {
   const {
-    transactions, categories, paymentSources, recurringItems, currencyPrefs, familyMembers,
+    transactions, categories, expenseCategories, incomeHeads,
+    paymentSources, recurringItems, currencyPrefs, familyMembers,
     friends, splits, addFriend, removeFriend, addSplits, updateSplitStatus,
     loading, error, reload,
     addTransaction, deleteTransaction, updateTransaction,
@@ -1682,6 +2033,28 @@ export default function ExpenseManager() {
     addRecurringItem, updateRecurringItem, deleteRecurringItem,
     addCurrencyPref, updateCurrencyRate, removeCurrencyPref,
   } = useExpense()
+
+  const seedDoneRef = useRef(false)
+  useEffect(() => {
+    if (loading || seedDoneRef.current || incomeHeads.length > 0) return
+    seedDoneRef.current = true
+    const defaults = [
+      { category_name:'Salary',                   icon_code:'💼', colour_hex:'#1A3C6E', category_type:'income', display_order:101 },
+      { category_name:'Freelance / Consulting',   icon_code:'💻', colour_hex:'#3b82f6', category_type:'income', display_order:102 },
+      { category_name:'Rental Income',            icon_code:'🏠', colour_hex:'#10b981', category_type:'income', display_order:103 },
+      { category_name:'Interest Income',          icon_code:'🏦', colour_hex:'#f59e0b', category_type:'income', display_order:104 },
+      { category_name:'Dividend',                 icon_code:'📈', colour_hex:'#8b5cf6', category_type:'income', display_order:105 },
+      { category_name:'Business Income',          icon_code:'🏪', colour_hex:'#ec4899', category_type:'income', display_order:106 },
+      { category_name:'Gift Received',            icon_code:'🎁', colour_hex:'#06b6d4', category_type:'income', display_order:107 },
+      { category_name:'Reimbursement Received',   icon_code:'↩️', colour_hex:'#16a34a', category_type:'income', display_order:108 },
+      { category_name:'Other Income',             icon_code:'📌', colour_hex:'#94a3b8', category_type:'income', display_order:109 },
+    ]
+    ;(async () => {
+      for (const d of defaults) {
+        try { await addCategory(d) } catch (err) { console.error('ExpenseManager seedIncomeHeads error:', err) }
+      }
+    })()
+  }, [loading, incomeHeads.length])
 
   const width    = useWindowWidth()
 
@@ -2171,7 +2544,8 @@ export default function ExpenseManager() {
           <div style={{ paddingTop:8 }}>
             <FamilyMembersSection familyMembers={familyMembers} />
             <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
-            <CategoriesSection categories={categories} onAdd={addCategory} onUpdate={updateCategory} />
+            <CategoriesSection categories={expenseCategories} onAdd={addCategory} onUpdate={updateCategory} />
+            <IncomeHeadsSection incomeHeads={incomeHeads} onAdd={addCategory} onUpdate={updateCategory} onToast={setToast} />
             <RecurringSection recurringItems={recurringItems} categories={categories} paymentSources={paymentSources} onAdd={addRecurringItem} onUpdate={updateRecurringItem} onDelete={deleteRecurringItem} />
             <FriendsSection friends={friends} addFriend={addFriend} removeFriend={removeFriend} onToast={setToast} onReload={reload} />
             <ForeignCurrenciesSection currencyPrefs={currencyPrefs} onAdd={addCurrencyPref} onUpdateRate={updateCurrencyRate} onRemove={removeCurrencyPref} onToast={setToast} />

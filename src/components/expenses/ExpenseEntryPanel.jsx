@@ -218,13 +218,24 @@ const panelCSS = `
     color: #1A3C6E; margin-bottom: 10px;
   }
 
-  /* Toggle switch */
+  /* Toggle switch — blue (split) */
   .eep-toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
   .eep-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
   .eep-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #e2e8f0; border-radius: 20px; transition: background 0.2s; }
   .eep-toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
   .eep-toggle-switch input:checked + .eep-toggle-slider { background: #1A3C6E; }
   .eep-toggle-switch input:checked + .eep-toggle-slider::before { transform: translateX(16px); }
+  /* Toggle switch — green (reimbursable) */
+  .eep-toggle-switch.green input:checked + .eep-toggle-slider { background: #16a34a; }
+
+  /* Transfer-in "from" text input */
+  .eep-transfer-input {
+    width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
+    box-sizing: border-box; margin-top: 8px; margin-bottom: 8px;
+    background: #ffffff; color: #1a1a2a; transition: border-color 0.15s;
+  }
+  .eep-transfer-input:focus { border-color: #1A3C6E; }
 
   /* Bottom sheet (More categories / sources) */
   .eep-sheet-backdrop {
@@ -278,7 +289,8 @@ const LSKEY_SRC = 'eep_last_src'
 
 export default function ExpenseEntryPanel({ open, onClose }) {
   const {
-    categories, paymentSources, familyMembers, friends,
+    expenseCategories, incomeHeads,
+    paymentSources, familyMembers, friends,
     addTransaction, addSplits, addFriend,
     currencyPrefs, updateCurrencyRate,
   } = useExpense()
@@ -301,6 +313,13 @@ export default function ExpenseEntryPanel({ open, onClose }) {
   const [editRateVal,    setEditRateVal]    = useState('')
   const [savingRate,     setSavingRate]     = useState(false)
 
+  // Reimbursable
+  const [isReimbursable, setIsReimbursable] = useState(false)
+
+  // Transfer-in selectors
+  const [transferFrom,      setTransferFrom]      = useState('')  // name or '__other__'
+  const [transferFromOther, setTransferFromOther] = useState('')
+
   // Split state
   const [splitOn,           setSplitOn]           = useState(false)
   const [splitParticipants, setSplitParticipants] = useState([])
@@ -310,13 +329,14 @@ export default function ExpenseEntryPanel({ open, onClose }) {
 
   const amountRef = useRef(null)
 
-  const activeCategories = categories.filter(c => c.is_active)
-  const activeSources    = paymentSources.filter(s => s.is_active)
+  const activeExpCats  = expenseCategories.filter(c => c.is_active !== false)
+  const activeIncHeads = incomeHeads.filter(c => c.is_active !== false)
+  const activeSources  = paymentSources.filter(s => s.is_active)
 
   const lastCatId = localStorage.getItem(LSKEY_CAT)
   const lastSrcId = localStorage.getItem(LSKEY_SRC)
 
-  const sortedCats = [...activeCategories].sort((a, b) => {
+  const sortedExpCats = [...activeExpCats].sort((a, b) => {
     if (a.id === lastCatId) return -1
     if (b.id === lastCatId) return 1
     return 0
@@ -327,19 +347,29 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     return 0
   })
 
-  const topCats    = sortedCats.slice(0, 6)
-  const topSrcs    = sortedSrcs.slice(0, 3)
-  const hasMoreCats = activeCategories.length > 6
-  const hasMoreSrcs = activeSources.length > 3
+  const topExpCats    = sortedExpCats.slice(0, 6)
+  const topSrcs       = sortedSrcs.slice(0, 3)
+  const hasMoreExpCats = activeExpCats.length > 6
+  const hasMoreSrcs   = activeSources.length > 3
+
+  function initCategoryForType(type) {
+    if (type === 'expense') {
+      const savedCat = localStorage.getItem(LSKEY_CAT)
+      const sorted = [...activeExpCats].sort((a, b) => a.id === savedCat ? -1 : b.id === savedCat ? 1 : 0)
+      setCategoryId(sorted[0]?.id || null)
+    } else if (type === 'income') {
+      setCategoryId(activeIncHeads[0]?.id || null)
+    } else {
+      setCategoryId(null)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
-    const savedCat = localStorage.getItem(LSKEY_CAT)
     const savedSrc = localStorage.getItem(LSKEY_SRC)
-    if (savedCat && activeCategories.find(c => c.id === savedCat)) setCategoryId(savedCat)
-    else if (activeCategories.length > 0) setCategoryId(activeCategories[0].id)
     if (savedSrc && activeSources.find(s => s.id === savedSrc)) setSourceId(savedSrc)
     else if (activeSources.length > 0) setSourceId(activeSources[0].id)
+    initCategoryForType(txnType)
     setSaveState('idle')
     setSelectedCurrency('INR')
     setEditRate(false)
@@ -367,6 +397,9 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     setSplitMode('equal')
     setShowAddFriendForm(false)
     setNewFriendName('')
+    setIsReimbursable(false)
+    setTransferFrom('')
+    setTransferFromOther('')
   }
 
   // ── Split helpers ─────────────────────────────────────────────────────────
@@ -414,65 +447,66 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     if (!rawAmt || rawAmt <= 0 || saveState === 'loading') return
     if (splitOn && splitErr) return
     setSaveState('loading')
-    const catName = categories.find(c => c.id === categoryId)?.category_name || 'Expense'
 
     const isForeign = selectedCurrency !== 'INR'
     const selectedPref = currencyPrefs.find(c => c.currency_code === selectedCurrency)
     const rate = selectedPref?.fx_rate_to_inr || 1
-    const amt = isForeign ? Math.round(rawAmt * rate * 100) / 100 : rawAmt
+    const amt  = isForeign ? Math.round(rawAmt * rate * 100) / 100 : rawAmt
+
+    let txnNotes = note || null
+    if (txnType === 'transfer_in') {
+      const fromName = transferFrom === '__other__' ? transferFromOther.trim() : transferFrom
+      txnNotes = fromName ? `Transfer from: ${fromName}` : null
+    }
+
+    const catName = txnType === 'expense'
+      ? (expenseCategories.find(c => c.id === categoryId)?.category_name || 'Expense')
+      : txnType === 'income'
+        ? (incomeHeads.find(c => c.id === categoryId)?.category_name || 'Income')
+        : 'Transfer'
 
     try {
       const newTxn = await addTransaction({
-        txn_type:          txnType,
-        amount:            amt,
-        category_id:       categoryId || null,
-        payment_source_id: sourceId || null,
-        family_member:     member || 'Self',
-        txn_date:          txnDate,
-        notes:             note || null,
-        original_amount:   isForeign ? rawAmt : null,
-        original_currency: isForeign ? selectedCurrency : null,
-        fx_rate_used:      isForeign ? rate : null,
-        inr_equivalent:    isForeign ? amt : null,
+        txn_type:             txnType,
+        amount:               amt,
+        category_id:          txnType === 'transfer_in' ? null : (categoryId || null),
+        payment_source_id:    sourceId || null,
+        family_member:        txnType === 'transfer_in' ? 'Self' : (member || 'Self'),
+        txn_date:             txnDate,
+        notes:                txnNotes,
+        is_reimbursable:      txnType === 'expense' ? isReimbursable : false,
+        reimbursement_status: txnType === 'expense' && isReimbursable ? 'pending' : null,
+        original_amount:      isForeign ? rawAmt : null,
+        original_currency:    isForeign ? selectedCurrency : null,
+        fx_rate_used:         isForeign ? rate : null,
+        inr_equivalent:       isForeign ? amt : null,
       })
-      if (categoryId) localStorage.setItem(LSKEY_CAT, categoryId)
-      if (sourceId)   localStorage.setItem(LSKEY_SRC, sourceId)
+      if (categoryId && txnType !== 'transfer_in') localStorage.setItem(LSKEY_CAT, categoryId)
+      if (sourceId) localStorage.setItem(LSKEY_SRC, sourceId)
 
       if (splitOn && splitParticipants.length >= 2 && newTxn) {
         let rows
         if (splitMode === 'equal') {
           const share = Math.round((amt / splitParticipants.length) * 100) / 100
           rows = splitParticipants.map(p => ({
-            participant_type: p.type,
-            participant_name: p.name,
-            share_amount:     share,
-            is_payer:         p.isPayer,
+            participant_type: p.type, participant_name: p.name,
+            share_amount: share, is_payer: p.isPayer,
           }))
         } else {
-          const nonLast = splitParticipants.slice(0, -1)
-          const lastP   = splitParticipants[splitParticipants.length - 1]
+          const nonLast    = splitParticipants.slice(0, -1)
+          const lastP      = splitParticipants[splitParticipants.length - 1]
           const nonLastSum = nonLast.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
           const remainder  = Math.round((amt - nonLastSum) * 100) / 100
           rows = [
             ...nonLast.map(p => ({
-              participant_type: p.type,
-              participant_name: p.name,
-              share_amount:     parseFloat(p.amount) || 0,
-              is_payer:         p.isPayer,
+              participant_type: p.type, participant_name: p.name,
+              share_amount: parseFloat(p.amount) || 0, is_payer: p.isPayer,
             })),
-            {
-              participant_type: lastP.type,
-              participant_name: lastP.name,
-              share_amount:     remainder,
-              is_payer:         lastP.isPayer,
-            },
+            { participant_type: lastP.type, participant_name: lastP.name, share_amount: remainder, is_payer: lastP.isPayer },
           ]
         }
-        try {
-          await addSplits(newTxn.id, rows)
-        } catch (splitSaveErr) {
-          console.error('ExpenseEntryPanel addSplits error:', splitSaveErr)
-        }
+        try { await addSplits(newTxn.id, rows) }
+        catch (splitSaveErr) { console.error('ExpenseEntryPanel addSplits error:', splitSaveErr) }
         setSaveState('success')
         setToast({ message: `✓ ₹${amt.toLocaleString('en-IN')} split among ${splitParticipants.length} people`, type: 'success' })
       } else {
@@ -480,11 +514,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
         setToast({ message: `Saved — ₹${amt.toLocaleString('en-IN')} · ${catName}`, type: 'success' })
       }
 
-      setTimeout(() => {
-        resetForNextEntry()
-        setSaveState('idle')
-        onClose()
-      }, 1200)
+      setTimeout(() => { resetForNextEntry(); setSaveState('idle'); onClose() }, 1200)
     } catch (err) {
       console.error('ExpenseEntryPanel save error:', err)
       setSaveState('error')
@@ -510,21 +540,19 @@ export default function ExpenseEntryPanel({ open, onClose }) {
 
   // ── Split panel (inline) ──────────────────────────────────────────────────
 
-  const friendOptions  = friends.filter(f => f.is_active)
-  const familyOptions  = familyMembers.filter(m => m !== 'Self')
+  const friendOptions = friends.filter(f => f.is_active)
+  const familyOptions = familyMembers.filter(m => m !== 'Self')
 
   function SplitPanel() {
     return (
       <div style={{ marginBottom:16, padding:14, background:'#f8f9fa', borderRadius:12, border:'1px solid #e8ecf0' }}>
-        {/* Participant selector */}
         <div className="eep-label" style={{ marginBottom:8 }}>Who was there?</div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
           {familyOptions.map(m => {
-            const id  = `fam-${m}`
-            const sel = splitParticipants.some(p => p.id === id)
+            const id = `fam-${m}`; const sel = splitParticipants.some(p => p.id === id)
             return (
               <button key={id}
-                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor: sel?'#1A3C6E':'#e2e8f0', background: sel?'#1A3C6E':'#f1f5f9', color: sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
+                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
                 onClick={() => toggleParticipant(id, 'family', m)}
               >{m}</button>
             )
@@ -533,80 +561,53 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             const sel = splitParticipants.some(p => p.id === f.id)
             return (
               <button key={f.id}
-                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor: sel?'#1A3C6E':'#e2e8f0', background: sel?'#1A3C6E':'#f1f5f9', color: sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
+                style={{ padding:'6px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
                 onClick={() => toggleParticipant(f.id, 'friend', f.friend_name)}
               >👤 {f.friend_name}{f.nickname ? ` (${f.nickname})` : ''}</button>
             )
           })}
           {!showAddFriendForm && (
-            <button
-              style={{ padding:'6px 12px', borderRadius:20, border:'1.5px dashed #1A3C6E', background:'#ffffff', color:'#1A3C6E', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}
-              onClick={() => setShowAddFriendForm(true)}
-            >+ Add friend</button>
+            <button style={{ padding:'6px 12px', borderRadius:20, border:'1.5px dashed #1A3C6E', background:'#ffffff', color:'#1A3C6E', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }} onClick={() => setShowAddFriendForm(true)}>+ Add friend</button>
           )}
           {showAddFriendForm && (
             <div style={{ display:'flex', gap:6, alignItems:'center', width:'100%', marginTop:4 }}>
-              <input
-                style={{ flex:1, padding:'6px 10px', border:'1.5px solid #1A3C6E', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', color:'#1a1a2a' }}
-                placeholder="Friend's name"
-                value={newFriendName}
-                onChange={e => setNewFriendName(e.target.value)}
-                autoFocus
-              />
-              <button
-                disabled={!newFriendName.trim()}
+              <input style={{ flex:1, padding:'6px 10px', border:'1.5px solid #1A3C6E', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', color:'#1a1a2a' }}
+                placeholder="Friend's name" value={newFriendName} onChange={e => setNewFriendName(e.target.value)} autoFocus />
+              <button disabled={!newFriendName.trim()}
                 onClick={async () => {
-                  const name = newFriendName.trim()
-                  if (!name) return
-                  try {
-                    await addFriend(name, null)
-                    toggleParticipant(`new-${name}-${Date.now()}`, 'friend', name)
-                    setNewFriendName('')
-                    setShowAddFriendForm(false)
-                  } catch (err) { console.error('ExpenseEntryPanel addFriend error:', err) }
+                  const name = newFriendName.trim(); if (!name) return
+                  try { await addFriend(name, null); toggleParticipant(`new-${name}-${Date.now()}`, 'friend', name); setNewFriendName(''); setShowAddFriendForm(false) }
+                  catch (err) { console.error('ExpenseEntryPanel addFriend error:', err) }
                 }}
-                style={{ padding:'6px 12px', border:'none', borderRadius:8, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}
-              >Add</button>
-              <button
-                onClick={() => { setShowAddFriendForm(false); setNewFriendName('') }}
-                style={{ padding:'6px 10px', border:'1.5px solid #e2e8f0', borderRadius:8, background:'#ffffff', color:'#64748b', fontFamily:'DM Sans', fontSize:12, cursor:'pointer' }}
-              >✕</button>
+                style={{ padding:'6px 12px', border:'none', borderRadius:8, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:12, fontWeight:600, cursor:'pointer' }}>Add</button>
+              <button onClick={() => { setShowAddFriendForm(false); setNewFriendName('') }}
+                style={{ padding:'6px 10px', border:'1.5px solid #e2e8f0', borderRadius:8, background:'#ffffff', color:'#64748b', fontFamily:'DM Sans', fontSize:12, cursor:'pointer' }}>✕</button>
             </div>
           )}
         </div>
-
         {splitParticipants.length < 2 && (
           <div style={{ fontSize:12, color:'#94a3b8', fontFamily:'DM Sans', marginBottom:4 }}>Tap people above to add them to the split</div>
         )}
-
         {splitParticipants.length >= 2 && (
           <>
-            {/* Mode toggle */}
             <div style={{ display:'flex', background:'#f1f5f9', borderRadius:8, padding:3, marginBottom:12 }}>
               {['equal','custom'].map(m => (
-                <button key={m}
-                  onClick={() => setSplitMode(m)}
-                  style={{ flex:1, padding:'6px', border:'none', borderRadius:6, fontFamily:'DM Sans', fontSize:13, fontWeight:500, cursor:'pointer', background: splitMode===m?'#1A3C6E':'transparent', color: splitMode===m?'#ffffff':'#64748b', transition:'all 0.15s' }}
-                >{m === 'equal' ? 'Equal' : 'Custom'}</button>
+                <button key={m} onClick={() => setSplitMode(m)}
+                  style={{ flex:1, padding:'6px', border:'none', borderRadius:6, fontFamily:'DM Sans', fontSize:13, fontWeight:500, cursor:'pointer', background:splitMode===m?'#1A3C6E':'transparent', color:splitMode===m?'#ffffff':'#64748b', transition:'all 0.15s' }}>
+                  {m === 'equal' ? 'Equal' : 'Custom'}
+                </button>
               ))}
             </div>
-
-            {/* Equal mode rows */}
             {splitMode === 'equal' && (() => {
               const share = totalAmt / splitParticipants.length
               return splitParticipants.map(p => (
                 <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
                   <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{p.name}</span>
                   <span style={{ fontFamily:'DM Sans', fontSize:13, fontWeight:600, color:'#1a1a2a' }}>₹{share.toLocaleString('en-IN', { maximumFractionDigits:2 })}</span>
-                  <button
-                    style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: p.isPayer?'#1A3C6E':'#f1f5f9', color: p.isPayer?'#ffffff':'#94a3b8' }}
-                    onClick={() => movePayer(p.id)}
-                  >Payer</button>
+                  <button style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background:p.isPayer?'#1A3C6E':'#f1f5f9', color:p.isPayer?'#ffffff':'#94a3b8' }} onClick={() => movePayer(p.id)}>Payer</button>
                 </div>
               ))
             })()}
-
-            {/* Custom mode rows */}
             {splitMode === 'custom' && (() => {
               const nonLast    = splitParticipants.slice(0, -1)
               const lastP      = splitParticipants[splitParticipants.length - 1]
@@ -619,33 +620,21 @@ export default function ExpenseEntryPanel({ open, onClose }) {
                       <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{p.name}</span>
                       <input type="number" inputMode="decimal"
                         style={{ width:80, padding:'5px 8px', border:'1.5px solid #e2e8f0', borderRadius:8, fontFamily:'DM Sans', fontSize:13, outline:'none', textAlign:'right', color:'#1a1a2a' }}
-                        value={p.amount} onChange={e => setCustomAmount(p.id, e.target.value)} placeholder="₹"
-                      />
-                      <button
-                        style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: p.isPayer?'#1A3C6E':'#f1f5f9', color: p.isPayer?'#ffffff':'#94a3b8' }}
-                        onClick={() => movePayer(p.id)}
-                      >Payer</button>
+                        value={p.amount} onChange={e => setCustomAmount(p.id, e.target.value)} placeholder="₹" />
+                      <button style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background:p.isPayer?'#1A3C6E':'#f1f5f9', color:p.isPayer?'#ffffff':'#94a3b8' }} onClick={() => movePayer(p.id)}>Payer</button>
                     </div>
                   ))}
                   {lastP && (
                     <div key={lastP.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
                       <span style={{ flex:1, fontFamily:'DM Sans', fontSize:13, color:'#374151' }}>{lastP.name}</span>
-                      <span style={{ width:80, textAlign:'right', fontFamily:'DM Sans', fontSize:13, fontWeight:600, color: remainder < 0 ? '#dc2626' : '#1a1a2a' }}>
-                        ₹{remainder.toLocaleString('en-IN', { maximumFractionDigits:2 })}
-                      </span>
-                      <button
-                        style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background: lastP.isPayer?'#1A3C6E':'#f1f5f9', color: lastP.isPayer?'#ffffff':'#94a3b8' }}
-                        onClick={() => movePayer(lastP.id)}
-                      >Payer</button>
+                      <span style={{ width:80, textAlign:'right', fontFamily:'DM Sans', fontSize:13, fontWeight:600, color:remainder<0?'#dc2626':'#1a1a2a' }}>₹{remainder.toLocaleString('en-IN', { maximumFractionDigits:2 })}</span>
+                      <button style={{ padding:'3px 10px', border:'none', borderRadius:20, fontFamily:'DM Sans', fontSize:11, fontWeight:600, cursor:'pointer', background:lastP.isPayer?'#1A3C6E':'#f1f5f9', color:lastP.isPayer?'#ffffff':'#94a3b8' }} onClick={() => movePayer(lastP.id)}>Payer</button>
                     </div>
                   )}
                 </>
               )
             })()}
-
-            {splitErr && (
-              <div style={{ marginTop:8, fontSize:12, color:'#dc2626', fontFamily:'DM Sans' }}>{splitErr}</div>
-            )}
+            {splitErr && <div style={{ marginTop:8, fontSize:12, color:'#dc2626', fontFamily:'DM Sans' }}>{splitErr}</div>}
           </>
         )}
       </div>
@@ -656,15 +645,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     <>
       <style>{panelCSS}</style>
 
-      {toast && (
-        <Toast
-          key={toast.message}
-          message={toast.message}
-          type={toast.type}
-          duration={2500}
-          onDismiss={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast key={toast.message} message={toast.message} type={toast.type} duration={2500} onDismiss={() => setToast(null)} />}
 
       {open && <div className="eep-backdrop" onClick={handleClose} />}
 
@@ -682,20 +663,9 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             <>
               <div className="eep-label">Currency</div>
               <div className="eep-chips" style={{ marginBottom:12 }}>
-                <button
-                  className={`eep-chip${selectedCurrency === 'INR' ? ' selected' : ''}`}
-                  onClick={() => { setSelectedCurrency('INR'); setEditRate(false) }}
-                >
-                  ₹ INR
-                </button>
+                <button className={`eep-chip${selectedCurrency==='INR'?' selected':''}`} onClick={() => { setSelectedCurrency('INR'); setEditRate(false) }}>₹ INR</button>
                 {currencyPrefs.map(cp => (
-                  <button
-                    key={cp.currency_code}
-                    className={`eep-chip${selectedCurrency === cp.currency_code ? ' selected' : ''}`}
-                    onClick={() => { setSelectedCurrency(cp.currency_code); setEditRate(false) }}
-                  >
-                    {cp.currency_symbol} {cp.currency_code}
-                  </button>
+                  <button key={cp.currency_code} className={`eep-chip${selectedCurrency===cp.currency_code?' selected':''}`} onClick={() => { setSelectedCurrency(cp.currency_code); setEditRate(false) }}>{cp.currency_symbol} {cp.currency_code}</button>
                 ))}
               </div>
             </>
@@ -704,22 +674,11 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {/* Amount */}
           <div className="eep-amount-row">
             <span className="eep-rupee">
-              {selectedCurrency === 'INR'
-                ? '₹'
-                : (currencyPrefs.find(c => c.currency_code === selectedCurrency)?.currency_symbol || selectedCurrency)}
+              {selectedCurrency === 'INR' ? '₹' : (currencyPrefs.find(c => c.currency_code === selectedCurrency)?.currency_symbol || selectedCurrency)}
             </span>
-            <input
-              ref={amountRef}
-              className="eep-amount-input"
-              type="number"
-              inputMode="decimal"
-              pattern="[0-9]*"
-              placeholder="0"
-              value={amount}
-              disabled={saveState === 'loading' || saveState === 'success'}
-              onChange={e => setAmount(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
-            />
+            <input ref={amountRef} className="eep-amount-input" type="number" inputMode="decimal" pattern="[0-9]*" placeholder="0"
+              value={amount} disabled={saveState === 'loading' || saveState === 'success'}
+              onChange={e => setAmount(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }} />
           </div>
 
           {/* FX rate row + preview */}
@@ -728,38 +687,22 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             const rate = pref?.fx_rate_to_inr || 1
             const rawAmt = parseFloat(amount)
             const inrPreview = rawAmt > 0 ? (rawAmt * rate).toLocaleString('en-IN') : null
-
             async function handleSaveRate() {
               const r = parseFloat(editRateVal)
               if (!r || r <= 0 || !pref) return
               setSavingRate(true)
-              try {
-                await updateCurrencyRate(pref.id, r)
-                setEditRate(false)
-                setEditRateVal('')
-              } catch (err) {
-                console.error('ExpenseEntryPanel handleSaveRate error:', err)
-              } finally { setSavingRate(false) }
+              try { await updateCurrencyRate(pref.id, r); setEditRate(false); setEditRateVal('') }
+              catch (err) { console.error('ExpenseEntryPanel handleSaveRate error:', err) }
+              finally { setSavingRate(false) }
             }
-
             return (
               <>
                 <div className="eep-fx-rate-row">
                   {editRate ? (
                     <div className="eep-fx-rate-edit">
                       <span>1 {selectedCurrency} = ₹</span>
-                      <input
-                        className="eep-fx-rate-input"
-                        type="number"
-                        inputMode="decimal"
-                        value={editRateVal}
-                        onChange={e => setEditRateVal(e.target.value)}
-                        placeholder={String(rate)}
-                        autoFocus
-                      />
-                      <button className="eep-fx-confirm-btn" disabled={savingRate} onClick={handleSaveRate}>
-                        {savingRate ? '…' : '✓'}
-                      </button>
+                      <input className="eep-fx-rate-input" type="number" inputMode="decimal" value={editRateVal} onChange={e => setEditRateVal(e.target.value)} placeholder={String(rate)} autoFocus />
+                      <button className="eep-fx-confirm-btn" disabled={savingRate} onClick={handleSaveRate}>{savingRate ? '…' : '✓'}</button>
                       <button className="eep-fx-edit-btn" onClick={() => { setEditRate(false); setEditRateVal('') }}>✕</button>
                     </div>
                   ) : (
@@ -769,9 +712,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
                     </>
                   )}
                 </div>
-                <div className="eep-fx-preview">
-                  {inrPreview ? `= ₹${inrPreview}` : '= ₹ —'}
-                </div>
+                <div className="eep-fx-preview">{inrPreview ? `= ₹${inrPreview}` : '= ₹ —'}</div>
               </>
             )
           })()}
@@ -779,67 +720,117 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {/* Type toggle */}
           <div className="eep-type-row">
             {[['expense','Expense',''],['income','Income','type-income'],['transfer_in','Transfer In','type-transfer']].map(([val, label, cls]) => (
-              <button
-                key={val}
+              <button key={val}
                 className={`eep-type-btn${txnType === val ? ` active ${cls}` : ''}`}
-                onClick={() => { setTxnType(val); if (val !== 'expense') { setSplitOn(false); setSplitParticipants([]) } }}
                 disabled={saveState === 'loading' || saveState === 'success'}
-              >
-                {label}
-              </button>
+                onClick={() => {
+                  setTxnType(val)
+                  if (val !== 'expense') { setSplitOn(false); setSplitParticipants([]) }
+                  initCategoryForType(val)
+                  setMember('Self')
+                  setTransferFrom('')
+                  setTransferFromOther('')
+                }}
+              >{label}</button>
             ))}
           </div>
 
-          {/* Category chips */}
-          <div className="eep-label">Category</div>
-          <div className="eep-chips">
-            {topCats.map(cat => (
-              <button
-                key={cat.id}
-                className={`eep-chip${categoryId === cat.id ? ' selected' : ''}`}
-                onClick={() => setCategoryId(cat.id)}
-              >
-                <span>{cat.icon_code}</span>
-                <span>{cat.category_name}</span>
-              </button>
-            ))}
-            {hasMoreCats && (
-              <button className="eep-chip more" onClick={() => setCatSheet(true)}>More →</button>
-            )}
-          </div>
-
-          {/* Payment source chips */}
-          <div className="eep-label">Payment Source</div>
-          <div className="eep-chips">
-            {topSrcs.map(src => (
-              <button
-                key={src.id}
-                className={`eep-chip${sourceId === src.id ? ' selected' : ''}`}
-                onClick={() => setSourceId(src.id)}
-              >
-                <span>{SOURCE_ICONS[src.source_type] || '💰'}</span>
-                <span>{src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}</span>
-              </button>
-            ))}
-            {hasMoreSrcs && (
-              <button className="eep-chip more" onClick={() => setSrcSheet(true)}>More →</button>
-            )}
-          </div>
-
-          {/* Family member chips */}
-          {familyMembers.length > 1 && (
+          {/* ── EXPENSE: category chips ── */}
+          {txnType === 'expense' && (
             <>
-              <div className="eep-label">For</div>
+              <div className="eep-label">Category</div>
               <div className="eep-chips">
-                {familyMembers.map(m => (
-                  <button
-                    key={m}
-                    className={`eep-chip${member === m ? ' selected' : ''}`}
-                    onClick={() => setMember(m)}
-                  >
-                    {m}
+                {topExpCats.map(cat => (
+                  <button key={cat.id} className={`eep-chip${categoryId===cat.id?' selected':''}`} onClick={() => setCategoryId(cat.id)}>
+                    <span>{cat.icon_code}</span><span>{cat.category_name}</span>
                   </button>
                 ))}
+                {hasMoreExpCats && <button className="eep-chip more" onClick={() => setCatSheet(true)}>More →</button>}
+              </div>
+            </>
+          )}
+
+          {/* ── INCOME: income head chips ── */}
+          {txnType === 'income' && (
+            <>
+              <div className="eep-label">Income Head</div>
+              <div className="eep-chips">
+                {activeIncHeads.map(h => (
+                  <button key={h.id} className={`eep-chip${categoryId===h.id?' selected':''}`} onClick={() => setCategoryId(h.id)}>
+                    <span>{h.icon_code}</span><span>{h.category_name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── TRANSFER-IN: no category ── */}
+
+          {/* Payment source — shown for expense and income */}
+          {txnType !== 'transfer_in' && (
+            <>
+              <div className="eep-label">Payment Source</div>
+              <div className="eep-chips">
+                {topSrcs.map(src => (
+                  <button key={src.id} className={`eep-chip${sourceId===src.id?' selected':''}`} onClick={() => setSourceId(src.id)}>
+                    <span>{SOURCE_ICONS[src.source_type]||'💰'}</span>
+                    <span>{src.source_name}{src.last_four?` ···${src.last_four}`:''}</span>
+                  </button>
+                ))}
+                {hasMoreSrcs && <button className="eep-chip more" onClick={() => setSrcSheet(true)}>More →</button>}
+              </div>
+            </>
+          )}
+
+          {/* ── EXPENSE / INCOME: family member chips ── */}
+          {(txnType === 'expense' || txnType === 'income') && familyMembers.length > 1 && (
+            <>
+              <div className="eep-label">{txnType === 'expense' ? 'For / Paid by' : 'Earned by'}</div>
+              <div className="eep-chips">
+                {familyMembers.map(m => (
+                  <button key={m} className={`eep-chip${member===m?' selected':''}`} onClick={() => setMember(m)}>{m}</button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── TRANSFER-IN: dual selector ── */}
+          {txnType === 'transfer_in' && (
+            <>
+              {/* Selector 1 — Transferred from */}
+              <div className="eep-label">Transferred from</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
+                {familyOptions.map(m => (
+                  <button key={m}
+                    className={`eep-chip${transferFrom===m?' selected':''}`}
+                    onClick={() => { setTransferFrom(m); setTransferFromOther('') }}
+                  >{m}</button>
+                ))}
+                {friendOptions.map(f => (
+                  <button key={f.id}
+                    className={`eep-chip${transferFrom===f.friend_name?' selected':''}`}
+                    onClick={() => { setTransferFrom(f.friend_name); setTransferFromOther('') }}
+                  >👤 {f.friend_name}</button>
+                ))}
+                <button
+                  className={`eep-chip${transferFrom==='__other__'?' selected':''}`}
+                  onClick={() => setTransferFrom('__other__')}
+                >Someone else</button>
+              </div>
+              {transferFrom === '__other__' && (
+                <input className="eep-transfer-input" placeholder="Enter name…" value={transferFromOther} onChange={e => setTransferFromOther(e.target.value)} autoFocus />
+              )}
+
+              {/* Selector 2 — Into account */}
+              <div className="eep-label" style={{ marginTop:8 }}>Into account</div>
+              <div className="eep-chips">
+                {topSrcs.map(src => (
+                  <button key={src.id} className={`eep-chip${sourceId===src.id?' selected':''}`} onClick={() => setSourceId(src.id)}>
+                    <span>{SOURCE_ICONS[src.source_type]||'💰'}</span>
+                    <span>{src.source_name}{src.last_four?` ···${src.last_four}`:''}</span>
+                  </button>
+                ))}
+                {hasMoreSrcs && <button className="eep-chip more" onClick={() => setSrcSheet(true)}>More →</button>}
               </div>
             </>
           )}
@@ -850,51 +841,44 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             <label className="eep-date-btn">
               <span>📅</span>
               <span className="eep-date-label-rel">{fmtDateLabel(txnDate)}</span>
-              {txnDate !== todayStr() && (
-                <span className="eep-date-label-abs">{txnDate}</span>
-              )}
-              <input
-                type="date"
-                value={txnDate}
-                max={todayStr()}
-                onChange={e => setTxnDate(e.target.value)}
-                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
-              />
-              <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>▾</span>
+              {txnDate !== todayStr() && <span className="eep-date-label-abs">{txnDate}</span>}
+              <input type="date" value={txnDate} max={todayStr()} onChange={e => setTxnDate(e.target.value)}
+                style={{ position:'absolute', opacity:0, pointerEvents:'none', width:0, height:0 }} />
+              <span style={{ fontSize:11, color:'#94a3b8', marginLeft:4 }}>▾</span>
             </label>
           </div>
 
-          {/* Note */}
-          {!noteOpen ? (
-            <button className="eep-note-toggle" onClick={() => setNoteOpen(true)}>
-              <span>＋</span> Add note
-            </button>
-          ) : (
-            <input
-              className="eep-note-input"
-              type="text"
-              placeholder="Add a note…"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              autoFocus
-            />
+          {/* Note — expense and income only */}
+          {txnType !== 'transfer_in' && (
+            !noteOpen ? (
+              <button className="eep-note-toggle" onClick={() => setNoteOpen(true)}><span>＋</span> Add note</button>
+            ) : (
+              <input className="eep-note-input" type="text" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} autoFocus />
+            )
+          )}
+
+          {/* Reimbursable toggle — expense only */}
+          {txnType === 'expense' && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0 12px', borderTop:'1px solid #f1f5f9', marginTop:4 }}>
+              <span style={{ fontFamily:'DM Sans', fontSize:13, fontWeight:500, color:'#374151' }}>Reimbursable expense?</span>
+              <label className="eep-toggle-switch green">
+                <input type="checkbox" checked={isReimbursable} onChange={e => setIsReimbursable(e.target.checked)} />
+                <span className="eep-toggle-slider" />
+              </label>
+            </div>
           )}
 
           {/* Split toggle — expense only */}
           {txnType === 'expense' && (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0 12px', borderTop:'1px solid #f1f5f9', marginTop:4 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0 12px', borderTop:'1px solid #f1f5f9', marginTop:isReimbursable ? 0 : 4 }}>
               <span style={{ fontFamily:'DM Sans', fontSize:13, fontWeight:500, color:'#374151' }}>Split this expense?</span>
               <label className="eep-toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={splitOn}
-                  onChange={e => {
-                    const on = e.target.checked
-                    setSplitOn(on)
-                    if (on) setSplitParticipants([{ id:'self', type:'self', name:'Self', amount:'', isPayer:true }])
-                    else { setSplitParticipants([]); setSplitMode('equal'); setShowAddFriendForm(false); setNewFriendName('') }
-                  }}
-                />
+                <input type="checkbox" checked={splitOn} onChange={e => {
+                  const on = e.target.checked
+                  setSplitOn(on)
+                  if (on) setSplitParticipants([{ id:'self', type:'self', name:'Self', amount:'', isPayer:true }])
+                  else { setSplitParticipants([]); setSplitMode('equal'); setShowAddFriendForm(false); setNewFriendName('') }
+                }} />
                 <span className="eep-toggle-slider" />
               </label>
             </div>
@@ -904,17 +888,13 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {txnType === 'expense' && splitOn && <SplitPanel />}
 
           {/* Save */}
-          <button
-            className={saveBtnClass}
-            onClick={handleSave}
-            disabled={!canSave}
-          >
+          <button className={saveBtnClass} onClick={handleSave} disabled={!canSave}>
             <SaveButtonContent />
           </button>
         </div>
       </div>
 
-      {/* Category bottom sheet */}
+      {/* Category bottom sheet (expense) */}
       {catSheet && (
         <>
           <div className="eep-sheet-backdrop" onClick={() => setCatSheet(false)} />
@@ -922,12 +902,8 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             <div className="eep-sheet-handle" />
             <div className="eep-sheet-title">Select Category</div>
             <div className="eep-sheet-grid">
-              {activeCategories.map(cat => (
-                <button
-                  key={cat.id}
-                  className={`eep-sheet-item${categoryId === cat.id ? ' selected' : ''}`}
-                  onClick={() => { setCategoryId(cat.id); setCatSheet(false) }}
-                >
+              {activeExpCats.map(cat => (
+                <button key={cat.id} className={`eep-sheet-item${categoryId===cat.id?' selected':''}`} onClick={() => { setCategoryId(cat.id); setCatSheet(false) }}>
                   <span className="eep-sheet-icon">{cat.icon_code}</span>
                   <span className="eep-sheet-name">{cat.category_name}</span>
                 </button>
@@ -946,13 +922,9 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             <div className="eep-sheet-title">Select Payment Source</div>
             <div className="eep-sheet-grid">
               {activeSources.map(src => (
-                <button
-                  key={src.id}
-                  className={`eep-sheet-item${sourceId === src.id ? ' selected' : ''}`}
-                  onClick={() => { setSourceId(src.id); setSrcSheet(false) }}
-                >
-                  <span className="eep-sheet-icon">{SOURCE_ICONS[src.source_type] || '💰'}</span>
-                  <span className="eep-sheet-name">{src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}</span>
+                <button key={src.id} className={`eep-sheet-item${sourceId===src.id?' selected':''}`} onClick={() => { setSourceId(src.id); setSrcSheet(false) }}>
+                  <span className="eep-sheet-icon">{SOURCE_ICONS[src.source_type]||'💰'}</span>
+                  <span className="eep-sheet-name">{src.source_name}{src.last_four?` ···${src.last_four}`:''}</span>
                 </button>
               ))}
             </div>
