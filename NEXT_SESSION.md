@@ -49,6 +49,11 @@ All SQL already run manually before EB-Fix-3 session:
 
 ---
 
+## EB-Fix-8 status: DONE ✅ (04 Jun 2026)
+- Date picker in ExpenseEntryPanel was unclickable: `pointerEvents:'none'` + `width:0, height:0` on the `<input type="date">`
+- Fix: removed pointer-events restriction, input now covers full button area via `inset: 0` equivalent
+- Affects all txn types (Expense / Income / Transfer-in)
+
 ## EB-Balances status: DONE ✅ (04 Jun 2026)
 - Balances tab built: household total card, accounts grouped by owner, SVG sparklines
 - Tab order: Analytics / Balances / Dues / Log / Setup. Default: Analytics.

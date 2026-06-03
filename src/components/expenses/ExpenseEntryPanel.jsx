@@ -868,7 +868,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
               <span className="eep-date-label-rel">{fmtDateLabel(txnDate)}</span>
               {txnDate !== todayStr() && <span className="eep-date-label-abs">{txnDate}</span>}
               <input type="date" value={txnDate} max={todayStr()} onChange={e => setTxnDate(e.target.value)}
-                style={{ position:'absolute', opacity:0, pointerEvents:'none', width:0, height:0 }} />
+                style={{ position:'absolute', opacity:0, top:0, left:0, right:0, bottom:0, cursor:'pointer' }} />
               <span style={{ fontSize:11, color:'#94a3b8', marginLeft:4 }}>▾</span>
             </label>
           </div>

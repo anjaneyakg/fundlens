@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 04 Jun 2026 · v53.0
+**Last updated:** 04 Jun 2026 · v54.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,16 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Fix-8 — Date picker not clickable in ExpenseEntryPanel ✅ (04 Jun 2026)
+
+**Root cause:** `<input type="date">` inside the `eep-date-btn` label had `pointerEvents:'none'` + `width:0, height:0`. The `pointerEvents:'none'` prevented the native date picker from opening on click/tap (especially on mobile). The zero dimensions meant there was no direct tap target.
+
+**Fix (1 line):** Removed `pointerEvents:'none'`, `width:0`, `height:0`. Set `top:0, left:0, right:0, bottom:0` so the input covers the full button area (label has `position:relative`). `opacity:0` keeps it invisible.
+
+Affects all three txn types (Expense, Income, Transfer-in) — all use the same date section.
 
 ---
 
