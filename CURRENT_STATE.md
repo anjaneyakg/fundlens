@@ -1114,7 +1114,7 @@ features never activated.
 | `download_nav_local.py` *(FI)* | v1.0 | ✅ Live | FundInsight/pipeline/ — downloads nav_history year-by-year to data/nav_local/. Run from FundInsight/ with .env loaded. |
 | `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
 | `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
-| `compute_returns.py` *(FI)* | v1.0 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). |
+| `compute_returns.py` *(FI)* | v1.1 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). NFO inception detection: earliest NAV = face value (10/100/1000) → inception = first_nav_date − 5 days. |
 
 ---
 
