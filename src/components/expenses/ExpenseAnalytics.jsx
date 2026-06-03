@@ -308,8 +308,9 @@ export default function ExpenseAnalytics({
   )
 
   const filtered = useMemo(() => {
-    if (!dateRange.start) return transactions
-    return transactions.filter(t => t.txn_date >= dateRange.start && t.txn_date <= dateRange.end)
+    const base = transactions.filter(t => t.txn_type !== 'transfer_in')
+    if (!dateRange.start) return base
+    return base.filter(t => t.txn_date >= dateRange.start && t.txn_date <= dateRange.end)
   }, [transactions, dateRange])
 
   // ── Section C — Summary ────────────────────────────────────────────────────
@@ -354,7 +355,7 @@ export default function ExpenseAnalytics({
     for (let i = 5; i >= 0; i--) {
       const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i)
       const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
-      const monthTxns = transactions.filter(t => t.txn_date?.startsWith(prefix))
+      const monthTxns = transactions.filter(t => t.txn_date?.startsWith(prefix) && t.txn_type !== 'transfer_in')
       const income  = monthTxns.filter(t => t.txn_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
       const expense = monthTxns.filter(t => t.txn_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       months.push({ month: d.toLocaleString('en-IN', { month: 'short' }), income, expense })

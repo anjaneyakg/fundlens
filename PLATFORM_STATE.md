@@ -98,6 +98,8 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | EB-S1 | 4 Supabase tables, ExpenseContext, entry panel, FAB, dashboard widget, /expenses page (Log + Setup + Analytics stub + Dues) | ✅ Done — 01 Jun 2026 |
 | EB-S2 | Full Analytics tab (charts, CC reconciliation, budget alerts, 12-month projection) + Dues tab (Mark Paid, Snooze, grouping) | ✅ Done — 02 Jun 2026 |
 | EB-S3 | Reimbursement tracker, unusual spend alerts, subscription audit, end-of-month summary, CSV export | ✅ Done — 02 Jun 2026 |
+| EB-Fix-3 | CC Reconcile moved to Log tab sub-view; foreign currency prefs + FX entry panel | ✅ Done — 03 Jun 2026 |
+| EB-Balances | Balances tab (household total, accounts by owner, SVG sparklines, period net movement). Tab order: Analytics/Balances/Dues/Log/Setup. transfer_in excluded from Analytics. owner + Set Balance anchor in Setup → Payment Sources. | ✅ Done — 04 Jun 2026 |
 | EB-S4 | Push notifications, family collaboration — if new requirements arise | ⏳ Future |
 
 ### Phase 5 — Monetisation & Go-Live (Weeks 11–13)
@@ -157,7 +159,7 @@ Plan | Research | Track | Save & Invest | [Promote — advisor only]
 | `profiles` | ✅ RLS live | `migrations/001_users_table.sql` | id TEXT (Firebase UID), email, role, plan_tier; RLS on SELECT/INSERT/UPDATE by sub claim |
 | `advisor_profiles` | ✅ RLS live (open — tighten Phase 3) | `migrations/002_advisor_profiles.sql` | user_id → profiles.id; logo_url, css_override, max_clients; RLS currently `USING true` — tighten in PH3-S1 |
 | `promo_messages` | ✅ RLS live | `migrations/003_promo_messages.sql` | id UUID, text, is_active, display_order; public RLS read policy; populate rows when content ready |
-| `expense_payment_sources` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; source_type check; credit_limit, billing_cycle_date for CC |
+| `expense_payment_sources` | ✅ Live | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; source_type check; credit_limit, billing_cycle_date for CC; + balance_amount, balance_as_of_date, owner_family_member (added 03 Jun 2026); + last_settled_amount, last_settled_cycle (added EB-Fix-3) |
 | `expense_categories` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; icon_code, colour_hex, budget_limit_monthly; auto-seeded 17 defaults |
 | `expense_recurring` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; recurring_type, frequency, due_day, due_date_next |
 | `expense_transactions` | ⚠ Migration written — run 005 | `migrations/005_expense_manager.sql` | user_id TEXT FK → profiles.id; txn_type, amount, family_member (text), recurring_id FK |

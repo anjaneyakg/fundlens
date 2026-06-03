@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v52.0
+**Last updated:** 04 Jun 2026 · v53.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,35 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Balances — Balances tab + tab resequence + transfer_in fix ✅ (04 Jun 2026)
+
+### What was built
+
+| Change | Detail |
+|---|---|
+| **Tab resequencing** | Analytics / Balances / Dues / Log / Setup. Default open tab: Analytics. |
+| **transfer_in excluded from Analytics** | `filtered` useMemo in ExpenseAnalytics.jsx now strips transfer_in before date-filtering. `monthlyTrend` also excludes transfer_in. |
+| **Payment source owner** | Per-source ▼ expand section in Setup → Payment Sources. Owner chip row (Self + family members). Saves `owner_family_member` text via `updatePaymentSource()`. |
+| **Set Balance anchor** | Per-source expandable. Amount input + date picker (default: 1st of current month). "Set Balance" navy button. "Last set: ₹X as of DD/MM/YY" shown when anchor exists. Saves `balance_amount + balance_as_of_date`. |
+| **BalancesTab component** | Household total card (navy, sum of all anchored accounts). Period selector (This Month / Last Month / Last 3M). Accounts grouped by owner (Self → named members → Unassigned). Per-account card: icon, name, type, current balance (green/red), period net movement, anchor date. Inline SVG sparkline: last 5 month-end balances + today. |
+
+### New SQL columns (already added manually 03 Jun 2026)
+
+```sql
+ALTER TABLE public.expense_payment_sources
+  ADD COLUMN IF NOT EXISTS balance_amount numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS balance_as_of_date date,
+  ADD COLUMN IF NOT EXISTS owner_family_member text;
+```
+
+### Build
+968 modules, 0 errors.
+
+### Balance computation formula
+`display_balance = balance_amount + SUM(income + transfer_in - expense) WHERE txn_date >= balance_as_of_date`
 
 ---
 

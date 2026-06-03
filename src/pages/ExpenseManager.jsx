@@ -519,6 +519,47 @@ const emCSS = `
     cursor: pointer; background: #ffffff; transition: background 0.12s;
   }
   .em-cur-quick-chip:hover { background: #f0f4ff; }
+
+  /* ── BALANCES TAB ── */
+  .bt-wrap { padding: 12px 16px 32px; }
+  .bt-total-card {
+    background: #1A3C6E; color: #ffffff; border-radius: 14px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .bt-total-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; margin-bottom: 6px; font-family: 'DM Sans', sans-serif; }
+  .bt-total-amount { font-size: 28px; font-weight: 700; font-family: 'DM Sans', sans-serif; }
+  .bt-total-sub { font-size: 12px; opacity: 0.75; margin-top: 4px; font-family: 'DM Sans', sans-serif; }
+  .bt-total-warn { font-size: 12px; color: #fcd34d; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 6px 10px; border-radius: 8px; font-family: 'DM Sans', sans-serif; }
+  .bt-period-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .bt-period-btn {
+    padding: 6px 14px; border-radius: 20px; border: 1.5px solid #e2e8f0;
+    background: #ffffff; color: #64748b;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.12s;
+  }
+  .bt-period-btn.active { background: #1A3C6E; color: #ffffff; border-color: #1A3C6E; font-weight: 600; }
+  .bt-group-hdr {
+    font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.07em; margin: 16px 0 8px; font-family: 'DM Sans', sans-serif;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bt-account-card {
+    background: #ffffff; border: 1px solid #e8ecf0; border-radius: 12px;
+    padding: 14px; margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .bt-account-top { display: flex; align-items: flex-start; gap: 12px; }
+  .bt-account-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+  .bt-account-info { flex: 1; min-width: 0; }
+  .bt-account-name { font-size: 14px; font-weight: 700; color: #1a1a2a; font-family: 'DM Sans', sans-serif; }
+  .bt-account-type { font-size: 11px; color: #94a3b8; margin-top: 2px; font-family: 'DM Sans', sans-serif; }
+  .bt-account-right { text-align: right; flex-shrink: 0; min-width: 90px; }
+  .bt-balance-amt { font-size: 16px; font-weight: 700; font-family: 'DM Sans', sans-serif; }
+  .bt-balance-date { font-size: 10px; color: #94a3b8; margin-top: 1px; font-family: 'DM Sans', sans-serif; }
+  .bt-balance-period { font-size: 11px; font-weight: 600; margin-top: 3px; font-family: 'DM Sans', sans-serif; }
+  .bt-no-anchor { font-size: 12px; color: #94a3b8; font-family: 'DM Sans', sans-serif; font-style: italic; margin-top: 4px; }
+  .bt-sparkline-wrap { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+  .bt-empty { text-align: center; padding: 48px 20px; color: #94a3b8; font-size: 14px; line-height: 1.6; font-family: 'DM Sans', sans-serif; }
 `
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -1195,12 +1236,25 @@ function FamilyMembersSection({ familyMembers, onAdd, onRemove, onToast }) {
   )
 }
 
-function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }) {
-  const [showForm, setShowForm] = useState(false)
-  const [editId,   setEditId]   = useState(null)
-  const [form,     setForm]     = useState({ source_name:'', source_type:'cash', last_four:'', credit_limit:'', billing_cycle_date:'' })
-  const [saving,   setSaving]   = useState(false)
+function PaymentSourcesSection({ paymentSources, transactions, familyMembers, onAdd, onUpdate }) {
+  const [showForm,      setShowForm]      = useState(false)
+  const [editId,        setEditId]        = useState(null)
+  const [form,          setForm]          = useState({ source_name:'', source_type:'cash', last_four:'', credit_limit:'', billing_cycle_date:'' })
+  const [saving,        setSaving]        = useState(false)
+  const [expandedId,    setExpandedId]    = useState(null)
+  const [ownerSaving,   setOwnerSaving]   = useState(null)
+  const [balanceSaving, setBalanceSaving] = useState(null)
+  const [balInputs,     setBalInputs]     = useState({})
+
+  function firstOfCurrMonth() {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`
+  }
+  function getBalInput(id) { return balInputs[id] || { amount: '', date: firstOfCurrMonth() } }
+  function setBalField(id, field, val) { setBalInputs(p => ({ ...p, [id]: { ...getBalInput(id), [field]: val } })) }
+
   function resetForm() { setForm({ source_name:'', source_type:'cash', last_four:'', credit_limit:'', billing_cycle_date:'' }) }
+
   async function handleSave() {
     if (!form.source_name.trim()) return; setSaving(true)
     try {
@@ -1210,24 +1264,108 @@ function PaymentSourcesSection({ paymentSources, transactions, onAdd, onUpdate }
     } catch (err) { console.error('PaymentSourcesSection save error:', err) }
     finally { setSaving(false) }
   }
-  function startEdit(src) { setEditId(src.id); setForm({ source_name:src.source_name, source_type:src.source_type, last_four:src.last_four||'', credit_limit:src.credit_limit||'', billing_cycle_date:src.billing_cycle_date||'' }); setShowForm(true) }
+
+  function startEdit(src) {
+    setEditId(src.id)
+    setForm({ source_name:src.source_name, source_type:src.source_type, last_four:src.last_four||'', credit_limit:src.credit_limit||'', billing_cycle_date:src.billing_cycle_date||'' })
+    setShowForm(true)
+  }
+
+  async function handleSaveOwner(src, ownerName) {
+    setOwnerSaving(src.id)
+    try { await onUpdate(src.id, { owner_family_member: ownerName }) }
+    catch (err) { console.error('PaymentSourcesSection handleSaveOwner error:', err) }
+    finally { setOwnerSaving(null) }
+  }
+
+  async function handleSetBalance(src) {
+    const inp = getBalInput(src.id)
+    const amt = parseFloat(inp.amount)
+    if (!amt || !inp.date) return
+    setBalanceSaving(src.id)
+    try {
+      await onUpdate(src.id, { balance_amount: amt, balance_as_of_date: inp.date })
+      setBalInputs(p => ({ ...p, [src.id]: { amount: '', date: firstOfCurrMonth() } }))
+    } catch (err) { console.error('PaymentSourcesSection handleSetBalance error:', err) }
+    finally { setBalanceSaving(null) }
+  }
+
+  const allOwnerNames = ['Self', ...familyMembers.map(m => m.name)]
   const isCC = form.source_type === 'credit_card'
+
   return (
     <SetupSection icon="💳" title="Payment Sources" count={paymentSources.length}>
       <div style={{ paddingTop:12 }}>
-        {paymentSources.map(src => (
-          <div key={src.id} className="em-setup-list-item">
-            <span className="em-setup-item-icon">{SOURCE_ICONS[src.source_type]||'💰'}</span>
-            <div style={{ flex:1 }}>
-              <div className="em-setup-item-name">{src.source_name}{src.last_four?` ···${src.last_four}`:''}</div>
-              <div className="em-setup-item-sub">{SOURCE_TYPE_LABELS[src.source_type]}{src.credit_limit?` · ₹${fmtAmt(src.credit_limit)} limit`:''}</div>
+        {paymentSources.map(src => {
+          const isExp = expandedId === src.id
+          const inp   = getBalInput(src.id)
+          return (
+            <div key={src.id} style={{ marginBottom:8, border:'1px solid #f1f5f9', borderRadius:10, overflow:'hidden' }}>
+              {/* Summary row */}
+              <div className="em-setup-list-item" style={{ borderBottom: isExp ? '1px solid #f1f5f9' : 'none', marginBottom:0 }}>
+                <span className="em-setup-item-icon">{SOURCE_ICONS[src.source_type]||'💰'}</span>
+                <div style={{ flex:1 }}>
+                  <div className="em-setup-item-name">{src.source_name}{src.last_four?` ···${src.last_four}`:''}</div>
+                  <div className="em-setup-item-sub">
+                    {SOURCE_TYPE_LABELS[src.source_type]}{src.credit_limit?` · ₹${fmtAmt(src.credit_limit)} limit`:''}
+                    {src.owner_family_member ? ` · ${src.owner_family_member}` : ''}
+                  </div>
+                </div>
+                <div className="em-setup-actions">
+                  <Toggle checked={src.is_active} onChange={v => onUpdate(src.id, { is_active:v })} />
+                  <button className="em-icon-btn" onClick={() => startEdit(src)}>✏</button>
+                  <button className="em-icon-btn" style={{ fontSize:10, color: isExp ? '#1A3C6E' : '#94a3b8' }}
+                    onClick={() => setExpandedId(isExp ? null : src.id)}>{isExp ? '▲' : '▼'}</button>
+                </div>
+              </div>
+
+              {/* Expandable: owner + balance */}
+              {isExp && (
+                <div style={{ padding:'12px 14px', background:'#fafbfc' }}>
+                  {/* Field A — Account Owner */}
+                  <div className="em-field-label" style={{ marginBottom:6 }}>Account Owner</div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
+                    {allOwnerNames.map(name => {
+                      const sel = (src.owner_family_member || 'Self') === name
+                      return (
+                        <button key={name} disabled={ownerSaving === src.id}
+                          onClick={() => handleSaveOwner(src, name)}
+                          style={{ padding:'5px 12px', borderRadius:20, border:'1.5px solid', borderColor:sel?'#1A3C6E':'#e2e8f0', background:sel?'#1A3C6E':'#f1f5f9', color:sel?'#ffffff':'#475569', fontFamily:'DM Sans', fontSize:12, fontWeight:500, cursor:'pointer' }}
+                        >{name}</button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Field B — Set Balance */}
+                  <div className="em-field-label" style={{ marginBottom:6 }}>Set Balance</div>
+                  <div style={{ display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap' }}>
+                    <div style={{ flex:1, minWidth:100 }}>
+                      <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'DM Sans', marginBottom:3 }}>Amount (₹)</div>
+                      <input className="em-field-input" type="number" inputMode="decimal" placeholder="e.g. 25000"
+                        value={inp.amount} onChange={e => setBalField(src.id, 'amount', e.target.value)} style={{ margin:0 }} />
+                    </div>
+                    <div style={{ flex:1, minWidth:120 }}>
+                      <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'DM Sans', marginBottom:3 }}>As of date</div>
+                      <input className="em-field-input" type="date"
+                        value={inp.date} onChange={e => setBalField(src.id, 'date', e.target.value)} style={{ margin:0 }} />
+                    </div>
+                    <button
+                      disabled={!parseFloat(inp.amount) || !inp.date || balanceSaving === src.id}
+                      onClick={() => handleSetBalance(src)}
+                      style={{ padding:'9px 14px', border:'none', borderRadius:10, background:'#1A3C6E', color:'#ffffff', fontFamily:'DM Sans', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', opacity:(!parseFloat(inp.amount)||!inp.date||balanceSaving===src.id)?0.5:1 }}
+                    >{balanceSaving === src.id ? '…' : 'Set Balance'}</button>
+                  </div>
+                  {src.balance_as_of_date && (
+                    <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'DM Sans', marginTop:6 }}>
+                      Last set: ₹{fmtAmt(src.balance_amount)} as of {fmtDate(src.balance_as_of_date)}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="em-setup-actions">
-              <Toggle checked={src.is_active} onChange={v => onUpdate(src.id, { is_active:v })} />
-              <button className="em-icon-btn" onClick={() => startEdit(src)}>✏</button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
+
         {showForm ? (
           <div className="em-add-form">
             <div><div className="em-field-label">Name</div><input className="em-field-input" placeholder="e.g. HDFC Regalia" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name:e.target.value }))} /></div>
@@ -2049,6 +2187,224 @@ function ForeignCurrenciesSection({ currencyPrefs, onAdd, onUpdateRate, onRemove
   )
 }
 
+// ── Balances Tab ──────────────────────────────────────────────────────────────
+
+function BalancesTab({ paymentSources, transactions, familyMembers }) {
+  const [periodMode, setPeriodMode] = useState('this_month')
+
+  const periodRange = useMemo(() => {
+    const today = new Date()
+    if (periodMode === 'this_month') return { start: monthPrefix(0) + '-01', end: todayStr() }
+    if (periodMode === 'last_month') {
+      const p  = monthPrefix(-1)
+      const ld = new Date(today.getFullYear(), today.getMonth(), 0).getDate()
+      return { start: p + '-01', end: `${p}-${String(ld).padStart(2,'0')}` }
+    }
+    const d = new Date(today); d.setMonth(d.getMonth() - 3, 1)
+    return { start: dateToDStr(d), end: todayStr() }
+  }, [periodMode])
+
+  function computeCurrentBalance(src) {
+    if (!src.balance_as_of_date) return null
+    const net = transactions
+      .filter(t => t.payment_source_id === src.id && t.txn_date >= src.balance_as_of_date)
+      .reduce((s, t) => {
+        if (t.txn_type === 'income' || t.txn_type === 'transfer_in') return s + Number(t.amount)
+        if (t.txn_type === 'expense') return s - Number(t.amount)
+        return s
+      }, 0)
+    return Number(src.balance_amount || 0) + net
+  }
+
+  function computePeriodMovement(src) {
+    return transactions
+      .filter(t => t.payment_source_id === src.id && t.txn_date >= periodRange.start && t.txn_date <= periodRange.end)
+      .reduce((s, t) => {
+        if (t.txn_type === 'income' || t.txn_type === 'transfer_in') return s + Number(t.amount)
+        if (t.txn_type === 'expense') return s - Number(t.amount)
+        return s
+      }, 0)
+  }
+
+  function computeSparklinePoints(src) {
+    if (!src.balance_as_of_date) return Array(6).fill(null)
+    const pts = []
+    for (let i = 5; i >= 0; i--) {
+      let pointDate
+      if (i === 0) {
+        pointDate = todayStr()
+      } else {
+        const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i + 1); d.setDate(0)
+        pointDate = dateToDStr(d)
+      }
+      if (pointDate < src.balance_as_of_date) { pts.push(null); continue }
+      const net = transactions
+        .filter(t => t.payment_source_id === src.id && t.txn_date >= src.balance_as_of_date && t.txn_date <= pointDate)
+        .reduce((s, t) => {
+          if (t.txn_type === 'income' || t.txn_type === 'transfer_in') return s + Number(t.amount)
+          if (t.txn_type === 'expense') return s - Number(t.amount)
+          return s
+        }, 0)
+      pts.push(Number(src.balance_amount || 0) + net)
+    }
+    return pts
+  }
+
+  const activeSources = paymentSources.filter(s => s.is_active)
+
+  const grouped = useMemo(() => {
+    const active = paymentSources.filter(s => s.is_active)
+    const g = {}
+    active.forEach(src => {
+      const key = src.owner_family_member || '__unassigned__'
+      if (!g[key]) g[key] = []
+      g[key].push(src)
+    })
+    const keys = Object.keys(g).sort((a, b) => {
+      if (a === '__unassigned__') return 1
+      if (b === '__unassigned__') return -1
+      if (a === 'Self') return -1
+      if (b === 'Self') return 1
+      return a.localeCompare(b)
+    })
+    const out = {}
+    keys.forEach(k => { out[k] = g[k] })
+    return out
+  }, [paymentSources])
+
+  const householdTotal = useMemo(() => {
+    return paymentSources
+      .filter(s => s.is_active && s.balance_as_of_date != null)
+      .reduce((sum, src) => sum + (computeCurrentBalance(src) || 0), 0)
+  }, [paymentSources, transactions])
+
+  const sourcesWithAnchor = activeSources.filter(s => s.balance_as_of_date != null)
+  const unanchoredCount   = activeSources.filter(s => !s.balance_as_of_date).length
+
+  function SparklineSVG({ points }) {
+    const valid = points.filter(p => p !== null)
+    if (valid.length < 2) return (
+      <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'DM Sans', padding:'4px 0' }}>Not enough data</div>
+    )
+    const W = 280, H = 40
+    const min = Math.min(...valid)
+    const max = Math.max(...valid)
+    const range = max - min || 1
+    const coords = []
+    points.forEach((v, i) => {
+      if (v === null) return
+      const x = (i / (points.length - 1)) * W
+      const y = H - 4 - ((v - min) / range) * (H - 8)
+      coords.push({ x, y })
+    })
+    if (coords.length < 2) return null
+    const d = coords.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    const last = coords[coords.length - 1]
+    return (
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+        <path d={d} fill="none" stroke="#1A3C6E" strokeWidth="1.5" strokeLinejoin="round" />
+        <circle cx={last.x} cy={last.y} r={3} fill="#1A3C6E" />
+      </svg>
+    )
+  }
+
+  const PERIOD_OPTIONS = [
+    { value: 'this_month', label: 'This Month' },
+    { value: 'last_month', label: 'Last Month' },
+    { value: 'last_3m',    label: 'Last 3M'    },
+  ]
+  const periodLabel = PERIOD_OPTIONS.find(p => p.value === periodMode)?.label || ''
+
+  if (activeSources.length === 0) {
+    return <div className="bt-empty">Add payment sources in Setup to track balances.</div>
+  }
+
+  if (unanchoredCount === activeSources.length) {
+    return (
+      <div style={{ padding:'16px' }}>
+        <div className="bt-empty" style={{ padding:'32px 0' }}>
+          Set a balance for each account in Setup → Payment Sources<br />to see your balances here.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bt-wrap">
+      {/* Section A — Household Total */}
+      <div className="bt-total-card">
+        <div className="bt-total-label">Household Balance</div>
+        <div className="bt-total-amount">₹{fmtAmt(Math.round(householdTotal))}</div>
+        <div className="bt-total-sub">
+          across {sourcesWithAnchor.length} account{sourcesWithAnchor.length !== 1 ? 's' : ''} · as of today
+        </div>
+        {unanchoredCount > 0 && (
+          <div className="bt-total-warn">
+            ⚠ {unanchoredCount} account{unanchoredCount !== 1 ? 's' : ''} not included — set balance in Setup
+          </div>
+        )}
+      </div>
+
+      {/* Period selector */}
+      <div className="bt-period-row">
+        {PERIOD_OPTIONS.map(p => (
+          <button key={p.value}
+            className={`bt-period-btn${periodMode === p.value ? ' active' : ''}`}
+            onClick={() => setPeriodMode(p.value)}
+          >{p.label}</button>
+        ))}
+      </div>
+
+      {/* Section B — Accounts grouped by owner */}
+      {Object.entries(grouped).map(([owner, srcs]) => (
+        <div key={owner}>
+          <div className="bt-group-hdr">
+            <span>{owner === '__unassigned__' ? 'UNASSIGNED' : owner.toUpperCase()}</span>
+            <span style={{ fontWeight:400 }}>· {srcs.length} account{srcs.length !== 1 ? 's' : ''}</span>
+          </div>
+          {srcs.map(src => {
+            const bal      = computeCurrentBalance(src)
+            const movement = computePeriodMovement(src)
+            const pts      = computeSparklinePoints(src)
+            const hasAnchor = src.balance_as_of_date != null
+            return (
+              <div key={src.id} className="bt-account-card">
+                <div className="bt-account-top">
+                  <div className="bt-account-icon">{SOURCE_ICONS[src.source_type] || '💰'}</div>
+                  <div className="bt-account-info">
+                    <div className="bt-account-name">
+                      {src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}
+                    </div>
+                    <div className="bt-account-type">{SOURCE_TYPE_LABELS[src.source_type]}</div>
+                    {!hasAnchor && <div className="bt-no-anchor">Set balance to track</div>}
+                  </div>
+                  {hasAnchor && (
+                    <div className="bt-account-right">
+                      <div className="bt-balance-amt" style={{ color: (bal ?? 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                        ₹{fmtAmt(Math.round(Math.abs(bal ?? 0)))}
+                        {(bal ?? 0) < 0 && <span style={{ fontSize:10, color:'#dc2626', marginLeft:2 }}>owed</span>}
+                      </div>
+                      <div className="bt-balance-date">anchor: {fmtDate(src.balance_as_of_date)}</div>
+                      <div className="bt-balance-period" style={{ color: movement >= 0 ? '#16a34a' : '#dc2626' }}>
+                        {movement >= 0 ? '+' : '−'}₹{fmtAmt(Math.round(Math.abs(movement)))} {periodLabel.toLowerCase()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {hasAnchor && (
+                  <div className="bt-sparkline-wrap">
+                    <SparklineSVG points={pts} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ExpenseManager() {
@@ -2089,7 +2445,7 @@ export default function ExpenseManager() {
 
   const width    = useWindowWidth()
 
-  const [tab,                   setTab]                   = useState('log')
+  const [tab,                   setTab]                   = useState('analytics')
   const [filterMode,            setFilterMode]            = useState('this')
   const [customStart,           setCustomStart]           = useState('')
   const [customEnd,             setCustomEnd]             = useState(todayStr())
@@ -2326,7 +2682,7 @@ export default function ExpenseManager() {
 
         {/* Tabs */}
         <div className="em-tabs">
-          {[['log','Log'],['setup','Setup'],['analytics','Analytics'],['dues','Dues']].map(([id, label]) => (
+          {[['analytics','Analytics'],['balances','Balances'],['dues','Dues'],['log','Log'],['setup','Setup']].map(([id, label]) => (
             <button key={id} className={`em-tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
               {label}
               {id === 'dues' && totalDueBadge > 0 && <span className="em-tab-badge">{totalDueBadge}</span>}
@@ -2574,7 +2930,7 @@ export default function ExpenseManager() {
         {tab === 'setup' && (
           <div style={{ paddingTop:8 }}>
             <FamilyMembersSection familyMembers={familyMembers} onAdd={addFamilyMember} onRemove={removeFamilyMember} onToast={setToast} />
-            <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
+            <PaymentSourcesSection paymentSources={paymentSources} transactions={transactions} familyMembers={familyMembers} onAdd={addPaymentSource} onUpdate={updatePaymentSource} />
             <CategoriesSection categories={expenseCategories} onAdd={addCategory} onUpdate={updateCategory} />
             <IncomeHeadsSection incomeHeads={incomeHeads} onAdd={addCategory} onUpdate={updateCategory} onToast={setToast} />
             <RecurringSection recurringItems={recurringItems} categories={categories} paymentSources={paymentSources} onAdd={addRecurringItem} onUpdate={updateRecurringItem} onDelete={deleteRecurringItem} />
@@ -2595,6 +2951,15 @@ export default function ExpenseManager() {
             splits={splits}
             friends={friends}
             updateSplitStatus={updateSplitStatus}
+          />
+        )}
+
+        {/* ─── BALANCES TAB ──────────────────────────────────────────────────── */}
+        {tab === 'balances' && (
+          <BalancesTab
+            paymentSources={paymentSources}
+            transactions={transactions}
+            familyMembers={familyMembers}
           />
         )}
 

@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 04 Jun 2026 (compute_returns.py IO optimisation — single query/batch)
+Last updated: 04 Jun 2026 (EB-Balances: Balances tab, owner/balance fields, tab resequence)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -49,7 +49,22 @@ All SQL already run manually before EB-Fix-3 session:
 
 ---
 
+## EB-Balances status: DONE ✅ (04 Jun 2026)
+- Balances tab built: household total card, accounts grouped by owner, SVG sparklines
+- Tab order: Analytics / Balances / Dues / Log / Setup. Default: Analytics.
+- transfer_in excluded from all Analytics calculations (filtered useMemo + monthlyTrend)
+- Payment source owner chip (Self + family members) + Set Balance anchor (amount + date) in Setup
+- New columns already in Supabase: `balance_amount`, `balance_as_of_date`, `owner_family_member`
+- Build: 968 modules, 0 errors
+
 ## Current priority (do this FIRST next session):
+
+### P0 — Run compute_returns.py (check scheme_returns row count first)
+Check scheme_returns in Supabase. If 0 rows, run:
+```bash
+cd ~/Documents/FundInsight
+python pipeline/compute_returns.py
+```
 
 ### Step 0 — Run compute_returns.py (before any other work)
 ```bash
