@@ -374,7 +374,7 @@ export function ExpenseProvider({ children }) {
   async function addSplits(transaction_id, splitRows) {
     const client = sb()
     if (!client || !user) return
-    const rows = splitRows.map(r => ({ ...r, transaction_id }))
+    const rows = splitRows.map(r => ({ ...r, transaction_id, user_id: user.uid }))
     const { error: err } = await client
       .from('expense_splits')
       .insert(rows)

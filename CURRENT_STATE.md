@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v51.0
+**Last updated:** 03 Jun 2026 · v52.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,36 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Fix-7 — expense_splits: user_id missing + is_payer column ✅ (03 Jun 2026)
+
+### Root cause
+
+`addSplits` in `ExpenseContext.jsx` built insert rows as `{ ...r, transaction_id }` — `user_id: user.uid` was never added. Every other `add*` function adds this field. With `user_id` absent the insert failed with either a NOT NULL violation (`23502`) or RLS policy violation (`42501`).
+
+Additionally, the `expense_splits` table was missing the `is_payer` column, causing a Supabase schema cache error: `Could not find the 'is_payer' column of 'expense_splits'`.
+
+### Code fixes applied
+
+| File | Change |
+|---|---|
+| `src/context/ExpenseContext.jsx` line 377 | `{ ...r, transaction_id }` → `{ ...r, transaction_id, user_id: user.uid }` |
+| `src/components/expenses/ExpenseEntryPanel.jsx` lines 514–520 | Inner split try-catch now sets `setSaveState('error')` and shows error toast on failure; previously swallowed the error and called `setSaveState('success')` regardless |
+
+### Manual SQL required in Supabase fundlens-prod (run once)
+
+```sql
+ALTER TABLE public.expense_splits
+  ADD COLUMN IF NOT EXISTS is_payer boolean NOT NULL DEFAULT false;
+```
+
+Must be run before this fix takes effect — the column must exist for the insert payload to be accepted.
+
+### Status
+
+`expense_splits` fully operational once SQL above is applied.
 
 ---
 

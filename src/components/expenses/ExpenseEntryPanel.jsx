@@ -511,10 +511,15 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             { participant_type: lastP.type, participant_name: lastP.name, share_amount: remainder, is_payer: lastP.isPayer },
           ]
         }
-        try { await addSplits(newTxn.id, rows) }
-        catch (splitSaveErr) { console.error('ExpenseEntryPanel addSplits error:', splitSaveErr) }
-        setSaveState('success')
-        setToast({ message: `✓ ₹${amt.toLocaleString('en-IN')} split among ${splitParticipants.length} people`, type: 'success' })
+        try {
+          await addSplits(newTxn.id, rows)
+          setSaveState('success')
+          setToast({ message: `✓ ₹${amt.toLocaleString('en-IN')} split among ${splitParticipants.length} people`, type: 'success' })
+        } catch (splitSaveErr) {
+          console.error('Split save failed:', JSON.stringify(splitSaveErr, null, 2))
+          setSaveState('error')
+          setToast({ message: 'Failed to save split. Check connection.', type: 'error' })
+        }
       } else {
         setSaveState('success')
         setToast({ message: `Saved — ₹${amt.toLocaleString('en-IN')} · ${catName}`, type: 'success' })
