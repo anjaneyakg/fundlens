@@ -1,5 +1,5 @@
 """
-backfill_nav_history.py  —  v1.4.1
+backfill_nav_history.py  —  v1.5.0
 
 Fetches NAV history from AMFI and inserts into Supabase nav_history table.
 
@@ -23,6 +23,11 @@ Usage:
     python backfill_nav_history.py --auto-resume --dry-run
 
 Changelog:
+  v1.5.0  Custom --from/--to range: no T-1 cap applied (exact user dates used).
+          Warning emitted when --to is today or in the future (AMFI may not have
+          published NAV yet), but fetch is still attempted — do NOT skip.
+          T-1 cap remains only for --full and --auto-resume (where no explicit
+          end date is supplied).
   v1.4.1  get_supabase_client: key fallback chain SUPABASE_SERVICE_ROLE_KEY
           → SUPABASE_KEY → SUPABASE_SERVICE_KEY.
   v1.4.0  Add --from / --to as aliases for --start-date / --end-date.
@@ -477,6 +482,8 @@ def resolve_date_range(args: argparse.Namespace) -> tuple[date, date]:
         return start, yesterday
 
     # --start-date / --from mode: user controls end; default to yesterday if not supplied.
+    # T-1 cap is NOT applied here — the user supplies exact dates and we honour them.
+    # This allows gap-repair runs for any past date, including the last 30 days.
     try:
         start = date.fromisoformat(args.start_date)
     except ValueError:
@@ -496,6 +503,14 @@ def resolve_date_range(args: argparse.Namespace) -> tuple[date, date]:
         log.error("--start-date must be before --end-date.")
         sys.exit(1)
 
+    if end >= today:
+        log.warning(
+            "--to date %s is today or in the future — AMFI may not have published "
+            "NAV for these dates yet. Fetch will be attempted; expect 0 rows for "
+            "future dates.",
+            end,
+        )
+
     return start, end
 
 
@@ -510,7 +525,7 @@ def main() -> None:
     else:
         start, end = resolve_date_range(args)
 
-    log.info("backfill_nav_history.py  v1.4.1  starting")
+    log.info("backfill_nav_history.py  v1.5.0  starting")
     log.info(
         "  Mode     : %s",
         "auto-resume" if args.auto_resume
