@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 03 Jun 2026 · v49.0
+**Last updated:** 03 Jun 2026 · v50.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,17 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Fix-6 — Entry Panel label fixes (income + transfer_in) ✅ (03 Jun 2026)
+
+Surgical edits to `src/components/expenses/ExpenseEntryPanel.jsx` only. No other files changed.
+
+| Fix | Change |
+|---|---|
+| **Fix 1 — Income tab label** | "PAYMENT SOURCE" label changed to "INTO ACCOUNT" when `txnType === 'income'`. Label is now `{txnType === 'income' ? 'Into account' : 'Payment Source'}` — expense tab still says "Payment Source". |
+| **Fix 2 — Transfer In: FROM ACCOUNT row** | New `fromAccount` / `setFromAccount(null)` state added. A "FROM ACCOUNT" payment source chip row (using `topSrcs` + `hasMoreSrcs`) renders above the existing "TRANSFERRED FROM" people chips. Selected source name is encoded into `notes` on save as `"From account: <name>; Transfer from: <person>"` — no DB schema change. `fromAccount` reset on panel open. |
 
 ---
 

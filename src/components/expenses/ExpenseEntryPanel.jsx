@@ -319,6 +319,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
   // Transfer-in selectors
   const [transferFrom,      setTransferFrom]      = useState('')  // name or '__other__'
   const [transferFromOther, setTransferFromOther] = useState('')
+  const [fromAccount,       setFromAccount]       = useState(null) // source_id for transfer_in origin
 
   // Split state
   const [splitOn,           setSplitOn]           = useState(false)
@@ -400,6 +401,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     setIsReimbursable(false)
     setTransferFrom('')
     setTransferFromOther('')
+    setFromAccount(null)
   }
 
   // ── Split helpers ─────────────────────────────────────────────────────────
@@ -456,7 +458,11 @@ export default function ExpenseEntryPanel({ open, onClose }) {
     let txnNotes = note || null
     if (txnType === 'transfer_in') {
       const fromName = transferFrom === '__other__' ? transferFromOther.trim() : transferFrom
-      txnNotes = fromName ? `Transfer from: ${fromName}` : null
+      const fromSrc  = fromAccount ? activeSources.find(s => s.id === fromAccount)?.source_name : null
+      const parts    = []
+      if (fromSrc)  parts.push(`From account: ${fromSrc}`)
+      if (fromName) parts.push(`Transfer from: ${fromName}`)
+      txnNotes = parts.length ? parts.join('; ') : null
     }
 
     const catName = txnType === 'expense'
@@ -769,7 +775,7 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {/* Payment source — shown for expense and income */}
           {txnType !== 'transfer_in' && (
             <>
-              <div className="eep-label">Payment Source</div>
+              <div className="eep-label">{txnType === 'income' ? 'Into account' : 'Payment Source'}</div>
               <div className="eep-chips">
                 {topSrcs.map(src => (
                   <button key={src.id} className={`eep-chip${sourceId===src.id?' selected':''}`} onClick={() => setSourceId(src.id)}>
@@ -799,8 +805,20 @@ export default function ExpenseEntryPanel({ open, onClose }) {
           {/* ── TRANSFER-IN: dual selector ── */}
           {txnType === 'transfer_in' && (
             <>
+              {/* Selector 0 — From account (payment source) */}
+              <div className="eep-label">From account</div>
+              <div className="eep-chips">
+                {topSrcs.map(src => (
+                  <button key={src.id} className={`eep-chip${fromAccount===src.id?' selected':''}`} onClick={() => setFromAccount(src.id)}>
+                    <span>{SOURCE_ICONS[src.source_type]||'💰'}</span>
+                    <span>{src.source_name}{src.last_four?` ···${src.last_four}`:''}</span>
+                  </button>
+                ))}
+                {hasMoreSrcs && <button className="eep-chip more" onClick={() => setSrcSheet(true)}>More →</button>}
+              </div>
+
               {/* Selector 1 — Transferred from */}
-              <div className="eep-label">Transferred from</div>
+              <div className="eep-label" style={{ marginTop:8 }}>Transferred from</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
                 {familyOptions.map(m => (
                   <button key={m.id}
