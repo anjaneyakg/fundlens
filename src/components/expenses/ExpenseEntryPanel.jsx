@@ -782,12 +782,14 @@ export default function ExpenseEntryPanel({ open, onClose }) {
             </>
           )}
 
-          {/* ── EXPENSE / INCOME: family member chips ── */}
-          {(txnType === 'expense' || txnType === 'income') && familyMembers.length > 1 && (
+          {/* ── EXPENSE / INCOME: family member chips — always visible, Self is hardcoded first ── */}
+          {(txnType === 'expense' || txnType === 'income') && (
             <>
               <div className="eep-label">{txnType === 'expense' ? 'For / Paid by' : 'Earned by'}</div>
               <div className="eep-chips">
-                {familyMembers.map(m => (
+                {/* Self always present */}
+                <button className={`eep-chip${member==='Self'?' selected':''}`} onClick={() => setMember('Self')}>Self</button>
+                {familyMembers.filter(m => m !== 'Self').map(m => (
                   <button key={m} className={`eep-chip${member===m?' selected':''}`} onClick={() => setMember(m)}>{m}</button>
                 ))}
               </div>
