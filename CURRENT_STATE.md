@@ -1099,11 +1099,11 @@ features never activated.
 | Priority | Task |
 |---|---|
 | P0 | **compute_returns.py full batch** — check if complete (`SELECT COUNT(*) FROM scheme_returns;`); if 0 rows, run `python pipeline/compute_returns.py` from FundInsight/ |
-| P0 | **Cell C — Scheme Reconciler** — fuzzy-match holdings_raw names → AMFI scheme master → populate scheme_code_amfi in scheme_portfolios |
+| P0 | **Scheme Mapping pass** — holdings_latest.csv now has Mar 2026 data (119,308 rows, 48 AMCs). Go to /admin/scheme-mapping and map all (amc_name, scheme_code_amc) pairs. Priority: Kotak, SBI, HDFC, Nippon, ICICI — these have meaningful AMC codes. Choice is new (not in Feb). |
+| P0 | **Cell C — Scheme Reconciler** — after Scheme Mapping pass: build cell_c_reconciler.py to fuzzy-match scheme_name to AMFI master, populate scheme_code_amfi. Uses scheme_code_map.json as fallback/override. |
 | P1 | **AIrrow sentiment archive cron** (T-88 days to August launch — URGENT) |
 | P1 | **PH4-S7 Performance + SEO** — lazy loading, code splitting, meta tags, sitemap |
-| P1 | **merge_holdings.py** — merge Feb+Mar 2026 CSVs (holdings_raw_4d_2026-02.csv + 2026-03.csv) → master_holdings.csv |
-| P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C + merge_holdings.py) |
+| P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C) |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P0 | **GitHub Actions secrets** — Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD` to FundInsight repo secrets to activate daily_returns_sync cron |
@@ -1180,6 +1180,7 @@ features never activated.
 | `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
 | `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
 | `compute_returns.py` *(FI)* | v1.1 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). IO-optimised: 1 combined query/batch (vs 9 before) using unnest+DISTINCT ON. Batch 200, 2s sleep between batches. First full run pending (IO budget exhausted 03 Jun — reset at midnight UTC). |
+| `merge_holdings.py` *(FI)* | v1.0 | ✅ Ready | Transforms holdings_raw_4d_YYYY-MM.csv (13-col cell_4d_v2.py output) to canonical 18-col holdings_latest.csv format. AMC name expansion, ISIN validation, industry/rating split, instrument_type heuristic. --dry-run flag. Run: `python pipeline/merge_holdings.py` from FundInsight/. Mar 2026 run complete: 119,308 rows, 48 AMCs. |
 
 ---
 
@@ -1294,8 +1295,13 @@ FROM nav_history;
 
 | Month | Rows | AMCs | File |
 |---|---|---|---|
-| Feb 2026 | 115,469 | 47 | holdings_raw_4d_2026-02.csv |
+| Feb 2026 | 115,469 | 47 | holdings_raw_4d_2026-02.csv (full version on GitHub; local copy is partial — 46K rows, 19 AMCs only) |
 | Mar 2026 | 119,308 | 48 | holdings_raw_4d_2026-03.csv |
+
+**holdings_latest.csv** — now Mar 2026 (updated 04 Jun 2026 by merge_holdings.py v1.0)
+- 119,308 rows, 48 AMCs, portfolio_date=2026-03-31, disclosure_date=2026-04-30
+- Choice Mutual Fund: new in Mar 2026 (was not in Feb)
+- Union Mutual Fund: in Feb 2026 only (absent from Mar raw — did not submit or file not downloaded)
 
 ---
 

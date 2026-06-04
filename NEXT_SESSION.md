@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 04 Jun 2026 (EB-Fix-9: Set Balance RLS + Balances net movement + Split settlement persist)
+Last updated: 04 Jun 2026 (merge_holdings.py v1.0 — Mar 2026 canonical transform + holdings_latest.csv updated)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -77,16 +77,46 @@ cd ~/Documents/FundInsight
 python pipeline/compute_returns.py
 ```
 
-### Step 1 — Cell C: Scheme Reconciler (main pipeline task)
+## merge_holdings.py status: DONE ✅ (04 Jun 2026) — v1.0
+
+- `FundInsight/pipeline/merge_holdings.py` v1.0 complete
+- Transforms 13-col raw parser output to canonical 18-col holdings_latest.csv format
+- Mar 2026 run complete: 119,308 rows, 48 AMCs, portfolio_date=2026-03-31
+- `holdings_latest.csv` overwritten with Mar 2026 data (was Feb 2026)
+- `holdings_raw_4d_2026-03_canonical.csv` created as staging file
+
+### Step 1 — Scheme Mapping pass (NEXT: do this FIRST)
+
+`holdings_latest.csv` now has Mar 2026 data. The Scheme Mapping UI at `/admin/scheme-mapping` needs a full mapping pass.
+
+- 1,603 distinct `scheme_code_amc` values across 48 AMCs need mapping to AMFI scheme names
+- `scheme_code_map.json` does NOT exist yet — will be created by this pass
+- Priority AMCs (meaningful codes, map first): Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan, Aditya Birla Sun Life
+- New AMC in Mar: **Choice Mutual Fund** (15 securities, 1 scheme — map first, it's tiny)
+- AMCs where scheme_code_amc = full scheme name (Shriram, Trust, JM, Union): these are already self-describing — confirm and save
+- AMCs where scheme_code_amc = "Sheet1" (Angel One, Navi, Unifi): pick the correct AMFI scheme manually
+
+After mapping pass: `scheme_code_map.json` will be written to GitHub via the Save button in the UI.
+
+### Step 2 — Cell C: Scheme Reconciler (build after mapping pass)
 
 Context:
 - `scheme_portfolios` table has 0 rows. Blocked on Cell C.
-- Feb 2026: 115,469 rows in `holdings_raw_4d_2026-02.csv` (47 AMCs)
-- Mar 2026: 119,308 rows in `holdings_raw_4d_2026-03.csv` (48 AMCs)
-- Cell C goal: fuzzy-match holding names in the CSV to AMFI scheme master → populate `scheme_code_amfi`
-- After Cell C: build `merge_holdings.py` → `master_holdings.csv` → Phase C Supabase upsert
+- Cell C goal: fuzzy-match scheme_name (from holdings_latest.csv) to AMFI scheme master → resolve AMFI numeric scheme_code → look up scheme_id in `schemes` table
+- scheme_code_map.json acts as override/fallback for low-confidence fuzzy matches
+- Output: `scheme_code_amfi_map.csv` with (amc_name, scheme_name, scheme_id, confidence, match_method)
+- After Cell C: build `cell_c_upsert.py` + `scheme_portfolios` DDL → upsert to Supabase
 
-Read at session start: `cell_4d_v2.py`, `amcList.js` (scheme master reference), the two CSV output files.
+Read at session start: `cell_4d_v2.py`, `merge_holdings.py`, `pipeline/compute_returns.py` (for Supabase write pattern).
+
+### Key notes for Cell C build:
+- `scheme_code_amc` = sheet_name from Excel. For many AMCs it is a meaningful code (V3I, SMEEF), for others it is the full scheme name or "Sheet1".
+- Match on `scheme_name` (cleaned scheme name), NOT on `scheme_code_amc`.
+- Fuzzy match scoped per AMC (only compare within same AMC's schemes in Supabase).
+- Use `rapidfuzz` library (fast, MIT license). pip install rapidfuzz.
+- `schemes` table has: id (uuid), amfi_code (int), name (text), amc_id (uuid FK).
+- `amcs` table has: id (uuid), name (text), short_name (text).
+- Need to JOIN schemes with amcs to scope matching per AMC.
 
 ---
 
@@ -97,7 +127,10 @@ Read at session start: `cell_4d_v2.py`, `amcList.js` (scheme master reference), 
 - ✅ PH3-S1 through PH3-S5 — ALL DONE
 - ✅ PH4-S5 bug fixes — ALL DONE (31 May 2026)
 - ✅ Node.js 24 upgrade — DONE (30 May 2026)
+- ✅ merge_holdings.py v1.0 — DONE (04 Jun 2026) — holdings_latest.csv written locally (Mar 2026)
+- ⚠ holdings_latest.csv on GitHub not yet updated — run `python pipeline/merge_holdings.py --push` after adding GITHUB_TOKEN to FundInsight/.env (same PAT that is VITE_GITHUB_PAT in Vercel)
 - ⚠ scheme_returns table: 0 rows — run `python pipeline/compute_returns.py` from FundInsight/ (first run)
+- ⚠ scheme_code_map.json does NOT exist yet — do Scheme Mapping pass at /admin/scheme-mapping first
 - ⚠ Add SUPABASE_DB_PASSWORD to FundInsight repo GHA secrets (for daily_returns_sync.yml)
 - ⚠ Run migrations/005_expense_manager.sql — REQUIRED before testing /expenses
 - ⚠ Run migrations/004_registration.sql — REQUIRED before testing /register
