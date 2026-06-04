@@ -384,19 +384,20 @@ export function ExpenseProvider({ children }) {
     setSplits(data || [])
   }
 
-  async function updateSplitStatus(id, status) {
+  async function updateSplitStatus(splitId, status) {
     const client = sb()
     if (!client) return
-    const patch = { settlement_status: status }
-    if (status === 'settled') patch.settled_at = new Date().toISOString()
+    const patch = {
+      settlement_status: status,
+      settled_at: status === 'settled' ? new Date().toISOString() : null,
+    }
     const { error: err } = await client
       .from('expense_splits')
       .update(patch)
-      .eq('id', id)
+      .eq('id', splitId)
+      .eq('user_id', user.uid)
     if (err) { console.error('updateSplitStatus error:', err); throw err }
-    const { data, error: reloadErr } = await client.from('expense_splits').select('*')
-    if (reloadErr) console.error('updateSplitStatus reload error:', reloadErr)
-    setSplits(data || [])
+    setSplits(prev => prev.map(s => s.id === splitId ? { ...s, ...patch } : s))
   }
 
   const value = {

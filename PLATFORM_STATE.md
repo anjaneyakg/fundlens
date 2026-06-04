@@ -100,6 +100,7 @@ Full detail: `FundLens_GoLive_Plan_v1.docx` in repo.
 | EB-S3 | Reimbursement tracker, unusual spend alerts, subscription audit, end-of-month summary, CSV export | ✅ Done — 02 Jun 2026 |
 | EB-Fix-3 | CC Reconcile moved to Log tab sub-view; foreign currency prefs + FX entry panel | ✅ Done — 03 Jun 2026 |
 | EB-Balances | Balances tab (household total, accounts by owner, SVG sparklines, period net movement). Tab order: Analytics/Balances/Dues/Log/Setup. transfer_in excluded from Analytics. owner + Set Balance anchor in Setup → Payment Sources. | ✅ Done — 04 Jun 2026 |
+| EB-Fix-9 | Set Balance confirmed correct (auth + RLS). Balances tab shows net movement (MODE B) for accounts without opening balance anchor; household total includes all accounts with asterisk when any MODE B. Split settlement status persists to Supabase (user_id RLS fix + optimistic state update). | ✅ Done — 04 Jun 2026 |
 | EB-S4 | Push notifications, family collaboration — if new requirements arise | ⏳ Future |
 
 ### Phase 5 — Monetisation & Go-Live (Weeks 11–13)

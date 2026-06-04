@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 04 Jun 2026 (EB-Balances: Balances tab, owner/balance fields, tab resequence)
+Last updated: 04 Jun 2026 (EB-Fix-9: Set Balance RLS + Balances net movement + Split settlement persist)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -62,23 +62,19 @@ All SQL already run manually before EB-Fix-3 session:
 - New columns already in Supabase: `balance_amount`, `balance_as_of_date`, `owner_family_member`
 - Build: 968 modules, 0 errors
 
+## EB-Fix-9 status: DONE ✅ (04 Jun 2026)
+- (1) Set Balance confirmed correct: `updatePaymentSource` already used auth client + user_id RLS filter.
+- (2) Balances tab now shows net movement (MODE B) for accounts without opening balance anchor. Household total includes all accounts; asterisk + footnote if any MODE B. `computeAllTimeMovement()` added.
+- (3) `updateSplitStatus` fixed: added `.eq('user_id', user.uid)`, `settled_at: null` for non-settled, optimistic setSplits update.
+
 ## Current priority (do this FIRST next session):
 
-### P0 — Run compute_returns.py (check scheme_returns row count first)
-Check scheme_returns in Supabase. If 0 rows, run:
+### P0 — Verify compute_returns.py completion
+Check scheme_returns row count: `SELECT COUNT(*) FROM scheme_returns;`
+If 0 rows, run:
 ```bash
 cd ~/Documents/FundInsight
 python pipeline/compute_returns.py
-```
-
-### Step 0 — Run compute_returns.py (before any other work)
-```bash
-cd ~/Documents/FundInsight
-# Activate venv: source .venv/Scripts/activate  (Git Bash)
-python pipeline/compute_returns.py --dry-run --verbose
-# Confirm output matches expected format, then:
-python pipeline/compute_returns.py
-# Verify scheme_returns row count in Supabase after full run
 ```
 
 ### Step 1 — Cell C: Scheme Reconciler (main pipeline task)

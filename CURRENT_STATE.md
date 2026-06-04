@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 04 Jun 2026 · v54.0
+**Last updated:** 04 Jun 2026 · v55.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,31 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## EB-Fix-9 — Expense Manager: Set Balance RLS + Balances net movement + Split settlement persist ✅ (04 Jun 2026)
+
+Three bug fixes:
+
+**(1) Set Balance now saves correctly** — `updatePaymentSource` already used authenticated client and `user_id` RLS filter; confirmed correct. No code change required.
+
+**(2) Balances tab — net movement for accounts without opening balance anchor**
+- `BalancesTab` now has two display modes per account:
+  - MODE A (anchor set): `balance_amount + net_movement_since_anchor_date`, label "as of DD/MM/YY"
+  - MODE B (no anchor, has transactions): all-time net movement, label "Net movement · no opening balance set", amber chip "⚠ Set opening balance for true balance"
+  - EMPTY (no anchor, no transactions): "Set balance to track" placeholder (unchanged)
+- Household total now includes ALL accounts (MODE A + MODE B). Asterisk + footnote shown if any MODE B account.
+- Early return condition changed from "all unanchored" → "no data at all" (`hasAnyData` check).
+- Added `computeAllTimeMovement()` helper function in `BalancesTab`.
+
+**(3) Split settlement status now persists to Supabase**
+- `updateSplitStatus` in `ExpenseContext.jsx` was missing `.eq('user_id', user.uid)` — RLS was silently blocking the update.
+- Fixed: added `user_id` filter, set `settled_at: null` when status is not 'settled', replaced full reload with optimistic `setSplits(prev => prev.map(...))`.
+- `SplitViewSheet` already called `updateSplitStatus` correctly; Analytics `friendBalances` filter already reads `settlement_status !== 'settled'` — no changes needed to those components.
+
+### Build
+968 modules, 0 errors.
 
 ---
 
@@ -1073,11 +1098,12 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Run compute_returns.py --dry-run** from FundInsight/ to validate output, then run full `python pipeline/compute_returns.py` (first population of scheme_returns table) |
+| P0 | **compute_returns.py full batch** — check if complete (`SELECT COUNT(*) FROM scheme_returns;`); if 0 rows, run `python pipeline/compute_returns.py` from FundInsight/ |
 | P0 | **Cell C — Scheme Reconciler** — fuzzy-match holdings_raw names → AMFI scheme master → populate scheme_code_amfi in scheme_portfolios |
+| P1 | **AIrrow sentiment archive cron** (T-88 days to August launch — URGENT) |
+| P1 | **PH4-S7 Performance + SEO** — lazy loading, code splitting, meta tags, sitemap |
 | P1 | **merge_holdings.py** — merge Feb+Mar 2026 CSVs (holdings_raw_4d_2026-02.csv + 2026-03.csv) → master_holdings.csv |
 | P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C + merge_holdings.py) |
-| P1 | **AIrrow sentiment archive cron** (T-89 days to August launch — URGENT) |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P0 | **GitHub Actions secrets** — Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD` to FundInsight repo secrets to activate daily_returns_sync cron |

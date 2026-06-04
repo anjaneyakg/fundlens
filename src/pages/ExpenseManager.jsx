@@ -2226,6 +2226,16 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
       }, 0)
   }
 
+  function computeAllTimeMovement(src) {
+    return transactions
+      .filter(t => t.payment_source_id === src.id)
+      .reduce((s, t) => {
+        if (t.txn_type === 'income' || t.txn_type === 'transfer_in') return s + Number(t.amount)
+        if (t.txn_type === 'expense') return s - Number(t.amount)
+        return s
+      }, 0)
+  }
+
   function computeSparklinePoints(src) {
     if (!src.balance_as_of_date) return Array(6).fill(null)
     const pts = []
@@ -2273,13 +2283,22 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
   }, [paymentSources])
 
   const householdTotal = useMemo(() => {
-    return paymentSources
-      .filter(s => s.is_active && s.balance_as_of_date != null)
-      .reduce((sum, src) => sum + (computeCurrentBalance(src) || 0), 0)
+    return paymentSources.filter(s => s.is_active).reduce((sum, src) => {
+      if (src.balance_as_of_date != null) return sum + (computeCurrentBalance(src) || 0)
+      if (transactions.some(t => t.payment_source_id === src.id)) return sum + computeAllTimeMovement(src)
+      return sum
+    }, 0)
   }, [paymentSources, transactions])
 
-  const sourcesWithAnchor = activeSources.filter(s => s.balance_as_of_date != null)
-  const unanchoredCount   = activeSources.filter(s => !s.balance_as_of_date).length
+  const anyModeB = activeSources.some(src =>
+    !src.balance_as_of_date && transactions.some(t => t.payment_source_id === src.id)
+  )
+  const hasAnyData = activeSources.some(src =>
+    src.balance_as_of_date != null || transactions.some(t => t.payment_source_id === src.id)
+  )
+  const contributing = activeSources.filter(src =>
+    src.balance_as_of_date != null || transactions.some(t => t.payment_source_id === src.id)
+  ).length
 
   function SparklineSVG({ points }) {
     const valid = points.filter(p => p !== null)
@@ -2319,7 +2338,7 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
     return <div className="bt-empty">Add payment sources in Setup to track balances.</div>
   }
 
-  if (unanchoredCount === activeSources.length) {
+  if (!hasAnyData) {
     return (
       <div style={{ padding:'16px' }}>
         <div className="bt-empty" style={{ padding:'32px 0' }}>
@@ -2334,13 +2353,17 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
       {/* Section A — Household Total */}
       <div className="bt-total-card">
         <div className="bt-total-label">Household Balance</div>
-        <div className="bt-total-amount">₹{fmtAmt(Math.round(householdTotal))}</div>
-        <div className="bt-total-sub">
-          across {sourcesWithAnchor.length} account{sourcesWithAnchor.length !== 1 ? 's' : ''} · as of today
+        <div className="bt-total-amount">
+          ₹{fmtAmt(Math.round(Math.abs(householdTotal)))}
+          {anyModeB ? ' *' : ''}
+          {householdTotal < 0 && <span style={{ fontSize:16, marginLeft:4 }}>owed</span>}
         </div>
-        {unanchoredCount > 0 && (
+        <div className="bt-total-sub">
+          across {contributing} account{contributing !== 1 ? 's' : ''} · as of today
+        </div>
+        {anyModeB && (
           <div className="bt-total-warn">
-            ⚠ {unanchoredCount} account{unanchoredCount !== 1 ? 's' : ''} not included — set balance in Setup
+            * Some accounts show net movement only — set opening balance in Setup for true totals
           </div>
         )}
       </div>
@@ -2363,10 +2386,14 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
             <span style={{ fontWeight:400 }}>· {srcs.length} account{srcs.length !== 1 ? 's' : ''}</span>
           </div>
           {srcs.map(src => {
-            const bal      = computeCurrentBalance(src)
-            const movement = computePeriodMovement(src)
-            const pts      = computeSparklinePoints(src)
-            const hasAnchor = src.balance_as_of_date != null
+            const bal         = computeCurrentBalance(src)
+            const movement    = computePeriodMovement(src)
+            const pts         = computeSparklinePoints(src)
+            const hasAnchor   = src.balance_as_of_date != null
+            const hasTxns     = transactions.some(t => t.payment_source_id === src.id)
+            const isModeB     = !hasAnchor && hasTxns
+            const netMovement = isModeB ? computeAllTimeMovement(src) : 0
+            const displayAmt  = hasAnchor ? (bal ?? 0) : netMovement
             return (
               <div key={src.id} className="bt-account-card">
                 <div className="bt-account-top">
@@ -2376,18 +2403,29 @@ function BalancesTab({ paymentSources, transactions, familyMembers }) {
                       {src.source_name}{src.last_four ? ` ···${src.last_four}` : ''}
                     </div>
                     <div className="bt-account-type">{SOURCE_TYPE_LABELS[src.source_type]}</div>
-                    {!hasAnchor && <div className="bt-no-anchor">Set balance to track</div>}
+                    {isModeB && (
+                      <span style={{ display:'inline-block', background:'#fffbeb', color:'#92400e', border:'1px solid #fcd34d', borderRadius:4, fontSize:10, fontWeight:700, padding:'2px 6px', marginTop:4, fontFamily:'DM Sans' }}>
+                        ⚠ Set opening balance for true balance
+                      </span>
+                    )}
+                    {!hasAnchor && !hasTxns && <div className="bt-no-anchor">Set balance to track</div>}
                   </div>
-                  {hasAnchor && (
+                  {(hasAnchor || isModeB) && (
                     <div className="bt-account-right">
-                      <div className="bt-balance-amt" style={{ color: (bal ?? 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                        ₹{fmtAmt(Math.round(Math.abs(bal ?? 0)))}
-                        {(bal ?? 0) < 0 && <span style={{ fontSize:10, color:'#dc2626', marginLeft:2 }}>owed</span>}
+                      <div className="bt-balance-amt" style={{ color: displayAmt >= 0 ? '#16a34a' : '#dc2626' }}>
+                        ₹{fmtAmt(Math.round(Math.abs(displayAmt)))}
+                        {displayAmt < 0 && <span style={{ fontSize:10, color:'#dc2626', marginLeft:2 }}>owed</span>}
                       </div>
-                      <div className="bt-balance-date">anchor: {fmtDate(src.balance_as_of_date)}</div>
-                      <div className="bt-balance-period" style={{ color: movement >= 0 ? '#16a34a' : '#dc2626' }}>
-                        {movement >= 0 ? '+' : '−'}₹{fmtAmt(Math.round(Math.abs(movement)))} {periodLabel.toLowerCase()}
-                      </div>
+                      {hasAnchor ? (
+                        <>
+                          <div className="bt-balance-date">as of {fmtDate(src.balance_as_of_date)}</div>
+                          <div className="bt-balance-period" style={{ color: movement >= 0 ? '#16a34a' : '#dc2626' }}>
+                            {movement >= 0 ? '+' : '−'}₹{fmtAmt(Math.round(Math.abs(movement)))} {periodLabel.toLowerCase()}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="bt-balance-date">Net movement · no opening balance set</div>
+                      )}
                     </div>
                   )}
                 </div>
