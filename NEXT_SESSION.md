@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 04 Jun 2026 (merge_holdings.py v1.0 — Mar 2026 canonical transform + holdings_latest.csv updated)
+Last updated: 18 Jun 2026 (merge_holdings.py v1.1 — embedded newline fix; holdings_latest.csv re-pushed clean)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -67,25 +67,27 @@ All SQL already run manually before EB-Fix-3 session:
 - (2) Balances tab now shows net movement (MODE B) for accounts without opening balance anchor. Household total includes all accounts; asterisk + footnote if any MODE B. `computeAllTimeMovement()` added.
 - (3) `updateSplitStatus` fixed: added `.eq('user_id', user.uid)`, `settled_at: null` for non-settled, optimistic setSplits update.
 
+## merge_holdings.py v1.1 status: DONE ✅ (18 Jun 2026) — embedded newline fix
+
+**Problem fixed:** Scheme Mapping page was showing 361 "AMCs" instead of 48. Root cause: Excel ALT+ENTER cells produced `\n` in `scheme_name`/`security_name_raw`/`industry` columns. Pandas quoted these correctly in CSV, but JavaScript `csv.split('\n')` tore them apart, creating phantom rows with ISINs/instrument-types appearing as AMC names.
+
+**Fix:** `merge_holdings.py` v1.1 strips embedded `\r`/`\n` from all text columns before writing CSV. 1,177 rows cleaned (scheme_name 1,080 + security_name_raw 60 + industry 37). holdings_latest.csv re-pushed to GitHub with `GITHUB_WRITE_TOKEN`.
+
+**Verification:** JS naive parse on clean file → exactly 48 unique amc_name values, 0 phantom rows.
+
+**Remaining blocker for Scheme Mapping UI:** Vercel's `VITE_GITHUB_PAT` may need updating to have `repo` scope for the private FundInsight repo (the previous session found it was returning GitHub 404). If /admin/scheme-mapping still shows 0/0 after the holdings_latest.csv fix, update VITE_GITHUB_PAT in Vercel → Project Settings → Environment Variables.
+
 ## Current priority (do this FIRST next session):
 
-### P0 — Verify compute_returns.py completion
-Check scheme_returns row count: `SELECT COUNT(*) FROM scheme_returns;`
-If 0 rows, run:
-```bash
-cd ~/Documents/FundInsight
-python pipeline/compute_returns.py
-```
+### P0 — Verify Scheme Mapping shows 48 AMCs
+1. Open `/admin/scheme-mapping`
+2. Confirm sidebar shows exactly 48 AMCs
+3. If shows 0/0: Vercel `VITE_GITHUB_PAT` still returning 404 — update it in Vercel env vars with a token that has `repo` scope for FundInsight (same value as `GITHUB_WRITE_TOKEN` in local .env)
+4. If shows 48: begin mapping pass (Tier 1 AMCs first — see below)
 
-## merge_holdings.py status: DONE ✅ (04 Jun 2026) — v1.0
+### P0 — Scheme Mapping pass (after UI confirmed working)
 
-- `FundInsight/pipeline/merge_holdings.py` v1.0 complete
-- Transforms 13-col raw parser output to canonical 18-col holdings_latest.csv format
-- Mar 2026 run complete: 119,308 rows, 48 AMCs, portfolio_date=2026-03-31
-- `holdings_latest.csv` overwritten with Mar 2026 data (was Feb 2026)
-- `holdings_raw_4d_2026-03_canonical.csv` created as staging file
-
-### Step 1 — Scheme Mapping pass (NEXT: do this FIRST)
+### Step 1 — Scheme Mapping pass
 
 `holdings_latest.csv` now has Mar 2026 data. The Scheme Mapping UI at `/admin/scheme-mapping` needs a full mapping pass.
 
@@ -127,8 +129,8 @@ Read at session start: `cell_4d_v2.py`, `merge_holdings.py`, `pipeline/compute_r
 - ✅ PH3-S1 through PH3-S5 — ALL DONE
 - ✅ PH4-S5 bug fixes — ALL DONE (31 May 2026)
 - ✅ Node.js 24 upgrade — DONE (30 May 2026)
-- ✅ merge_holdings.py v1.0 — DONE (04 Jun 2026) — holdings_latest.csv written locally (Mar 2026)
-- ⚠ holdings_latest.csv on GitHub not yet updated — run `python pipeline/merge_holdings.py --push` after adding GITHUB_TOKEN to FundInsight/.env (same PAT that is VITE_GITHUB_PAT in Vercel)
+- ✅ merge_holdings.py v1.1 — DONE (18 Jun 2026) — embedded newline fix; holdings_latest.csv clean (48 AMCs); pushed to GitHub
+- ⚠ Vercel VITE_GITHUB_PAT — may need updating to have `repo` scope for private FundInsight repo (Scheme Mapping proxy was returning GitHub 404 as of last session)
 - ⚠ scheme_returns table: 0 rows — run `python pipeline/compute_returns.py` from FundInsight/ (first run)
 - ⚠ scheme_code_map.json does NOT exist yet — do Scheme Mapping pass at /admin/scheme-mapping first
 - ⚠ Add SUPABASE_DB_PASSWORD to FundInsight repo GHA secrets (for daily_returns_sync.yml)

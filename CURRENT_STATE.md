@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 04 Jun 2026 · v55.0
+**Last updated:** 18 Jun 2026 · v58.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,21 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## merge_holdings.py v1.1 — Strip embedded newlines (361 fake AMCs → 48) ✅ (18 Jun 2026)
+
+**Root cause:** Excel ALT+ENTER multi-line cell values in AMC portfolio worksheets (primarily Nippon India, Bank of India, Helios, Trust) produced embedded `\n` characters in `scheme_name`, `security_name_raw`, and `industry` columns. `cell_4d_v2.py` preserved them as-is. `merge_holdings.py` v1.0 passed them through unchanged. `pandas.to_csv()` correctly RFC 4180-quoted the multi-line fields, but SchemeMapping.jsx's naive `csv.split('\n')` tore the quoted fields apart into phantom rows. Each phantom row had wrong data at `parts[2]` (amcIdx), so ISINs, instrument types, and sector names appeared as "AMC" names — producing 361 unique amc_name values instead of 48.
+
+**Fix:** Added `_clean_newlines()` helper in `merge_holdings.py` v1.1. At the end of `transform()`, before returning, all text columns (`amc_name`, `scheme_code_amc`, `scheme_name`, `security_name_raw`, `industry`, `rating`) are scanned for `\r`/`\n` and collapsed to a single space. Verification print now reports cleaned row counts per column.
+
+**Rows cleaned:**
+- `scheme_name`: 1,080 rows (Nippon India 871, Bank of India 86, Helios 85, Trust 38)
+- `security_name_raw`: 60 rows (Mahindra Manulife 27, Bandhan 20, DSP 5, others)
+- `industry`: 37 rows (LIC 16, Bandhan 7, PPFAS 6, DSP 5, Capitalmind 2, Helios 1)
+
+**Verification (JS naive parse):** 48 unique `amc_name` values. 0 phantom rows. Confirmed post-push.
 
 ---
 
@@ -1098,12 +1113,13 @@ features never activated.
 
 | Priority | Task |
 |---|---|
+| P0 | **Verify Scheme Mapping shows 48 AMCs** — holdings_latest.csv v1.1 pushed to GitHub (18 Jun 2026). Open /admin/scheme-mapping and confirm sidebar shows exactly 48 AMCs (not 361). If still broken: check Vercel VITE_GITHUB_PAT — must have `repo` scope for private FundInsight repo. |
+| P0 | **Scheme Mapping pass** — 1,603 distinct (amc_name, scheme_code_amc) pairs. Tier 1 (map first): Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan. Tier 2: Aditya Birla, DSP, Franklin Templeton, Mirae, Motilal Oswal. Auto/trivial: Shriram, Trust, JM (scheme_code_amc = full scheme name). Sheet1 AMCs (Angel One, Navi, Unifi): pick correct AMFI scheme manually. |
+| P0 | **Cell C — Scheme Reconciler** — after Scheme Mapping pass: build cell_c_reconciler.py to fuzzy-match scheme_name to AMFI master per AMC (rapidfuzz), produce scheme_code_amfi_map.csv. scheme_code_map.json acts as override for low-confidence matches. |
 | P0 | **compute_returns.py full batch** — check if complete (`SELECT COUNT(*) FROM scheme_returns;`); if 0 rows, run `python pipeline/compute_returns.py` from FundInsight/ |
-| P0 | **Scheme Mapping pass** — holdings_latest.csv now has Mar 2026 data (119,308 rows, 48 AMCs). Go to /admin/scheme-mapping and map all (amc_name, scheme_code_amc) pairs. Priority: Kotak, SBI, HDFC, Nippon, ICICI — these have meaningful AMC codes. Choice is new (not in Feb). |
-| P0 | **Cell C — Scheme Reconciler** — after Scheme Mapping pass: build cell_c_reconciler.py to fuzzy-match scheme_name to AMFI master, populate scheme_code_amfi. Uses scheme_code_map.json as fallback/override. |
-| P1 | **AIrrow sentiment archive cron** (T-88 days to August launch — URGENT) |
-| P1 | **PH4-S7 Performance + SEO** — lazy loading, code splitting, meta tags, sitemap |
+| P1 | **AIrrow sentiment archive cron** (T-86 days to August launch — URGENT) |
 | P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C) |
+| P1 | **PH4-S7 Performance + SEO** — lazy loading, code splitting, meta tags, sitemap |
 | P0 | **Node.js 24 upgrade** ✅ DONE (30 May 2026) |
 | P0 | **advisor_profiles RLS** ✅ DONE (migration 004 includes tightened policies) |
 | P0 | **GitHub Actions secrets** — Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD` to FundInsight repo secrets to activate daily_returns_sync cron |
@@ -1180,7 +1196,7 @@ features never activated.
 | `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
 | `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
 | `compute_returns.py` *(FI)* | v1.1 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). IO-optimised: 1 combined query/batch (vs 9 before) using unnest+DISTINCT ON. Batch 200, 2s sleep between batches. First full run pending (IO budget exhausted 03 Jun — reset at midnight UTC). |
-| `merge_holdings.py` *(FI)* | v1.0 | ✅ Ready | Transforms holdings_raw_4d_YYYY-MM.csv (13-col cell_4d_v2.py output) to canonical 18-col holdings_latest.csv format. AMC name expansion, ISIN validation, industry/rating split, instrument_type heuristic. --dry-run flag. Run: `python pipeline/merge_holdings.py` from FundInsight/. Mar 2026 run complete: 119,308 rows, 48 AMCs. |
+| `merge_holdings.py` *(FI)* | v1.1 | ✅ Ready | Transforms holdings_raw_4d_YYYY-MM.csv (13-col cell_4d_v2.py output) to canonical 18-col holdings_latest.csv format. AMC name expansion, ISIN validation, industry/rating split, instrument_type heuristic, embedded newline stripping (v1.1 fix). --dry-run / --skip-confirm / --push flags. Mar 2026 run complete: 119,308 rows, 48 AMCs, 0 embedded newlines. holdings_latest.csv pushed to GitHub. |
 
 ---
 
@@ -1298,8 +1314,9 @@ FROM nav_history;
 | Feb 2026 | 115,469 | 47 | holdings_raw_4d_2026-02.csv (full version on GitHub; local copy is partial — 46K rows, 19 AMCs only) |
 | Mar 2026 | 119,308 | 48 | holdings_raw_4d_2026-03.csv |
 
-**holdings_latest.csv** — now Mar 2026 (updated 04 Jun 2026 by merge_holdings.py v1.0)
+**holdings_latest.csv** — now Mar 2026 (updated 18 Jun 2026 by merge_holdings.py v1.1)
 - 119,308 rows, 48 AMCs, portfolio_date=2026-03-31, disclosure_date=2026-04-30
+- v1.1 fix applied: 1,177 embedded newlines stripped from scheme_name/security_name_raw/industry. JS naive parse now produces exactly 48 unique amc_name values.
 - Choice Mutual Fund: new in Mar 2026 (was not in Feb)
 - Union Mutual Fund: in Feb 2026 only (absent from Mar raw — did not submit or file not downloaded)
 
