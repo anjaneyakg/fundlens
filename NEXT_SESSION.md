@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 18 Jun 2026 (merge_holdings.py v1.1 — embedded newline fix; holdings_latest.csv re-pushed clean)
+Last updated: 19 Jun 2026 (amc_aliases table built — 122 rows; 4 consumers refactored; 24 schemes amc_id resolved)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -76,6 +76,15 @@ All SQL already run manually before EB-Fix-3 session:
 **Verification:** JS naive parse on clean file → exactly 48 unique amc_name values, 0 phantom rows.
 
 **Remaining blocker for Scheme Mapping UI:** Vercel's `VITE_GITHUB_PAT` may need updating to have `repo` scope for the private FundInsight repo (the previous session found it was returning GitHub 404). If /admin/scheme-mapping still shows 0/0 after the holdings_latest.csv fix, update VITE_GITHUB_PAT in Vercel → Project Settings → Environment Variables.
+
+## amc_aliases table: DONE ✅ (19 Jun 2026)
+
+- 122 rows (amfi=69, portfolio_pipeline=50, commit_key=3), 0 null amc_ids
+- All 4 inline AMC dicts replaced: merge_holdings.py (v1.2), api/amfi.js AMC_ALIASES_SCHEMES, api/amfi.js AMC_ALIASES_LIST, cell_4d_v2.py _COMMIT_AMC_MAP
+- Old dicts commented out with "SUPERSEDED" note in each file; NOT deleted (2-week retention window)
+- 24 schemes amc_id resolved: 24/24 via amc_aliases.canonical_name match (resolved in previous session)
+- Invesco: canonical="Invesco India Mutual Fund", amc_id=05460347 (amcs table has "Invesco Mutual Fund" — DEFAULTED, flagged)
+- Next pipeline table: scheme_code_map (BRD/FRD §8.4) → then cell_c_reconciler.py
 
 ## Current priority (do this FIRST next session):
 

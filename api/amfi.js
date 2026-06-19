@@ -185,84 +185,114 @@ async function handleMarketcap(req, res) {
 
 const AMFI_SCHEME_MASTER_URL = 'https://portal.amfiindia.com/DownloadSchemeData_Po.aspx?mf=0';
 
-const AMC_ALIASES_SCHEMES = {
-  'Aditya Birla Sun Life AMC Limited':      'Aditya Birla Sun Life Mutual Fund',
-  'Aditya Birla Sun Life':                  'Aditya Birla Sun Life Mutual Fund',
-  'HDFC Asset Management Company Limited':  'HDFC Mutual Fund',
-  'HDFC Mutual Fund':                       'HDFC Mutual Fund',
-  'SBI Funds Management Limited':           'SBI Mutual Fund',
-  'SBI Funds Management':                   'SBI Mutual Fund',
-  'UTI Asset Management Company Limited':   'UTI Mutual Fund',
-  'UTI Asset Management':                   'UTI Mutual Fund',
-  'DSP Investment Managers Private Limited':'DSP Mutual Fund',
-  'DSP Investment Managers':               'DSP Mutual Fund',
-  'JM Financial Asset Management Limited': 'JM Financial Mutual Fund',
-  'JM Financial Asset Management':         'JM Financial Mutual Fund',
-  'Motilal Oswal Asset Management Company Limited': 'Motilal Oswal Mutual Fund',
-  'Motilal Oswal Asset Management':        'Motilal Oswal Mutual Fund',
-  'Franklin Templeton Asset Management (India) Private Limited': 'Franklin Templeton Mutual Fund',
-  'Franklin Templeton Asset Management':   'Franklin Templeton Mutual Fund',
-  'Templeton India':                       'Franklin Templeton Mutual Fund',
-  'PGIM India Asset Management Private Limited': 'PGIM India Mutual Fund',
-  'PGIM India Asset Management':           'PGIM India Mutual Fund',
-  'HSBC Asset Management (India) Private Limited': 'HSBC Mutual Fund',
-  'HSBC Asset Management':                 'HSBC Mutual Fund',
-  'LIC Mutual Fund Asset Management Limited': 'LIC Mutual Fund',
-  'LIC Mutual Fund Asset Management':      'LIC Mutual Fund',
-  '360 ONE Asset Management Limited':      '360 ONE Mutual Fund',
-  '360 ONE Asset Management':              '360 ONE Mutual Fund',
-  'Angel One Asset Management Limited':    'Angel One Mutual Fund',
-  'Angel One Asset Management':            'Angel One Mutual Fund',
-  'ICICI Prudential Asset Management Company Limited': 'ICICI Prudential Mutual Fund',
-  'ICICI Prudential Asset Management':     'ICICI Prudential Mutual Fund',
-  'Nippon Life India Asset Management Limited': 'Nippon India Mutual Fund',
-  'Nippon India':                          'Nippon India Mutual Fund',
-  'Kotak Mahindra Asset Management Company Limited': 'Kotak Mahindra Mutual Fund',
-  'Kotak Mahindra Asset Management':       'Kotak Mahindra Mutual Fund',
-  'Trust Asset Management Private Limited': 'Trust Mutual Fund',
-  'Trust Asset Management':                'Trust Mutual Fund',
-  'Shriram Asset Management Co. Limited':  'Shriram Mutual Fund',
-  'Shriram Asset Management':              'Shriram Mutual Fund',
-  'Taurus Asset Management Company Limited': 'Taurus Mutual Fund',
-  'Taurus Asset Management':               'Taurus Mutual Fund',
-  'Canara Robeco Asset Management Company Limited': 'Canara Robeco Mutual Fund',
-  'Canara Robeco Asset Management':        'Canara Robeco Mutual Fund',
-  'Bandhan AMC Limited':                   'Bandhan Mutual Fund',
-  'Mirae Asset Investment Managers (India) Private Limited': 'Mirae Asset Mutual Fund',
-  'WhiteOak Capital Asset Management Limited': 'WhiteOak Capital Mutual Fund',
-  'Edelweiss Asset Management Limited':    'Edelweiss Mutual Fund',
-  'Helios Capital Asset Management (India) Private Limited': 'Helios Mutual Fund',
-  'Groww Asset Management Limited':        'Groww Mutual Fund',
-  'Navi AMC Limited':                      'Navi Mutual Fund',
-  'NJ Asset Management Private Limited':   'NJ Mutual Fund',
-  'PPFAS Asset Management Pvt. Ltd.':      'PPFAS Mutual Fund',
-  'Quantum Asset Management Company Private Limited': 'Quantum Mutual Fund',
-  'quant Money Managers Limited':          'quant Mutual Fund',
-  'Samco Asset Management Private Limited': 'Samco Mutual Fund',
-  'Sundaram Asset Management Company Limited': 'Sundaram Mutual Fund',
-  'Tata Asset Management Private Limited': 'Tata Mutual Fund',
-  'Union Asset Management Company Private Limited': 'Union Mutual Fund',
-  'Unifi Asset Management Private Limited': 'Unifi Mutual Fund',
-  'Baroda BNP Paribas Asset Management India Private Limited': 'Baroda BNP Paribas Mutual Fund',
-  'Invesco Asset Management (India) Private Limited': 'Invesco Mutual Fund',
-  'Mahindra Manulife Investment Management Private Limited': 'Mahindra Manulife Mutual Fund',
-  'ITI Asset Management Limited':          'ITI Mutual Fund',
-  'Bajaj Finserv Asset Management Limited': 'Bajaj Finserv Mutual Fund',
-  'Bank of India Investment Managers Private Limited': 'Bank of India Mutual Fund',
-  'Axis Asset Management Company Limited': 'Axis Mutual Fund',
-  'Capitalmind Asset Management Private Limited': 'Capitalmind Mutual Fund',
-  'Abakkus Asset Manager LLP':             'Abakkus Mutual Fund',
-  'Old Bridge Asset Management Private Limited': 'Old Bridge Mutual Fund',
-  'Jio BlackRock Investment Managers Private Limited': 'Jio BlackRock Mutual Fund',
-  'Choice International Limited':          'Choice Mutual Fund',
-  'The Wealth Company Asset Management Private Limited': 'The Wealth Company Mutual Fund',
-};
+// SUPERSEDED by amc_aliases table — kept for reference, do not use.
+// Remove after amc_aliases has been running correctly for at least 2 weeks.
+// const AMC_ALIASES_SCHEMES = {
+//   'Aditya Birla Sun Life AMC Limited':      'Aditya Birla Sun Life Mutual Fund',
+//   'Aditya Birla Sun Life':                  'Aditya Birla Sun Life Mutual Fund',
+//   'HDFC Asset Management Company Limited':  'HDFC Mutual Fund',
+//   'HDFC Mutual Fund':                       'HDFC Mutual Fund',
+//   'SBI Funds Management Limited':           'SBI Mutual Fund',
+//   'SBI Funds Management':                   'SBI Mutual Fund',
+//   'UTI Asset Management Company Limited':   'UTI Mutual Fund',
+//   'UTI Asset Management':                   'UTI Mutual Fund',
+//   'DSP Investment Managers Private Limited':'DSP Mutual Fund',
+//   'DSP Investment Managers':               'DSP Mutual Fund',
+//   'JM Financial Asset Management Limited': 'JM Financial Mutual Fund',
+//   'JM Financial Asset Management':         'JM Financial Mutual Fund',
+//   'Motilal Oswal Asset Management Company Limited': 'Motilal Oswal Mutual Fund',
+//   'Motilal Oswal Asset Management':        'Motilal Oswal Mutual Fund',
+//   'Franklin Templeton Asset Management (India) Private Limited': 'Franklin Templeton Mutual Fund',
+//   'Franklin Templeton Asset Management':   'Franklin Templeton Mutual Fund',
+//   'Templeton India':                       'Franklin Templeton Mutual Fund',
+//   'PGIM India Asset Management Private Limited': 'PGIM India Mutual Fund',
+//   'PGIM India Asset Management':           'PGIM India Mutual Fund',
+//   'HSBC Asset Management (India) Private Limited': 'HSBC Mutual Fund',
+//   'HSBC Asset Management':                 'HSBC Mutual Fund',
+//   'LIC Mutual Fund Asset Management Limited': 'LIC Mutual Fund',
+//   'LIC Mutual Fund Asset Management':      'LIC Mutual Fund',
+//   '360 ONE Asset Management Limited':      '360 ONE Mutual Fund',
+//   '360 ONE Asset Management':              '360 ONE Mutual Fund',
+//   'Angel One Asset Management Limited':    'Angel One Mutual Fund',
+//   'Angel One Asset Management':            'Angel One Mutual Fund',
+//   'ICICI Prudential Asset Management Company Limited': 'ICICI Prudential Mutual Fund',
+//   'ICICI Prudential Asset Management':     'ICICI Prudential Mutual Fund',
+//   'Nippon Life India Asset Management Limited': 'Nippon India Mutual Fund',
+//   'Nippon India':                          'Nippon India Mutual Fund',
+//   'Kotak Mahindra Asset Management Company Limited': 'Kotak Mahindra Mutual Fund',
+//   'Kotak Mahindra Asset Management':       'Kotak Mahindra Mutual Fund',
+//   'Trust Asset Management Private Limited': 'Trust Mutual Fund',
+//   'Trust Asset Management':                'Trust Mutual Fund',
+//   'Shriram Asset Management Co. Limited':  'Shriram Mutual Fund',
+//   'Shriram Asset Management':              'Shriram Mutual Fund',
+//   'Taurus Asset Management Company Limited': 'Taurus Mutual Fund',
+//   'Taurus Asset Management':               'Taurus Mutual Fund',
+//   'Canara Robeco Asset Management Company Limited': 'Canara Robeco Mutual Fund',
+//   'Canara Robeco Asset Management':        'Canara Robeco Mutual Fund',
+//   'Bandhan AMC Limited':                   'Bandhan Mutual Fund',
+//   'Mirae Asset Investment Managers (India) Private Limited': 'Mirae Asset Mutual Fund',
+//   'WhiteOak Capital Asset Management Limited': 'WhiteOak Capital Mutual Fund',
+//   'Edelweiss Asset Management Limited':    'Edelweiss Mutual Fund',
+//   'Helios Capital Asset Management (India) Private Limited': 'Helios Mutual Fund',
+//   'Groww Asset Management Limited':        'Groww Mutual Fund',
+//   'Navi AMC Limited':                      'Navi Mutual Fund',
+//   'NJ Asset Management Private Limited':   'NJ Mutual Fund',
+//   'PPFAS Asset Management Pvt. Ltd.':      'PPFAS Mutual Fund',
+//   'Quantum Asset Management Company Private Limited': 'Quantum Mutual Fund',
+//   'quant Money Managers Limited':          'quant Mutual Fund',
+//   'Samco Asset Management Private Limited': 'Samco Mutual Fund',
+//   'Sundaram Asset Management Company Limited': 'Sundaram Mutual Fund',
+//   'Tata Asset Management Private Limited': 'Tata Mutual Fund',
+//   'Union Asset Management Company Private Limited': 'Union Mutual Fund',
+//   'Unifi Asset Management Private Limited': 'Unifi Mutual Fund',
+//   'Baroda BNP Paribas Asset Management India Private Limited': 'Baroda BNP Paribas Mutual Fund',
+//   'Invesco Asset Management (India) Private Limited': 'Invesco Mutual Fund',
+//   'Mahindra Manulife Investment Management Private Limited': 'Mahindra Manulife Mutual Fund',
+//   'ITI Asset Management Limited':          'ITI Mutual Fund',
+//   'Bajaj Finserv Asset Management Limited': 'Bajaj Finserv Mutual Fund',
+//   'Bank of India Investment Managers Private Limited': 'Bank of India Mutual Fund',
+//   'Axis Asset Management Company Limited': 'Axis Mutual Fund',
+//   'Capitalmind Asset Management Private Limited': 'Capitalmind Mutual Fund',
+//   'Abakkus Asset Manager LLP':             'Abakkus Mutual Fund',
+//   'Old Bridge Asset Management Private Limited': 'Old Bridge Mutual Fund',
+//   'Jio BlackRock Investment Managers Private Limited': 'Jio BlackRock Mutual Fund',
+//   'Choice International Limited':          'Choice Mutual Fund',
+//   'The Wealth Company Asset Management Private Limited': 'The Wealth Company Mutual Fund',
+// };
 
-function normaliseAmcSchemes(raw) {
+// ── AMC alias map — loaded from amc_aliases table (source='amfi') ─────────────
+// Cached at module level for the duration of a warm serverless invocation.
+// TTL matches the 1hr Cache-Control header on the endpoints that use it.
+
+let _amcAliasMap = null;
+let _amcAliasMapLoadedAt = 0;
+const AMC_ALIAS_MAP_TTL = 3_600_000; // 1 hour in ms
+
+async function loadAmcAliasMap() {
+  const now = Date.now();
+  if (_amcAliasMap && (now - _amcAliasMapLoadedAt) < AMC_ALIAS_MAP_TTL) {
+    return _amcAliasMap;
+  }
+  try {
+    const rows = await sbFetch('amc_aliases?select=alias,canonical_name&source=eq.amfi');
+    const map = {};
+    for (const row of rows) {
+      map[row.alias] = row.canonical_name;
+    }
+    _amcAliasMap = map;
+    _amcAliasMapLoadedAt = now;
+    return map;
+  } catch (err) {
+    console.error('[loadAmcAliasMap] Failed to load from Supabase:', err.message);
+    return {};
+  }
+}
+
+function normaliseAmcSchemes(raw, aliasMap = {}) {
   if (!raw) return 'Unknown';
   const s = raw.trim();
-  if (AMC_ALIASES_SCHEMES[s]) return AMC_ALIASES_SCHEMES[s];
-  for (const [alias, canonical] of Object.entries(AMC_ALIASES_SCHEMES)) {
+  if (aliasMap[s]) return aliasMap[s];
+  for (const [alias, canonical] of Object.entries(aliasMap)) {
     if (s.startsWith(alias)) return canonical;
   }
   return s
@@ -287,7 +317,7 @@ function basePortfolioName(parts) {
   return (parts[2] || '').trim();
 }
 
-function parseAMFIMaster(text, { debug = false } = {}) {
+function parseAMFIMaster(text, { debug = false, aliasMap = {} } = {}) {
   const amcCounts    = {};
   const seenNames    = {};
   let currentAmcFull = '';
@@ -326,7 +356,7 @@ function parseAMFIMaster(text, { debug = false } = {}) {
       if (!isOpenEnded(parts)) continue;
 
       const amcRaw  = parts[0] || currentAmcFull;
-      const amc     = normaliseAmcSchemes(amcRaw);
+      const amc     = normaliseAmcSchemes(amcRaw, aliasMap);
       const baseName = basePortfolioName(parts);
 
       if (!seenNames[amc]) seenNames[amc] = new Set();
@@ -347,15 +377,18 @@ async function handleSchemes(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   try {
-    const response = await fetch(AMFI_SCHEME_MASTER_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FundLens/1.0)' },
-    });
+    const [response, aliasMap] = await Promise.all([
+      fetch(AMFI_SCHEME_MASTER_URL, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FundLens/1.0)' },
+      }),
+      loadAmcAliasMap(),
+    ]);
 
     if (!response.ok) throw new Error(`AMFI responded with ${response.status}`);
 
     const text                        = await response.text();
     const debug                       = req.query?.debug === '1';
-    const { amcCounts, debugSample }  = parseAMFIMaster(text, { debug });
+    const { amcCounts, debugSample }  = parseAMFIMaster(text, { debug, aliasMap });
 
     return res.status(200).json({
       ok:           true,
@@ -377,62 +410,64 @@ async function handleSchemes(req, res) {
 // GET → { ok, byAmc: { "ICICI Prudential Mutual Fund": ["scheme1", ...] } }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AMC_ALIASES_LIST = {
-  'Aditya Birla Sun Life AMC Limited':      'Aditya Birla Sun Life Mutual Fund',
-  'HDFC Asset Management Company Limited':  'HDFC Mutual Fund',
-  'SBI Funds Management Limited':           'SBI Mutual Fund',
-  'UTI Asset Management Company Limited':   'UTI Mutual Fund',
-  'DSP Investment Managers Private Limited':'DSP Mutual Fund',
-  'JM Financial Asset Management Limited':  'JM Financial Mutual Fund',
-  'Motilal Oswal Asset Management Company Limited': 'Motilal Oswal Mutual Fund',
-  'Franklin Templeton Asset Management (India) Private Limited': 'Franklin Templeton Mutual Fund',
-  'PGIM India Asset Management Private Limited': 'PGIM India Mutual Fund',
-  'HSBC Asset Management (India) Private Limited': 'HSBC Mutual Fund',
-  'LIC Mutual Fund Asset Management Limited': 'LIC Mutual Fund',
-  '360 ONE Asset Management Limited':       '360 ONE Mutual Fund',
-  'Angel One Asset Management Limited':     'Angel One Mutual Fund',
-  'ICICI Prudential Asset Management Company Limited': 'ICICI Prudential Mutual Fund',
-  'Nippon Life India Asset Management Limited': 'Nippon India Mutual Fund',
-  'Kotak Mahindra Asset Management Company Limited': 'Kotak Mahindra Mutual Fund',
-  'Trust Asset Management Private Limited': 'Trust Mutual Fund',
-  'Shriram Asset Management Co. Limited':   'Shriram Mutual Fund',
-  'Taurus Asset Management Company Limited':'Taurus Mutual Fund',
-  'Canara Robeco Asset Management Company Limited': 'Canara Robeco Mutual Fund',
-  'Bandhan AMC Limited':                    'Bandhan Mutual Fund',
-  'Mirae Asset Investment Managers (India) Private Limited': 'Mirae Asset Mutual Fund',
-  'WhiteOak Capital Asset Management Limited': 'WhiteOak Capital Mutual Fund',
-  'Edelweiss Asset Management Limited':     'Edelweiss Mutual Fund',
-  'Helios Capital Asset Management (India) Private Limited': 'Helios Mutual Fund',
-  'Groww Asset Management Limited':         'Groww Mutual Fund',
-  'Navi AMC Limited':                       'Navi Mutual Fund',
-  'NJ Asset Management Private Limited':    'NJ Mutual Fund',
-  'PPFAS Asset Management Pvt. Ltd.':       'PPFAS Mutual Fund',
-  'Quantum Asset Management Company Private Limited': 'Quantum Mutual Fund',
-  'quant Money Managers Limited':           'quant Mutual Fund',
-  'Samco Asset Management Private Limited': 'Samco Mutual Fund',
-  'Sundaram Asset Management Company Limited': 'Sundaram Mutual Fund',
-  'Tata Asset Management Private Limited':  'Tata Mutual Fund',
-  'Union Asset Management Company Private Limited': 'Union Mutual Fund',
-  'Unifi Asset Management Private Limited': 'Unifi Mutual Fund',
-  'Baroda BNP Paribas Asset Management India Private Limited': 'Baroda BNP Paribas Mutual Fund',
-  'Invesco Asset Management (India) Private Limited': 'Invesco India Mutual Fund',
-  'Mahindra Manulife Investment Management Private Limited': 'Mahindra Manulife Mutual Fund',
-  'ITI Asset Management Limited':           'ITI Mutual Fund',
-  'Bajaj Finserv Asset Management Limited': 'Bajaj Finserv Mutual Fund',
-  'Bank of India Investment Managers Private Limited': 'Bank of India Mutual Fund',
-  'Axis Asset Management Company Limited':  'Axis Mutual Fund',
-  'Capitalmind Asset Management Private Limited': 'Capitalmind Mutual Fund',
-  'Abakkus Asset Manager LLP':              'Abakkus Mutual Fund',
-  'Old Bridge Asset Management Private Limited': 'Old Bridge Mutual Fund',
-  'Jio BlackRock Investment Managers Private Limited': 'Jio BlackRock Mutual Fund',
-  'The Wealth Company Asset Management Private Limited': 'The Wealth Company Mutual Fund',
-};
+// SUPERSEDED by amc_aliases table — kept for reference, do not use.
+// Remove after amc_aliases has been running correctly for at least 2 weeks.
+// const AMC_ALIASES_LIST = {
+//   'Aditya Birla Sun Life AMC Limited':      'Aditya Birla Sun Life Mutual Fund',
+//   'HDFC Asset Management Company Limited':  'HDFC Mutual Fund',
+//   'SBI Funds Management Limited':           'SBI Mutual Fund',
+//   'UTI Asset Management Company Limited':   'UTI Mutual Fund',
+//   'DSP Investment Managers Private Limited':'DSP Mutual Fund',
+//   'JM Financial Asset Management Limited':  'JM Financial Mutual Fund',
+//   'Motilal Oswal Asset Management Company Limited': 'Motilal Oswal Mutual Fund',
+//   'Franklin Templeton Asset Management (India) Private Limited': 'Franklin Templeton Mutual Fund',
+//   'PGIM India Asset Management Private Limited': 'PGIM India Mutual Fund',
+//   'HSBC Asset Management (India) Private Limited': 'HSBC Mutual Fund',
+//   'LIC Mutual Fund Asset Management Limited': 'LIC Mutual Fund',
+//   '360 ONE Asset Management Limited':       '360 ONE Mutual Fund',
+//   'Angel One Asset Management Limited':     'Angel One Mutual Fund',
+//   'ICICI Prudential Asset Management Company Limited': 'ICICI Prudential Mutual Fund',
+//   'Nippon Life India Asset Management Limited': 'Nippon India Mutual Fund',
+//   'Kotak Mahindra Asset Management Company Limited': 'Kotak Mahindra Mutual Fund',
+//   'Trust Asset Management Private Limited': 'Trust Mutual Fund',
+//   'Shriram Asset Management Co. Limited':   'Shriram Mutual Fund',
+//   'Taurus Asset Management Company Limited':'Taurus Mutual Fund',
+//   'Canara Robeco Asset Management Company Limited': 'Canara Robeco Mutual Fund',
+//   'Bandhan AMC Limited':                    'Bandhan Mutual Fund',
+//   'Mirae Asset Investment Managers (India) Private Limited': 'Mirae Asset Mutual Fund',
+//   'WhiteOak Capital Asset Management Limited': 'WhiteOak Capital Mutual Fund',
+//   'Edelweiss Asset Management Limited':     'Edelweiss Mutual Fund',
+//   'Helios Capital Asset Management (India) Private Limited': 'Helios Mutual Fund',
+//   'Groww Asset Management Limited':         'Groww Mutual Fund',
+//   'Navi AMC Limited':                       'Navi Mutual Fund',
+//   'NJ Asset Management Private Limited':    'NJ Mutual Fund',
+//   'PPFAS Asset Management Pvt. Ltd.':       'PPFAS Mutual Fund',
+//   'Quantum Asset Management Company Private Limited': 'Quantum Mutual Fund',
+//   'quant Money Managers Limited':           'quant Mutual Fund',
+//   'Samco Asset Management Private Limited': 'Samco Mutual Fund',
+//   'Sundaram Asset Management Company Limited': 'Sundaram Mutual Fund',
+//   'Tata Asset Management Private Limited':  'Tata Mutual Fund',
+//   'Union Asset Management Company Private Limited': 'Union Mutual Fund',
+//   'Unifi Asset Management Private Limited': 'Unifi Mutual Fund',
+//   'Baroda BNP Paribas Asset Management India Private Limited': 'Baroda BNP Paribas Mutual Fund',
+//   'Invesco Asset Management (India) Private Limited': 'Invesco India Mutual Fund',
+//   'Mahindra Manulife Investment Management Private Limited': 'Mahindra Manulife Mutual Fund',
+//   'ITI Asset Management Limited':           'ITI Mutual Fund',
+//   'Bajaj Finserv Asset Management Limited': 'Bajaj Finserv Mutual Fund',
+//   'Bank of India Investment Managers Private Limited': 'Bank of India Mutual Fund',
+//   'Axis Asset Management Company Limited':  'Axis Mutual Fund',
+//   'Capitalmind Asset Management Private Limited': 'Capitalmind Mutual Fund',
+//   'Abakkus Asset Manager LLP':              'Abakkus Mutual Fund',
+//   'Old Bridge Asset Management Private Limited': 'Old Bridge Mutual Fund',
+//   'Jio BlackRock Investment Managers Private Limited': 'Jio BlackRock Mutual Fund',
+//   'The Wealth Company Asset Management Private Limited': 'The Wealth Company Mutual Fund',
+// };
 
-function normaliseAmcList(raw) {
+function normaliseAmcList(raw, aliasMap = {}) {
   if (!raw) return null;
   const s = raw.trim();
-  if (AMC_ALIASES_LIST[s]) return AMC_ALIASES_LIST[s];
-  for (const [alias, canonical] of Object.entries(AMC_ALIASES_LIST)) {
+  if (aliasMap[s]) return aliasMap[s];
+  for (const [alias, canonical] of Object.entries(aliasMap)) {
     if (s.startsWith(alias)) return canonical;
   }
   return null;
@@ -442,9 +477,12 @@ async function handleSchemesList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   try {
-    const upstream = await fetch(AMFI_SCHEME_MASTER_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FundLens/1.0)' }
-    });
+    const [upstream, aliasMap] = await Promise.all([
+      fetch(AMFI_SCHEME_MASTER_URL, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FundLens/1.0)' }
+      }),
+      loadAmcAliasMap(),
+    ]);
     if (!upstream.ok) throw new Error(`AMFI returned ${upstream.status}`);
 
     const text   = await upstream.text();
@@ -464,7 +502,7 @@ async function handleSchemesList(req, res) {
       const name   = parts[nameIdx]?.trim();
       if (!amcRaw || !name || name.length < 5) continue;
 
-      const amc = normaliseAmcList(amcRaw);
+      const amc = normaliseAmcList(amcRaw, aliasMap);
       if (!amc) continue;
 
       if (!byAmc[amc]) byAmc[amc] = new Set();
