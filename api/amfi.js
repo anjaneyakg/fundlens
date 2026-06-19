@@ -288,13 +288,37 @@ async function loadAmcAliasMap() {
   }
 }
 
+// Normalise common legal suffix abbreviations so AMFI spelling drift
+// (Pvt. Ltd → Pvt Ltd → Private Limited) doesn't cause match failures.
+// Applied to BOTH sides of alias comparisons in the two functions below.
+function normaliseLegalSuffix(name) {
+  return name
+    .replace(/\bPvt\.\s*Ltd\.?\b/gi,  'Private Limited')
+    .replace(/\bPvt\s+Ltd\.?\b/gi,    'Private Limited')
+    .replace(/\bPvt\.?\b/gi,          'Private')
+    .replace(/\bCo\.\s*Ltd\.?\b/gi,   'Company Limited')
+    .replace(/\bCo\.\b/gi,            'Company')           // safe: requires period
+    .replace(/\bLtd\.?\b/gi,          'Limited')
+    .replace(/\bMgmt\.?\b/gi,         'Management')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normaliseAmcSchemes(raw, aliasMap = {}) {
   if (!raw) return 'Unknown';
-  const s = raw.trim();
+  const s     = raw.trim();
+  const sNorm = normaliseLegalSuffix(s);
+  // 1. Exact match
   if (aliasMap[s]) return aliasMap[s];
+  // 2. Normalised exact match (handles Pvt./Private, Co./Company, Ltd./Limited drift)
   for (const [alias, canonical] of Object.entries(aliasMap)) {
-    if (s.startsWith(alias)) return canonical;
+    if (normaliseLegalSuffix(alias) === sNorm) return canonical;
   }
+  // 3. Normalised startsWith
+  for (const [alias, canonical] of Object.entries(aliasMap)) {
+    if (sNorm.startsWith(normaliseLegalSuffix(alias))) return canonical;
+  }
+  // 4. Regex fallback — last resort, always produces a result
   return s
     .replace(/ (Asset Management|AMC|Investment Managers?|Mutual Fund).*$/i, ' Mutual Fund')
     .trim();
@@ -465,12 +489,24 @@ async function handleSchemes(req, res) {
 
 function normaliseAmcList(raw, aliasMap = {}) {
   if (!raw) return null;
-  const s = raw.trim();
+  const s     = raw.trim();
+  const sNorm = normaliseLegalSuffix(s);
+  // 1. Exact match
   if (aliasMap[s]) return aliasMap[s];
+  // 2. Normalised exact match
   for (const [alias, canonical] of Object.entries(aliasMap)) {
-    if (s.startsWith(alias)) return canonical;
+    if (normaliseLegalSuffix(alias) === sNorm) return canonical;
   }
-  return null;
+  // 3. Normalised startsWith
+  for (const [alias, canonical] of Object.entries(aliasMap)) {
+    if (sNorm.startsWith(normaliseLegalSuffix(alias))) return canonical;
+  }
+  // 4. Regex fallback — matches normaliseAmcSchemes robustness; returns null only
+  //    if the name has no recognisable suffix (truly unresolvable → caller logs it)
+  const fallback = s
+    .replace(/ (Asset Management|AMC|Investment Managers?|Mutual Fund).*$/i, ' Mutual Fund')
+    .trim();
+  return fallback !== s ? fallback : null;
 }
 
 async function handleSchemesList(req, res) {
@@ -492,7 +528,8 @@ async function handleSchemesList(req, res) {
     const amcIdx  = header.findIndex(h => h === 'AMC');
     const nameIdx = header.findIndex(h => h === 'Scheme Name');
 
-    const byAmc = {};
+    const byAmc     = {};
+    const unresolved = new Set();
 
     for (let i = 1; i < lines.length; i++) {
       const parts = lines[i].split(',');
@@ -503,7 +540,10 @@ async function handleSchemesList(req, res) {
       if (!amcRaw || !name || name.length < 5) continue;
 
       const amc = normaliseAmcList(amcRaw, aliasMap);
-      if (!amc) continue;
+      if (!amc) {
+        unresolved.add(amcRaw);
+        continue;
+      }
 
       if (!byAmc[amc]) byAmc[amc] = new Set();
       byAmc[amc].add(name);
@@ -515,7 +555,11 @@ async function handleSchemesList(req, res) {
     }
 
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=300');
-    return res.status(200).json({ ok: true, byAmc: result });
+    return res.status(200).json({
+      ok:                 true,
+      byAmc:              result,
+      unresolvedAmcNames: [...unresolved].sort(),
+    });
 
   } catch (err) {
     console.error('[amfi?action=schemes-list]', err);
