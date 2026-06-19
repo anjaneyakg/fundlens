@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 19 Jun 2026 · v60.0
+**Last updated:** 19 Jun 2026 · v61.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -1306,6 +1306,7 @@ FROM nav_history;
 | 14 | PPFAS xlrd | Feb .xls cannot open. xlrd fallback added in v2.3 — test if resolved. | ⚠ Pending |
 | 15 | daily_nav_sync skipping new schemes (May–Jun 2026) | v1.0 silently discarded amfi_codes not in schemes table. 24 schemes (Kotak 3, DSP 1, Shriram 6, The Wealth Co 4, SBI 8, 360ONE 1, Groww 1) had no nav_history rows since 31 May 2026. | ✅ RESOLVED (19 Jun 2026) — v2.0 auto-inserts; backfill recovered 296 rows |
 | 16 | amc_id=null on 24 auto-inserted schemes | daily_nav_sync v2.0 inserts new schemes without amc_id (amc_aliases table not yet built). AMC raw names logged for future resolution. | ✅ RESOLVED (19 Jun 2026) — amc_aliases table built (122 rows); amc_id resolved 24/24 via canonical_name match |
+| 17 | SchemeMapping.jsx naive CSV column parser corrupted scheme_code_amc with embedded commas | `rows[i].split(',')` tore quoted CSV fields apart. pandas correctly RFC 4180-quotes `CMFCF_March 31, 2026` but naive split yielded `"CMFCF_March 31` (leading `"`, year stripped). User saved corrupted code to JSON; migrated verbatim to Supabase scheme_code_map. | ✅ RESOLVED (19 Jun 2026) — Supabase row corrected; `parseCsvLine()` RFC 4180 helper replaces `split(',')` on data rows in SchemeMapping.jsx |
 
 ---
 
