@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 19 Jun 2026 · v61.0
+**Last updated:** 19 Jun 2026 · v62.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -1186,7 +1186,7 @@ features never activated.
 | Table | Rows | Status | Notes |
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
-| `amc_aliases` | 122 | ✅ Complete | Single source of truth for AMC name resolution. Sources: amfi=69, portfolio_pipeline=50, commit_key=3. 0 null amc_ids. Invesco canonical=Invesco India Mutual Fund; amc_id manually assigned (amcs table has Invesco Mutual Fund). Replaces 4 inline dicts in merge_holdings.py, api/amfi.js (×2), cell_4d_v2.py. |
+| `amc_aliases` | 131 | ✅ Complete | Single source of truth for AMC name resolution. Sources: amfi=78, portfolio_pipeline=50, commit_key=3. 0 null amc_ids. Invesco canonical=Invesco India Mutual Fund; amc_id manually assigned. 9 additional amfi aliases added 19 Jun 2026 to fix handleSchemesList silent drops (Axis, Mirae, DSP, Tata, UTI, Sundaram, Helios, Mahindra Manulife, Jio BlackRock). |
 | `scheme_code_map` | 8 | ✅ Seeded | Maps (amc_id, scheme_code_amc) → amfi_code. UNIQUE(amc_id, scheme_code_amc). Fields: mapped_by IN ('manual','auto_exact','auto_fuzzy'), confidence numeric, mapped_at. Seeded from scheme_code_map.json (8 rows, all mapped_by=manual). Backed by create_scheme_code_map.py. |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
 | `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
@@ -1307,6 +1307,7 @@ FROM nav_history;
 | 15 | daily_nav_sync skipping new schemes (May–Jun 2026) | v1.0 silently discarded amfi_codes not in schemes table. 24 schemes (Kotak 3, DSP 1, Shriram 6, The Wealth Co 4, SBI 8, 360ONE 1, Groww 1) had no nav_history rows since 31 May 2026. | ✅ RESOLVED (19 Jun 2026) — v2.0 auto-inserts; backfill recovered 296 rows |
 | 16 | amc_id=null on 24 auto-inserted schemes | daily_nav_sync v2.0 inserts new schemes without amc_id (amc_aliases table not yet built). AMC raw names logged for future resolution. | ✅ RESOLVED (19 Jun 2026) — amc_aliases table built (122 rows); amc_id resolved 24/24 via canonical_name match |
 | 17 | SchemeMapping.jsx naive CSV column parser corrupted scheme_code_amc with embedded commas | `rows[i].split(',')` tore quoted CSV fields apart. pandas correctly RFC 4180-quotes `CMFCF_March 31, 2026` but naive split yielded `"CMFCF_March 31` (leading `"`, year stripped). User saved corrupted code to JSON; migrated verbatim to Supabase scheme_code_map. | ✅ RESOLVED (19 Jun 2026) — Supabase row corrected; `parseCsvLine()` RFC 4180 helper replaces `split(',')` on data rows in SchemeMapping.jsx |
+| 18 | handleSchemesList() silently dropped 9 AMCs (Axis, Mirae, DSP, Tata, UTI, Sundaram, Helios, Mahindra Manulife, Jio BlackRock) due to legal-entity-suffix mismatches between AMFI's live CSV and amc_aliases rows (Co. Ltd vs Company Limited, Pvt Ltd vs Private Limited, etc.) | This was a SEPARATE bug from the amc_aliases null-amc_id check — the table's own validation passed cleanly while this consumer-side drop went undetected since it's a different code path (AMFI scheme master CSV uses abbreviated legal forms). | ✅ RESOLVED (19 Jun 2026) — 9 exact alias rows added to amc_aliases (source='amfi', now 78 total). `normaliseLegalSuffix()` added to both `normaliseAmcList()` and `normaliseAmcSchemes()` to catch future abbreviation drift. `unresolvedAmcNames[]` field added to schemes-list API response so any future drop is visible immediately. Result: 37 → 53 AMCs in schemes-list; only AlphaGrep (genuinely unmapped new AMC) in unresolvedAmcNames. |
 
 ---
 
