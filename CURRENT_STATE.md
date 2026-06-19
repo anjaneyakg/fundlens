@@ -1188,7 +1188,8 @@ features never activated.
 | `sync_amc_master.py` | v2.0 | ✅ Ready | Sync AMCs from FundInsight → amcs table. |
 | `populate_schemes_table.py` | v2.0 | ✅ Ready | Load scheme master from AMFI. |
 | `uti_fetch.py` | v1.0 | ⛔ Retired | Replaced by cell_a_fetcher. |
-| `daily_nav_sync.py` | v1.0 | ✅ Live | Daily NAV → Supabase. Runs Mon–Fri 11:30PM IST via GitHub Actions. Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY secrets. |
+| `daily_nav_sync.py` | v2.0 | ✅ Live | Daily NAV → Supabase. Runs Mon–Fri 11:30PM IST via GitHub Actions. Tracks 4-level AMFI hierarchy (Nature/Type/Category/AMC). Auto-inserts previously-unknown schemes. Strips "(formerly known as ...)" tags. Populates schemes.category_id on new-scheme insertion. Full amfi_code list logged for all new insertions. SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY secrets required. |
+| `backfill_24_missing_schemes.py` | v1.0 | ✅ Done | One-time. Recovered 296 NAV rows (31 May–18 Jun 2026) for 24 schemes that were published by AMFI but skipped by daily_nav_sync v1.0. Run once on 19 Jun 2026 — archive or delete after verifying. |
 | `pipeline_cell1.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Raises SystemExit on import. |
 | `pipeline_cell2.py` | v4.3.1 | ⛔ Retired | Superseded by daily_nav_sync.py (31 May 2026). Gist pipeline discontinued. |
 | `db_connect.py` *(FI)* | v1.0 | ✅ Ready | FundInsight/pipeline/ — shared psycopg2 helper. Requires SUPABASE_DB_PASSWORD in .env. |
@@ -1271,6 +1272,8 @@ FROM nav_history;
 | 12 | jioblackrock Mar low rows | Mar ZIP only 4 files → 264 rows vs Feb 2,290. Re-download Mar ZIP. | ⚠ Pending |
 | 13 | Canara Robeco | CDN WAF blocks auto-fetch permanently. Manual download + portal upload. | ⚠ Permanent |
 | 14 | PPFAS xlrd | Feb .xls cannot open. xlrd fallback added in v2.3 — test if resolved. | ⚠ Pending |
+| 15 | daily_nav_sync skipping new schemes (May–Jun 2026) | v1.0 silently discarded amfi_codes not in schemes table. 24 schemes (Kotak 3, DSP 1, Shriram 6, The Wealth Co 4, SBI 8, 360ONE 1, Groww 1) had no nav_history rows since 31 May 2026. | ✅ RESOLVED (19 Jun 2026) — v2.0 auto-inserts; backfill recovered 296 rows |
+| 16 | amc_id=null on 24 auto-inserted schemes | daily_nav_sync v2.0 inserts new schemes without amc_id (amc_aliases table not yet built). AMC raw names logged for future resolution. | ⚠ Open — resolve when amc_aliases table is built |
 
 ---
 
