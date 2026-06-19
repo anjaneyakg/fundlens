@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 19 Jun 2026 · v59.0
+**Last updated:** 19 Jun 2026 · v60.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,36 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## scheme_code_map Supabase table + SchemeMapping.jsx migrated ✅ (19 Jun 2026)
+
+**What was done:**
+
+1. **`scheme_code_map` table created** in Supabase fundlens-prod with DDL per BRD/FRD §8.4:
+   - `(id uuid PK, amc_id uuid FK→amcs, scheme_code_amc text, amfi_code int, mapped_by text CHECK IN ('manual','auto_exact','auto_fuzzy'), confidence numeric, mapped_at timestamptz)`
+   - `UNIQUE(amc_id, scheme_code_amc)` + `idx_scheme_code_map_amfi` index
+   - `create_scheme_code_map.py` — one-time migration script in FundInsight/pipeline/
+
+2. **8 rows migrated** from `data/processed/scheme_code_map.json` (committed fdcc2c9) with `mapped_by='manual'`:
+   - 360 ONE Mutual Fund: 7 entries (Dynamic Bond, ELSS Tax Saver, Flexicap, Liquid, Overnight, Quant, SILVERETF)
+   - Capitalmind Mutual Fund: 1 entry (CMFCF_March 31 → Capitalmind Flexi Cap Fund)
+   - All resolve to Direct Plan Growth variants via prefix/substring match + `prefer_direct_growth()` logic
+
+3. **`handleSchemeCodeMap()` in `api/amfi.js` replaced** — GitHub file read/write removed entirely:
+   - GET: queries `scheme_code_map` + `amcs!inner(name)` join, fetches full nav names from `schemes`, strips plan/option suffix via `extractBaseName()`, returns `{mapping, meta}` (mapping=base names, meta=mapped_by+confidence)
+   - POST: resolves base name → amfi_code via `resolveAmfiCode()` (prefix match + Direct+Growth preference), upserts with `mapped_by='manual'`, deletes cleared entries by uuid (scoped to manual only, never touches auto_exact/auto_fuzzy)
+   - `SCM_REPO`, `SCM_FILE_PATH`, `SCM_BRANCH`, `SCM_API_BASE` constants removed
+
+4. **`SchemeMapping.jsx` updated** (data layer only, visual unchanged):
+   - Added `meta` state `{amc_name: {code: {mapped_by, confidence}}}`
+   - Load handler destructures `{mapping, meta}` from GET response (was direct JSON)
+   - `SchemeRow` accepts `mappedBy`/`confidence` props; renders `.sm-auto-badge` (green=exact, amber=fuzzy) for auto_exact/auto_fuzzy entries — no data yet but UI ready
+   - Save toast now says "✓ Saved — N mappings to Supabase" (was "written to GitHub")
+   - Post-save: meta updated locally to clear auto badges for saved AMC (all become manual)
+
+**Key invariant:** POST handler always writes `mapped_by='manual'` — automated reconciler (auto_exact/auto_fuzzy) rows are never overwritten via UI save (delete is scoped to manual rows only).
 
 ---
 
@@ -1113,10 +1143,9 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Verify Scheme Mapping shows 48 AMCs** — holdings_latest.csv v1.1 pushed to GitHub (18 Jun 2026). Open /admin/scheme-mapping and confirm sidebar shows exactly 48 AMCs (not 361). If still broken: check Vercel VITE_GITHUB_PAT — must have `repo` scope for private FundInsight repo. |
-| P0 | **Scheme Mapping pass** — 1,603 distinct (amc_name, scheme_code_amc) pairs. Tier 1 (map first): Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan. Tier 2: Aditya Birla, DSP, Franklin Templeton, Mirae, Motilal Oswal. Auto/trivial: Shriram, Trust, JM (scheme_code_amc = full scheme name). Sheet1 AMCs (Angel One, Navi, Unifi): pick correct AMFI scheme manually. |
-| P0 | **amc_aliases — done (19 Jun 2026)** — 122 rows, 0 null amc_ids. 4 consumers refactored (merge_holdings.py v1.2, api/amfi.js ×2, cell_4d_v2.py v2.5). Next pipeline table: scheme_code_map (BRD/FRD §8.4), then cell_c_reconciler.py. |
-| P0 | **Cell C — Scheme Reconciler** — after Scheme Mapping pass: build cell_c_reconciler.py to fuzzy-match scheme_name to AMFI master per AMC (rapidfuzz), produce scheme_code_amfi_map.csv. scheme_code_map.json acts as override for low-confidence matches. |
+| P0 | **Scheme Mapping pass** — 1,603 distinct (amc_name, scheme_code_amc) pairs. 8 already mapped (360 ONE×7, Capitalmind×1) in Supabase scheme_code_map. Tier 1 (map first): Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan. Tier 2: Aditya Birla, DSP, Franklin Templeton, Mirae, Motilal Oswal. Auto/trivial: Shriram, Trust, JM (scheme_code_amc = full scheme name). Sheet1 AMCs (Angel One, Navi, Unifi): pick correct AMFI scheme manually. |
+| P0 | **scheme_code_map — done (19 Jun 2026)** — Table created (8 rows, mapped_by=manual). `handleSchemeCodeMap()` migrated from GitHub file to Supabase. SchemeMapping.jsx reads `{mapping, meta}`. Next pipeline step: cell_c_reconciler.py (BRD/FRD §10.1). |
+| P0 | **Cell C — Scheme Reconciler** — Build `cell_c_reconciler.py` (BRD/FRD §10.1): fuzzy-match remaining unmapped `scheme_code_amc` values per AMC against schemes table (rapidfuzz, AMC-scoped). Writes auto_exact/auto_fuzzy rows to scheme_code_map. Must check `former_name` (daily_nav_sync v2.0 rename-stripping, BRD/FRD §8.6). |
 | P0 | **compute_returns.py full batch** — check if complete (`SELECT COUNT(*) FROM scheme_returns;`); if 0 rows, run `python pipeline/compute_returns.py` from FundInsight/ |
 | P1 | **AIrrow sentiment archive cron** (T-86 days to August launch — URGENT) |
 | P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C) |
@@ -1158,6 +1187,7 @@ features never activated.
 |---|---|---|---|
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `amc_aliases` | 122 | ✅ Complete | Single source of truth for AMC name resolution. Sources: amfi=69, portfolio_pipeline=50, commit_key=3. 0 null amc_ids. Invesco canonical=Invesco India Mutual Fund; amc_id manually assigned (amcs table has Invesco Mutual Fund). Replaces 4 inline dicts in merge_holdings.py, api/amfi.js (×2), cell_4d_v2.py. |
+| `scheme_code_map` | 8 | ✅ Seeded | Maps (amc_id, scheme_code_amc) → amfi_code. UNIQUE(amc_id, scheme_code_amc). Fields: mapped_by IN ('manual','auto_exact','auto_fuzzy'), confidence numeric, mapped_at. Seeded from scheme_code_map.json (8 rows, all mapped_by=manual). Backed by create_scheme_code_map.py. |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
 | `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |

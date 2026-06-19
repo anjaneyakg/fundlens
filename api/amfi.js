@@ -524,50 +524,90 @@ async function handleSchemesList(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// action=scheme-code-map — scheme code mapping r/w (was api/scheme-code-map.js)
-// GET  → fetch data/processed/scheme_code_map.json from FundInsight repo
-// POST → save updated mapping back to GitHub
+// action=scheme-code-map — scheme code mapping r/w (Supabase-backed)
+// GET  → { mapping: {amc_name: {code: base_scheme_name}},
+//           meta:    {amc_name: {code: {mapped_by, confidence}}} }
+// POST → upsert {mapping: {amc_name: {code: base_scheme_name}}} with mapped_by='manual'
+//
+// Note: schemes table stores full nav names; we strip plan/option suffix for
+// GET display so the base name matches the autocomplete in SchemeMapping.jsx.
+// On POST, base name is prefix-matched against schemes, preferring Direct+Growth.
+// Manual edits (POST) always write mapped_by='manual' per FR-C-16 — automated
+// runs (auto_exact, auto_fuzzy) must never overwrite a manual entry.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SCM_REPO      = 'anjaneyakg/FundInsight';
-const SCM_FILE_PATH = 'data/processed/scheme_code_map.json';
-const SCM_BRANCH    = 'main';
-const SCM_API_BASE  = `https://api.github.com/repos/${SCM_REPO}/contents/${SCM_FILE_PATH}`;
+function extractBaseName(fullName) {
+  // Strip plan/option suffix from AMFI full nav name to get a displayable base name.
+  // Handles mixed separators and casing found in the schemes table.
+  return fullName
+    .replace(/\s*[-–]\s*(Regular|Direct)\s+Plan.*/i, '')
+    .replace(/[-–](Regular|Direct)\s+Plan.*/i, '')
+    .replace(/\s+(Regular|Direct)\s+Plan.*/i, '')
+    .replace(/\s+(REGULAR|DIRECT)\s+(GROWTH|IDCW|INCOME|DIVIDEND|PAYOUT|REINVESTMENT).*/i, '')
+    .trim();
+}
+
+function resolveAmfiCode(baseName, amcSchemes) {
+  // Match base name against full nav names (case-insensitive prefix/substring).
+  // amcSchemes = [{amfi_code, name}, ...]
+  const lo = baseName.toLowerCase().trim();
+  let candidates = amcSchemes.filter(s => s.name.toLowerCase().startsWith(lo));
+  if (!candidates.length) candidates = amcSchemes.filter(s => s.name.toLowerCase().includes(lo));
+  if (!candidates.length) return null;
+
+  // Prefer Direct + Growth; fall back to Direct; then minimum amfi_code.
+  const dg = candidates.filter(s => {
+    const n = s.name.toLowerCase();
+    return n.includes('direct') && (n.includes('growth') || (!n.includes('idcw') && !n.includes('dividend') && !n.includes('income distribution')));
+  });
+  if (dg.length) return dg.reduce((a, b) => a.amfi_code < b.amfi_code ? a : b).amfi_code;
+
+  const d = candidates.filter(s => s.name.toLowerCase().includes('direct'));
+  if (d.length) return d.reduce((a, b) => a.amfi_code < b.amfi_code ? a : b).amfi_code;
+
+  return candidates.reduce((a, b) => a.amfi_code < b.amfi_code ? a : b).amfi_code;
+}
 
 async function handleSchemeCodeMap(req, res) {
-  const token = process.env.VITE_GITHUB_PAT;
-  if (!token) return res.status(500).json({ ok: false, error: 'GitHub token not configured' });
+  res.setHeader('Cache-Control', 'no-store');
 
-  const ghHeaders = {
-    Authorization: `token ${token}`,
-    Accept:        'application/vnd.github.v3+json',
-    'User-Agent':  'FundLens/1.0',
-  };
-
+  // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
     try {
-      const r = await fetch(SCM_API_BASE, { headers: ghHeaders });
+      // Fetch all mapped rows; PostgREST resolves amc_id FK -> amcs.name
+      const rows = await sbFetch(
+        'scheme_code_map?select=amc_id,scheme_code_amc,amfi_code,mapped_by,confidence,amcs!inner(name)'
+      );
 
-      if (r.status === 404) return res.status(200).json({});
-      if (!r.ok) throw new Error(`GitHub GET returned ${r.status}`);
-
-      const meta = await r.json();
-
-      let content;
-      if (meta.encoding === 'base64') {
-        content = Buffer.from(meta.content.replace(/\n/g, ''), 'base64').toString('utf-8');
-      } else {
-        const blobR = await fetch(
-          `https://api.github.com/repos/${SCM_REPO}/git/blobs/${meta.sha}`,
-          { headers: ghHeaders }
-        );
-        const blob = await blobR.json();
-        content = Buffer.from(blob.content.replace(/\n/g, ''), 'base64').toString('utf-8');
+      if (!rows || rows.length === 0) {
+        return res.status(200).json({ mapping: {}, meta: {} });
       }
 
-      const mapping = JSON.parse(content);
-      res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json(mapping);
+      // Fetch scheme full names for all amfi_codes in one round trip
+      const amfiCodes = [...new Set(rows.map(r => r.amfi_code))];
+      const schemeRows = await sbFetch(
+        `schemes?select=amfi_code,name&amfi_code=in.(${amfiCodes.join(',')})`
+      );
+      const nameByCode = {};
+      for (const s of (schemeRows || [])) nameByCode[s.amfi_code] = s.name;
+
+      // Build mapping (base name) + meta (mapped_by, confidence)
+      const mapping = {};
+      const meta    = {};
+      for (const row of rows) {
+        const amcName  = row.amcs?.name;
+        const fullName = nameByCode[row.amfi_code];
+        if (!amcName || !fullName) continue;
+
+        if (!mapping[amcName]) { mapping[amcName] = {}; meta[amcName] = {}; }
+        mapping[amcName][row.scheme_code_amc] = extractBaseName(fullName);
+        meta[amcName][row.scheme_code_amc]    = {
+          mapped_by:  row.mapped_by,
+          confidence: row.confidence ?? null,
+        };
+      }
+
+      return res.status(200).json({ mapping, meta });
 
     } catch (err) {
       console.error('[amfi?action=scheme-code-map] GET error:', err);
@@ -575,6 +615,10 @@ async function handleSchemeCodeMap(req, res) {
     }
   }
 
+  // ── POST ─────────────────────────────────────────────────────────────────────
+  // Receives {mapping: {amc_name: {scheme_code_amc: base_scheme_name}}}
+  // Resolves base names to amfi_codes, upserts with mapped_by='manual'.
+  // Deletes cleared manual entries (codes absent from this save for a given AMC).
   if (req.method === 'POST') {
     try {
       const { mapping } = req.body;
@@ -582,54 +626,69 @@ async function handleSchemeCodeMap(req, res) {
         return res.status(400).json({ ok: false, error: 'mapping object required in body' });
       }
 
-      const sorted = {};
-      for (const amc of Object.keys(mapping).sort()) {
-        sorted[amc] = {};
-        for (const code of Object.keys(mapping[amc]).sort()) {
-          sorted[amc][code] = mapping[amc][code];
+      // Load amcs for name -> id lookup (small table, one round trip)
+      const amcRows = await sbFetch('amcs?select=id,name');
+      const amcById = {};
+      for (const a of (amcRows || [])) amcById[a.name] = a.id;
+
+      let totalMapped = 0;
+      let amcCount    = 0;
+
+      for (const [amcName, codes] of Object.entries(mapping)) {
+        const amcId = amcById[amcName];
+        if (!amcId) {
+          console.warn(`[scheme-code-map] AMC not found: ${amcName}`);
+          continue;
+        }
+
+        // Fetch all schemes for this AMC to resolve base name -> amfi_code
+        const amcSchemes = await sbFetch(`schemes?select=amfi_code,name&amc_id=eq.${amcId}`);
+
+        const now        = new Date().toISOString();
+        const upsertRows = [];
+        const codeKeys   = Object.keys(codes);
+
+        for (const [code, baseName] of Object.entries(codes)) {
+          if (!baseName) continue;
+          const amfiCode = resolveAmfiCode(baseName, amcSchemes || []);
+          if (!amfiCode) {
+            console.warn(`[scheme-code-map] No scheme match for "${baseName}" (AMC: ${amcName})`);
+            continue;
+          }
+          upsertRows.push({
+            amc_id:          amcId,
+            scheme_code_amc: code,
+            amfi_code:       amfiCode,
+            mapped_by:       'manual',   // FR-C-16: manual edits always win
+            confidence:      null,
+            mapped_at:       now,
+          });
+        }
+
+        if (upsertRows.length > 0) {
+          await sbFetch('scheme_code_map?on_conflict=amc_id,scheme_code_amc', 'POST', upsertRows);
+          totalMapped += upsertRows.length;
+          amcCount++;
+        }
+
+        // Remove cleared manual entries: fetch current DB rows for this AMC,
+        // delete any whose scheme_code_amc is not in the current save.
+        // Scoped to mapped_by='manual' — never touch auto_exact/auto_fuzzy rows via UI save.
+        const existing = await sbFetch(
+          `scheme_code_map?select=id,scheme_code_amc&amc_id=eq.${amcId}&mapped_by=eq.manual`
+        );
+        const toDelete = (existing || []).filter(r => !codeKeys.includes(r.scheme_code_amc));
+        if (toDelete.length > 0) {
+          const ids = toDelete.map(r => r.id).join(',');
+          await sbFetch(`scheme_code_map?id=in.(${ids})`, 'DELETE');
         }
       }
 
-      const contentStr    = JSON.stringify(sorted, null, 2);
-      const contentBase64 = Buffer.from(contentStr).toString('base64');
-
-      let sha;
-      const existing = await fetch(SCM_API_BASE, { headers: ghHeaders });
-      if (existing.ok) {
-        const meta = await existing.json();
-        sha = meta.sha;
-      } else if (existing.status !== 404) {
-        throw new Error(`GitHub SHA fetch returned ${existing.status}`);
-      }
-
-      const totalMapped = Object.values(sorted).reduce(
-        (sum, codes) => sum + Object.keys(codes).length, 0
-      );
-      const amcCount = Object.keys(sorted).length;
-
-      const body = {
-        message: `scheme mapping: ${totalMapped} codes across ${amcCount} AMCs`,
-        content: contentBase64,
-        branch:  SCM_BRANCH,
-        ...(sha ? { sha } : {}),
-      };
-
-      const putRes = await fetch(SCM_API_BASE, {
-        method:  'PUT',
-        headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-
-      if (!putRes.ok) {
-        const errData = await putRes.json();
-        throw new Error(errData.message || `GitHub PUT returned ${putRes.status}`);
-      }
-
       return res.status(200).json({
-        ok:           true,
+        ok:         true,
         totalMapped,
         amcCount,
-        message:      `Saved ${totalMapped} mappings across ${amcCount} AMCs`,
+        message:    `Saved ${totalMapped} mappings across ${amcCount} AMCs`,
       });
 
     } catch (err) {

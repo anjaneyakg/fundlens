@@ -1,6 +1,6 @@
 // src/pages/SchemeMapping.jsx
 // Admin tool — maps AMC-internal scheme codes to canonical AMFI scheme names.
-// Saves mapping to data/processed/scheme_code_map.json in FundInsight repo.
+// Reads/writes scheme_code_map Supabase table via /api/amfi?action=scheme-code-map.
 // Route: /admin/scheme-mapping
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -211,6 +211,21 @@ const styles = `
   .sm-ac-item mark { background: rgba(99,91,255,0.15); color: #635bff; border-radius: 2px; padding: 0 1px; }
   .sm-ac-empty { padding: 10px 12px; font-size: 10px; color: #b0b8d8; font-style: italic; }
 
+  /* ── AUTO-MAPPING BADGE (shows mapped_by source beneath input) ── */
+  .sm-auto-badge {
+    display: inline-block; margin-top: 3px;
+    font-size: 9px; letter-spacing: 0.4px; padding: 1px 7px;
+    border-radius: 8px; white-space: nowrap;
+  }
+  .sm-auto-badge.exact {
+    background: rgba(22,163,74,0.08); color: #16a34a;
+    border: 1px solid rgba(22,163,74,0.2);
+  }
+  .sm-auto-badge.fuzzy {
+    background: rgba(217,119,6,0.08); color: #d97706;
+    border: 1px solid rgba(217,119,6,0.2);
+  }
+
   .sm-clear-cell {
     display: flex; align-items: center; justify-content: center;
     padding: 0 4px;
@@ -278,7 +293,7 @@ function highlight(text, query) {
 }
 
 // ── Single scheme row ────────────────────────────────────────────────────────
-function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange }) {
+function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedBy, confidence }) {
   const [query, setQuery]     = useState(currentName || '')
   const [open, setOpen]       = useState(false)
   const [hiIdx, setHiIdx]     = useState(-1)
@@ -344,6 +359,11 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange }) {
               }
             </div>
           )}
+          {isMapped && mappedBy && mappedBy !== 'manual' && (
+            <span className={`sm-auto-badge ${mappedBy === 'auto_exact' ? 'exact' : 'fuzzy'}`}>
+              {mappedBy === 'auto_exact' ? 'auto exact' : `auto fuzzy${confidence != null ? ` ${Math.round(confidence)}%` : ''}`}
+            </span>
+          )}
         </div>
       </div>
       <div className="sm-clear-cell">
@@ -360,6 +380,7 @@ export default function SchemeMapping() {
   const [holdings, setHoldings]     = useState([])   // [{amc_name, scheme_code_amc, rows}]
   const [amfiMap, setAmfiMap]       = useState({})   // {amc_name: [scheme_name, ...]}
   const [mapping, setMapping]       = useState({})   // {amc_name: {code: amfi_name}}
+  const [meta, setMeta]             = useState({})   // {amc_name: {code: {mapped_by, confidence}}}
   const [selectedAmc, setSelected]  = useState(null)
   const [filter, setFilter]         = useState('all') // all | unmapped | mapped
   const [amcSearch, setAmcSearch]   = useState('')
@@ -407,11 +428,12 @@ export default function SchemeMapping() {
         const amfiData = await amfiRes.json()
         setAmfiMap(amfiData.byAmc || {})
 
-        // 3. Existing mapping from GitHub
+        // 3. Existing mapping from Supabase
         const mapRes = await fetch('/api/amfi?action=scheme-code-map')
         if (mapRes.ok) {
-          const mapData = await mapRes.json()
+          const { mapping: mapData, meta: metaData } = await mapRes.json()
           setMapping(mapData || {})
+          setMeta(metaData || {})
         }
       } catch (err) {
         console.error('SchemeMapping load error:', err)
@@ -487,7 +509,20 @@ export default function SchemeMapping() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setDirty(false)
-      showToast(`✓ Saved — ${totalMapped} mappings written to GitHub`)
+      // After a manual save, clear auto-mapping badges for the affected AMC's codes
+      // (they are now mapped_by='manual' in Supabase)
+      setMeta(prev => {
+        const next = { ...prev }
+        if (selectedAmc && next[selectedAmc]) {
+          const amcMeta = { ...next[selectedAmc] }
+          for (const code of Object.keys(amcMeta)) {
+            amcMeta[code] = { ...amcMeta[code], mapped_by: 'manual' }
+          }
+          next[selectedAmc] = amcMeta
+        }
+        return next
+      })
+      showToast(`✓ Saved — ${data.totalMapped ?? totalMapped} mappings to Supabase`)
     } catch (err) {
       console.error('Save error:', err)
       showToast('Save failed: ' + err.message, 'error')
@@ -651,6 +686,8 @@ export default function SchemeMapping() {
                     currentName={mapping[selectedAmc]?.[h.scheme_code_amc] || ''}
                     amfiSchemes={amfiSchemes}
                     onChange={handleChange}
+                    mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
+                    confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
                   />
                 ))}
               </div>
