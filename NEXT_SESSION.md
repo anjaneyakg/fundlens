@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 19 Jun 2026 (amc_aliases table built — 122 rows; 4 consumers refactored; 24 schemes amc_id resolved)
+Last updated: 20 Jun 2026 (merge_holdings.py v1.2 — per-AMC scheme identification; amc_scheme_id_method table seeded; dry-run approved, push pending)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -77,6 +77,18 @@ All SQL already run manually before EB-Fix-3 session:
 
 **Remaining blocker for Scheme Mapping UI:** Vercel's `VITE_GITHUB_PAT` may need updating to have `repo` scope for the private FundInsight repo (the previous session found it was returning GitHub 404). If /admin/scheme-mapping still shows 0/0 after the holdings_latest.csv fix, update VITE_GITHUB_PAT in Vercel → Project Settings → Environment Variables.
 
+## merge_holdings.py v1.2 + amc_scheme_id_method table: DONE ✅ (20 Jun 2026) — push pending
+
+**What changed:**
+- `amc_scheme_id_method` Supabase table created and seeded (50 rows — 24 scheme_name_from_cell, 26 sheet_name_is_code)
+- `merge_holdings.py` v1.2: per-AMC conditional `scheme_code_amc` — for 24 AMCs uses `scheme_name_raw` instead of `sheet_name`
+- Dry-run verified: Capitalmind `'CMFCF_March 31, 2026'` → `'Capitalmind Flexi Cap Fund'`; HDFC `'HDFCAR'` → `'HDFC Arbitrage Fund'`
+- `create_amc_scheme_id_method.py` one-time script in FundInsight/pipeline/
+
+**Push pending** — run `python pipeline/merge_holdings.py --push` from FundInsight/
+
+**Stale row to re-map after push:** Capitalmind uuid cbb7611e — old key `'CMFCF_March 31, 2026'`, new key `'Capitalmind Flexi Cap Fund'`
+
 ## amc_aliases table: DONE ✅ (19 Jun 2026)
 
 - 122 rows (amfi=69, portfolio_pipeline=50, commit_key=3), 0 null amc_ids
@@ -88,46 +100,41 @@ All SQL already run manually before EB-Fix-3 session:
 
 ## Current priority (do this FIRST next session):
 
-### P0 — Verify Scheme Mapping shows 48 AMCs
-1. Open `/admin/scheme-mapping`
-2. Confirm sidebar shows exactly 48 AMCs
-3. If shows 0/0: Vercel `VITE_GITHUB_PAT` still returning 404 — update it in Vercel env vars with a token that has `repo` scope for FundInsight (same value as `GITHUB_WRITE_TOKEN` in local .env)
-4. If shows 48: begin mapping pass (Tier 1 AMCs first — see below)
+### P0 — Run merge_holdings.py --push (dry-run already approved 20 Jun 2026)
 
-### P0 — Scheme Mapping pass (after UI confirmed working)
+```
+cd C:\Users\anjan_o1xyjq0\Documents\FundInsight
+python pipeline/merge_holdings.py --push
+```
 
-### Step 1 — Scheme Mapping pass
+After push:
+- holdings_latest.csv will have corrected scheme_code_amc for 24 AMCs (scheme names instead of date-stamped sheet names)
+- **Re-map Capitalmind in SchemeMapping UI** — old key `'CMFCF_March 31, 2026'` is stale (uuid: cbb7611e). New key is `'Capitalmind Flexi Cap Fund'`. Open /admin/scheme-mapping → Capitalmind → delete stale entry → add new mapping.
 
-`holdings_latest.csv` now has Mar 2026 data. The Scheme Mapping UI at `/admin/scheme-mapping` needs a full mapping pass.
+### P1 — Part 4.7: Admin UI for amc_scheme_id_method (Session 2)
 
-- 1,603 distinct `scheme_code_amc` values across 48 AMCs need mapping to AMFI scheme names
-- `scheme_code_map.json` does NOT exist yet — will be created by this pass
-- Priority AMCs (meaningful codes, map first): Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan, Aditya Birla Sun Life
-- New AMC in Mar: **Choice Mutual Fund** (15 securities, 1 scheme — map first, it's tiny)
-- AMCs where scheme_code_amc = full scheme name (Shriram, Trust, JM, Union): these are already self-describing — confirm and save
-- AMCs where scheme_code_amc = "Sheet1" (Angel One, Navi, Unifi): pick the correct AMFI scheme manually
+- `amc_scheme_id_method` table already seeded (50 rows: 24 scheme_name_from_cell, 26 sheet_name_is_code)
+- Build admin UI to view/edit classifications per AMC in SchemeMapping admin
+- Session 2 scope only: UI reads and writes this table, no pipeline changes
 
-After mapping pass: `scheme_code_map.json` will be written to GitHub via the Save button in the UI.
+### P0 — Scheme Mapping pass (after --push)
 
-### Step 2 — Cell C: Scheme Reconciler (build after mapping pass)
+`holdings_latest.csv` will have updated scheme_code_amc values. The mapping pass should now use the correct join keys.
 
-Context:
-- `scheme_portfolios` table has 0 rows. Blocked on Cell C.
-- Cell C goal: fuzzy-match scheme_name (from holdings_latest.csv) to AMFI scheme master → resolve AMFI numeric scheme_code → look up scheme_id in `schemes` table
-- scheme_code_map.json acts as override/fallback for low-confidence fuzzy matches
-- Output: `scheme_code_amfi_map.csv` with (amc_name, scheme_name, scheme_id, confidence, match_method)
-- After Cell C: build `cell_c_upsert.py` + `scheme_portfolios` DDL → upsert to Supabase
+- For `sheet_name_is_code` AMCs (26): keys unchanged — continue existing mapping pass
+- For `scheme_name_from_cell` AMCs (24): keys are now scheme names — may be near-trivial or auto-matchable via cell_c_reconciler
+- Priority: Kotak, SBI, Axis, Bandhan, Aditya Birla Sun Life, DSP, Franklin Templeton, Mirae, Motilal Oswal
+- Trivial (scheme_code_amc = full scheme name): Shriram, Trust, JM — confirm and save
+- Re-map Capitalmind first (see above)
 
-Read at session start: `cell_4d_v2.py`, `merge_holdings.py`, `pipeline/compute_returns.py` (for Supabase write pattern).
+### P0 — Cell C: Scheme Reconciler (after --push AND Part 4.7 admin UI)
 
-### Key notes for Cell C build:
-- `scheme_code_amc` = sheet_name from Excel. For many AMCs it is a meaningful code (V3I, SMEEF), for others it is the full scheme name or "Sheet1".
-- Match on `scheme_name` (cleaned scheme name), NOT on `scheme_code_amc`.
-- Fuzzy match scoped per AMC (only compare within same AMC's schemes in Supabase).
-- Use `rapidfuzz` library (fast, MIT license). pip install rapidfuzz.
-- `schemes` table has: id (uuid), amfi_code (int), name (text), amc_id (uuid FK).
-- `amcs` table has: id (uuid), name (text), short_name (text).
-- Need to JOIN schemes with amcs to scope matching per AMC.
+- `cell_c_reconciler.py` (BRD/FRD §10.1): fuzzy-match remaining unmapped scheme_code_amc values per AMC against schemes table
+- For `scheme_name_from_cell` AMCs: scheme_code_amc IS the scheme name → exact or near-exact match expected
+- For `sheet_name_is_code` AMCs: scheme_code_amc is an AMC-internal code → fuzzy match required
+- Use `rapidfuzz`. Scope matching per AMC (JOIN schemes + amcs).
+- Writes auto_exact/auto_fuzzy rows to scheme_code_map. Check former_name (BRD/FRD §8.6).
+- Manual rows (mapped_by='manual') must never be overwritten by reconciler.
 
 ---
 
