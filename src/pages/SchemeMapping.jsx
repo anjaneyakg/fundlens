@@ -186,6 +186,10 @@ const styles = `
   .sm-scheme-row:hover { background: rgba(99,91,255,0.02); }
   .sm-scheme-row.mapped { }
   .sm-scheme-row.unmapped { background: rgba(220,38,38,0.02); }
+  .sm-scheme-row.target-highlight {
+    background: rgba(99,91,255,0.07) !important;
+    box-shadow: inset 3px 0 0 #635bff;
+  }
 
   .sm-code-cell {
     padding: 12px 16px;
@@ -394,7 +398,7 @@ function highlight(text, query) {
 }
 
 // ── Single scheme row ────────────────────────────────────────────────────────
-function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedBy, confidence, rowId, onAccept, onReject }) {
+function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedBy, confidence, rowId, onAccept, onReject, highlighted }) {
   const [query, setQuery]     = useState(currentName || '')
   const [open, setOpen]       = useState(false)
   const [hiIdx, setHiIdx]     = useState(-1)
@@ -404,8 +408,8 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedB
   useEffect(() => { setQuery(currentName || '') }, [currentName])
 
   const filtered = query.length >= 1
-    ? amfiSchemes.filter(s => s.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
-    : amfiSchemes.slice(0, 12)
+    ? amfiSchemes.filter(s => s.toLowerCase().includes(query.toLowerCase())).slice(0, 50)
+    : amfiSchemes.slice(0, 50)
 
   const commit = useCallback((val) => {
     setQuery(val)
@@ -426,7 +430,7 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedB
   const isMapped = !!currentName
 
   return (
-    <div className={`sm-scheme-row ${isMapped ? 'mapped' : 'unmapped'}`}>
+    <div className={`sm-scheme-row ${isMapped ? 'mapped' : 'unmapped'}${highlighted ? ' target-highlight' : ''}`}>
       <div className="sm-code-cell">
         <span className="sm-code-val">{code || '—'}</span>
         <span className="sm-code-rows">{rowCount} holdings</span>
@@ -568,6 +572,13 @@ export default function SchemeMapping() {
   const [rulesLoading, setRulesLoading]   = useState(false)
   const [rulesSavingId, setRulesSavingId] = useState(null)
 
+  // ── URL-param navigation (from "Map to Scheme" button in CoverageDashboard) ─
+  const _urlParams   = new URLSearchParams(window.location.search)
+  const urlAmc       = _urlParams.get('amc')
+  const urlCode      = _urlParams.get('code')
+  const urlOutlierId = _urlParams.get('outlier_id')
+  const targetRowRef = useRef(null)
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3500)
@@ -616,9 +627,10 @@ export default function SchemeMapping() {
         showToast('Failed to load data — ' + err.message, 'error')
       }
       setLoading(false)
+      if (urlAmc) setSelected(urlAmc)
     }
     load()
-  }, [])
+  }, []) // eslint-disable-line
 
   // ── Load parsing rules (lazy — on first tab visit) ───────────────────────
   const loadRules = useCallback(async () => {
@@ -760,6 +772,12 @@ export default function SchemeMapping() {
     }
   }, [selectedAmc])
 
+  useEffect(() => {
+    if (urlCode && selectedAmc === urlAmc && targetRowRef.current) {
+      setTimeout(() => targetRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150)
+    }
+  }, [selectedAmc]) // eslint-disable-line
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -783,6 +801,13 @@ export default function SchemeMapping() {
         return next
       })
       showToast(`✓ Saved — ${data.totalMapped ?? totalMapped} mappings to Supabase`)
+      if (urlOutlierId && urlCode && selectedAmc === urlAmc && mapping[selectedAmc]?.[urlCode]) {
+        fetch('/api/amfi?action=parser-outliers-resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: parseInt(urlOutlierId, 10), status: 'mapped' }),
+        }).catch(() => {})
+      }
     } catch (err) {
       console.error('Save error:', err)
       showToast('Save failed: ' + err.message, 'error')
@@ -959,21 +984,26 @@ export default function SchemeMapping() {
                           {filter === 'unmapped' ? 'All codes mapped for this AMC!' : 'No codes found'}
                         </div>
                       </div>
-                    ) : filteredCodes.map(h => (
-                      <SchemeRow
-                        key={`${h.amc_name}|||${h.scheme_code_amc}`}
-                        code={h.scheme_code_amc}
-                        rowCount={h.rows}
-                        currentName={mapping[selectedAmc]?.[h.scheme_code_amc] || ''}
-                        amfiSchemes={amfiSchemes}
-                        onChange={handleChange}
-                        mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
-                        confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
-                        rowId={meta[selectedAmc]?.[h.scheme_code_amc]?.id}
-                        onAccept={handleAccept}
-                        onReject={handleReject}
-                      />
-                    ))}
+                    ) : filteredCodes.map(h => {
+                      const isTarget = !!(urlCode && h.scheme_code_amc === urlCode)
+                      return (
+                        <div key={`${h.amc_name}|||${h.scheme_code_amc}`} ref={isTarget ? targetRowRef : null}>
+                          <SchemeRow
+                            code={h.scheme_code_amc}
+                            rowCount={h.rows}
+                            currentName={mapping[selectedAmc]?.[h.scheme_code_amc] || ''}
+                            amfiSchemes={amfiSchemes}
+                            onChange={handleChange}
+                            mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
+                            confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
+                            rowId={meta[selectedAmc]?.[h.scheme_code_amc]?.id}
+                            onAccept={handleAccept}
+                            onReject={handleReject}
+                            highlighted={isTarget}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 </>
               )}

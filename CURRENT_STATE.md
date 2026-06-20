@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v67.0
+**Last updated:** 20 Jun 2026 · v68.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,40 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## Fix A/B/C — "Map to Scheme" navigation + autocomplete + DB rollback ✅ (20 Jun 2026)
+
+Three bugs found during the first real reconciler run; all three fixed this session.
+
+### Problem 1 — "Map to Scheme" button did not pass context
+
+**Root cause:** `onClick` fired `resolveOutlier("mapped")` immediately (before any mapping existed), then navigated to `/admin/scheme-mapping` with no URL params. SchemeMapping had no URL param reader — AMC was not pre-selected and target code was not highlighted.
+
+**Fix (Fix A — two files):**
+- `CoverageDashboard.jsx`: removed `resolveOutlier` call from button; now navigates with URL params: `/admin/scheme-mapping?amc=...&code=...&outlier_id=...`
+- `SchemeMapping.jsx`: reads `amc`/`code`/`outlier_id` from `URLSearchParams` on mount; auto-selects AMC after data loads; scroll useEffect fires when `selectedAmc` matches `urlAmc`, scrolling target row into view after 150ms; target row gets `.target-highlight` CSS class (left border + background tint); `resolveOutlier` fires only inside `handleSave` success path, only if the target code is actually mapped
+
+### Problem 2 — Two outliers incorrectly marked "mapped"
+
+**Root cause:** The old button called `resolveOutlier("mapped")` before navigation — Edelweiss/EDGSEC and Groww/NI were marked mapped with 0 `scheme_code_map` rows.
+
+**Fix (Fix B — DB rollback via Supabase PATCH):**
+Both rows reset to `status='pending', resolved_at=NULL, resolved_by=NULL`. Confirmed exactly 2 rows returned by the PATCH response.
+
+### Problem 3 — ABSL autocomplete capped at 12 results
+
+**Root cause:** `.slice(0, 12)` hard cap in `SchemeRow` filtered list.
+
+**Fix (Fix C):** Cap raised to 50 in both the filtered and unfiltered paths.
+
+### Known issue (NOT fixed this session)
+
+**Kotak 2 codes:** `holdings_latest.csv` shows only 4 rows for Kotak (codes 'QOF' and 'LTF'). Investigation confirmed this is source data — the March 2026 Kotak Excel apparently only contained 2 relevant sheets. Not a pipeline bug. Tracked as a separate workstream.
+
+### Build
+969 modules, 0 errors.
 
 ---
 

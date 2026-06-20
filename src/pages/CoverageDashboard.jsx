@@ -546,9 +546,8 @@ export default function CoverageDashboard() {
                         <button
                           style={{ ...s.actionBtn, ...s.actionMap }}
                           disabled={busy}
-                          onClick={async () => {
-                            await resolveOutlier(o.id, "mapped");
-                            window.location.href = "/admin/scheme-mapping";
+                          onClick={() => {
+                            window.location.href = `/admin/scheme-mapping?amc=${encodeURIComponent(o.amc_name)}&code=${encodeURIComponent(o.sheet_name)}&outlier_id=${o.id}`;
                           }}
                           title="Mark as needing mapping and go to Scheme Mapping"
                         >
