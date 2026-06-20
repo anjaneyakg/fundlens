@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 20 Jun 2026 (merge_holdings.py v1.2 — per-AMC scheme identification; amc_scheme_id_method table seeded; dry-run approved, push pending)
+Last updated: 20 Jun 2026 (merge_holdings.py v1.2 LIVE — holdings_latest.csv pushed; Capitalmind re-mapped under corrected key; Part 4.7 admin UI is next)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -77,17 +77,19 @@ All SQL already run manually before EB-Fix-3 session:
 
 **Remaining blocker for Scheme Mapping UI:** Vercel's `VITE_GITHUB_PAT` may need updating to have `repo` scope for the private FundInsight repo (the previous session found it was returning GitHub 404). If /admin/scheme-mapping still shows 0/0 after the holdings_latest.csv fix, update VITE_GITHUB_PAT in Vercel → Project Settings → Environment Variables.
 
-## merge_holdings.py v1.2 + amc_scheme_id_method table: DONE ✅ (20 Jun 2026) — push pending
+## merge_holdings.py v1.2 + amc_scheme_id_method table: DONE ✅ (20 Jun 2026) — LIVE
 
 **What changed:**
 - `amc_scheme_id_method` Supabase table created and seeded (50 rows — 24 scheme_name_from_cell, 26 sheet_name_is_code)
 - `merge_holdings.py` v1.2: per-AMC conditional `scheme_code_amc` — for 24 AMCs uses `scheme_name_raw` instead of `sheet_name`
-- Dry-run verified: Capitalmind `'CMFCF_March 31, 2026'` → `'Capitalmind Flexi Cap Fund'`; HDFC `'HDFCAR'` → `'HDFC Arbitrage Fund'`
-- `create_amc_scheme_id_method.py` one-time script in FundInsight/pipeline/
+- Pushed: holdings_latest.csv live on GitHub + Vercel (119,308 rows, 20 Jun 2026)
+- Capitalmind re-mapped: new row uuid `5f14c7df` keyed as `'Capitalmind Flexi Cap Fund'` (amfi=153738)
+- Old orphaned row (uuid `cbb7611e`, key `'CMFCF_March 31, 2026'`) left harmlessly — same amfi_code, not deleted
 
-**Push pending** — run `python pipeline/merge_holdings.py --push` from FundInsight/
-
-**Stale row to re-map after push:** Capitalmind uuid cbb7611e — old key `'CMFCF_March 31, 2026'`, new key `'Capitalmind Flexi Cap Fund'`
+**Live spot-check (actual values):**
+- HDFC: 82 distinct scheme names (`'HDFC Arbitrage Fund'`, `'HDFC BSE 500 ETF'`, `'HDFC BSE Sensex Index Fund'`, ...)
+- UTI: 74 distinct scheme names (`'UTI - Arbitrage Fund'`, `'UTI - Corporate Bond Fund'`, `'UTI - Dividend Yield Fund.'`, ...)
+- ICICI Prudential: 139 distinct scheme names (`'ICICI Prudential Active Momentum Fund'`, `'BHARAT 22 ETF'`, ...)
 
 ## amc_aliases table: DONE ✅ (19 Jun 2026)
 
@@ -100,22 +102,11 @@ All SQL already run manually before EB-Fix-3 session:
 
 ## Current priority (do this FIRST next session):
 
-### P0 — Run merge_holdings.py --push (dry-run already approved 20 Jun 2026)
-
-```
-cd C:\Users\anjan_o1xyjq0\Documents\FundInsight
-python pipeline/merge_holdings.py --push
-```
-
-After push:
-- holdings_latest.csv will have corrected scheme_code_amc for 24 AMCs (scheme names instead of date-stamped sheet names)
-- **Re-map Capitalmind in SchemeMapping UI** — old key `'CMFCF_March 31, 2026'` is stale (uuid: cbb7611e). New key is `'Capitalmind Flexi Cap Fund'`. Open /admin/scheme-mapping → Capitalmind → delete stale entry → add new mapping.
-
-### P1 — Part 4.7: Admin UI for amc_scheme_id_method (Session 2)
+### P0 — Part 4.7: Admin UI for amc_scheme_id_method
 
 - `amc_scheme_id_method` table already seeded (50 rows: 24 scheme_name_from_cell, 26 sheet_name_is_code)
-- Build admin UI to view/edit classifications per AMC in SchemeMapping admin
-- Session 2 scope only: UI reads and writes this table, no pipeline changes
+- Build admin UI to view/edit classifications per AMC in SchemeMapping admin — outlier/ignore-sheet tagging
+- Session scope only: UI reads and writes this table, no pipeline changes in this session
 
 ### P0 — Scheme Mapping pass (after --push)
 

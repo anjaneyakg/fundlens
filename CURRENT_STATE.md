@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v63.0
+**Last updated:** 20 Jun 2026 · v63.1
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -39,11 +39,14 @@
    - Distinct count check passed: `scheme_code_amc == scheme_name_raw` count for all 22 active AMCs ✓
    - No AMC name warnings ✓
 
-4. **Stale scheme_code_map row (Step 6):** 1 row found — Capitalmind entry keyed as `'CMFCF_March 31, 2026'` (uuid: `cbb7611e`, mapped_by=manual, amfi_code=153738). This mapping is stale after the push — the new join key for Capitalmind Flexi Cap Fund is `'Capitalmind Flexi Cap Fund'`. **Not deleted — needs re-mapping via SchemeMapping UI after push.** All other 23 cell AMCs have 0 stale rows in scheme_code_map.
+4. **Push live (20 Jun 2026):** `holdings_latest.csv` pushed to GitHub (119,308 rows). Vercel proxy confirmed: all Capitalmind rows now show `scheme_code_amc='Capitalmind Flexi Cap Fund'`. Spot-check of live CSV:
+   - HDFC: 82 distinct scheme names (e.g. `'HDFC Arbitrage Fund'`, `'HDFC BSE 500 ETF'`, `'HDFC BSE Sensex Index Fund'`, ...) ✓
+   - UTI: 74 distinct scheme names (e.g. `'UTI - Arbitrage Fund'`, `'UTI - Corporate Bond Fund'`, `'UTI - Dividend Yield Fund.'`, ...) ✓
+   - ICICI Prudential: 139 distinct scheme names (e.g. `'BHARAT 22 ETF'`, `'ICICI Prudential Active Momentum Fund'`, ...) ✓
 
-**KNOWN ISSUE — RESOLVED (pending push):** scheme_code_amc was the wrong join key for 24 "Single" AMCs whose Excel sheet names carry no real identity (date stamps, generic labels). Root cause: merge_holdings.py applied one rule to all 49 AMCs. Fixed via new `amc_scheme_id_method` table + conditional logic. Admin UI to manage this classification is a separate follow-up session (Part 4.7).
+5. **Capitalmind re-mapped (20 Jun 2026):** New scheme_code_map row inserted (uuid: `5f14c7df`, `scheme_code_amc='Capitalmind Flexi Cap Fund'`, `amfi_code=153738`, `mapped_by='manual'`). Old stale row (uuid: `cbb7611e`, `scheme_code_amc='CMFCF_March 31, 2026'`) left as harmless orphan — same amfi_code 153738, not deleted, safe to clean up in a future housekeeping pass.
 
-**Push pending** — dry-run reviewed and approved. Next: `python pipeline/merge_holdings.py --push` to regenerate `holdings_latest.csv` with corrected keys.
+**KNOWN ISSUE — RESOLVED ✅ (20 Jun 2026):** scheme_code_amc was the wrong join key for 24 "Single" AMCs whose Excel sheet names carry no real identity (date stamps, generic labels). Root cause: merge_holdings.py applied one rule to all 49 AMCs. Fixed via new `amc_scheme_id_method` table + conditional logic. Push live, Capitalmind re-mapped. Admin UI to manage this classification is a separate follow-up session (Part 4.7).
 
 ---
 
@@ -1176,11 +1179,11 @@ features never activated.
 
 | Priority | Task |
 |---|---|
-| P0 | **Run merge_holdings.py --push** — dry-run approved (20 Jun 2026). Re-map Capitalmind in SchemeMapping UI after push (old key `'CMFCF_March 31, 2026'` is stale; new key is `'Capitalmind Flexi Cap Fund'`). Command: `python pipeline/merge_holdings.py --push` from FundInsight/. |
-| P0 | **Part 4.7 — Admin UI for amc_scheme_id_method** — Session 2 (separate). Edit/view classifications per AMC in SchemeMapping admin. Table already seeded; UI reads it. |
-| P0 | **Scheme Mapping pass** — after push, new keys for 24 AMCs apply. Run pass with updated keys. Tier 1: Kotak, SBI, HDFC, Nippon India, ICICI Prudential, Axis, Bandhan. Tier 2: Aditya Birla, DSP, Franklin Templeton, Mirae, Motilal Oswal. For scheme_name_from_cell AMCs (HDFC, UTI, ICICI etc): scheme_code_amc is now the scheme name — these may be near-trivial or auto-matchable via cell_c_reconciler. |
-| P0 | **scheme_code_map — done (19 Jun 2026)** — Table created (8 rows, mapped_by=manual). `handleSchemeCodeMap()` migrated from GitHub file to Supabase. SchemeMapping.jsx reads `{mapping, meta}`. ⚠ 1 stale row: Capitalmind 'CMFCF_March 31, 2026' → re-map to 'Capitalmind Flexi Cap Fund' after push. |
-| P0 | **Cell C — Scheme Reconciler** — Build `cell_c_reconciler.py` (BRD/FRD §10.1): fuzzy-match remaining unmapped `scheme_code_amc` values per AMC against schemes table (rapidfuzz, AMC-scoped). Writes auto_exact/auto_fuzzy rows to scheme_code_map. Must check `former_name` (daily_nav_sync v2.0 rename-stripping, BRD/FRD §8.6). Only after merge_holdings.py --push and Part 4.7 admin UI. |
+| P0 | **merge_holdings.py v1.2 — LIVE ✅ (20 Jun 2026)** — holdings_latest.csv pushed. Capitalmind re-mapped under new key. Orphaned stale row (cbb7611e) left harmlessly. |
+| P0 | **Part 4.7 — Admin UI for amc_scheme_id_method** — Next session. Build edit/view UI for per-AMC method classification in SchemeMapping admin. Table already seeded (50 rows). |
+| P0 | **Scheme Mapping pass** — holdings_latest.csv now has corrected keys. Run full mapping pass. For scheme_name_from_cell AMCs (HDFC/82, UTI/74, ICICI/139 schemes): scheme_code_amc is the scheme name — may be near-trivial or auto-matchable via cell_c_reconciler. Tier 1 (sheet_name_is_code AMCs with meaningful codes): Kotak, SBI, Axis, Bandhan, Nippon India, Aditya Birla, DSP, Franklin Templeton, Mirae, Motilal Oswal. |
+| P0 | **scheme_code_map — 9 rows active ✅ (20 Jun 2026)** — 8 original + 1 new Capitalmind ('Capitalmind Flexi Cap Fund' → amfi=153738). Orphaned row (cbb7611e) harmless. |
+| P0 | **Cell C — Scheme Reconciler** — Build `cell_c_reconciler.py` (BRD/FRD §10.1): fuzzy-match remaining unmapped `scheme_code_amc` values per AMC against schemes table (rapidfuzz, AMC-scoped). Writes auto_exact/auto_fuzzy rows to scheme_code_map. Must check `former_name` (BRD/FRD §8.6). After Part 4.7 admin UI. |
 | P0 | **compute_returns.py full batch** — check if complete (`SELECT COUNT(*) FROM scheme_returns;`); if 0 rows, run `python pipeline/compute_returns.py` from FundInsight/ |
 | P1 | **AIrrow sentiment archive cron** (T-86 days to August launch — URGENT) |
 | P1 | **Phase C — Supabase upsert** to scheme_portfolios table (depends on Cell C) |
@@ -1223,7 +1226,7 @@ features never activated.
 | `amcs` | 51 | ✅ Complete | 104 name variations (51 canonical + 53 alternates) |
 | `amc_aliases` | 131 | ✅ Complete | Single source of truth for AMC name resolution. Sources: amfi=78, portfolio_pipeline=50, commit_key=3. 0 null amc_ids. Invesco canonical=Invesco India Mutual Fund; amc_id manually assigned. 9 additional amfi aliases added 19 Jun 2026 to fix handleSchemesList silent drops (Axis, Mirae, DSP, Tata, UTI, Sundaram, Helios, Mahindra Manulife, Jio BlackRock). |
 | `amc_scheme_id_method` | 50 | ✅ Seeded | Single source of truth for per-AMC scheme identification method. `method IN ('sheet_name_is_code','scheme_name_from_cell')`. 24 rows = scheme_name_from_cell (AMCs whose sheet names are date-stamps or generic). 26 rows = sheet_name_is_code (default). Seeded 20 Jun 2026 by create_amc_scheme_id_method.py. Admin UI pending (Part 4.7). |
-| `scheme_code_map` | 8 | ✅ Seeded | Maps (amc_id, scheme_code_amc) → amfi_code. UNIQUE(amc_id, scheme_code_amc). Fields: mapped_by IN ('manual','auto_exact','auto_fuzzy'), confidence numeric, mapped_at. Seeded from scheme_code_map.json (8 rows, all mapped_by=manual). Backed by create_scheme_code_map.py. ⚠ 1 stale row: Capitalmind keyed as 'CMFCF_March 31, 2026' — needs re-mapping to 'Capitalmind Flexi Cap Fund' after merge_holdings.py --push. |
+| `scheme_code_map` | 9 | ✅ Active | Maps (amc_id, scheme_code_amc) → amfi_code. UNIQUE(amc_id, scheme_code_amc). Fields: mapped_by IN ('manual','auto_exact','auto_fuzzy'), confidence numeric, mapped_at. 9 rows total: 8 original + 1 new Capitalmind mapping under corrected key 'Capitalmind Flexi Cap Fund' (amfi=153738, 20 Jun 2026). Orphaned row: uuid cbb7611e keyed as 'CMFCF_March 31, 2026' — harmless, not deleted, same amfi_code. |
 | `schemes` | 16,364 | ✅ Complete | All active schemes, 100% AMC linkage |
 | `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
@@ -1265,7 +1268,7 @@ features never activated.
 | `reindex_nav.py` *(FI)* | v1.0 | ⏳ Pending run | FundInsight/pipeline/ — REINDEX CONCURRENTLY all nav_history indexes. ~20-60 min. |
 | `nav_gap_analysis.py` *(FI)* | v1.1 | ✅ Live | FundInsight/pipeline/ — reads local CSVs, writes nav_gap_analysis.xlsx. Last run 03 Jun 2026: 22,706,950 rows, 2006–2026. |
 | `compute_returns.py` *(FI)* | v1.1 | ✅ Ready | Computes 9-period returns for all active schemes. Reads nav_history via psycopg2. Writes to scheme_returns via supabase-py. Daily cron at 18:00 UTC (30 min after daily_nav_sync). IO-optimised: 1 combined query/batch (vs 9 before) using unnest+DISTINCT ON. Batch 200, 2s sleep between batches. First full run pending (IO budget exhausted 03 Jun — reset at midnight UTC). |
-| `merge_holdings.py` *(FI)* | v1.2 | ⏳ Push pending | Transforms holdings_raw_4d_YYYY-MM.csv (13-col cell_4d_v2.py output) to canonical 18-col holdings_latest.csv format. AMC name expansion, ISIN validation, industry/rating split, instrument_type heuristic, embedded newline stripping (v1.1 fix). AMC_NAME_MAP commented out; get_amc_name_map() loads from amc_aliases WHERE source='portfolio_pipeline'. **v1.2 (20 Jun 2026):** reads amc_scheme_id_method per AMC. For 24 AMCs (Capitalmind, HDFC, UTI, ICICI Prudential, JM Financial, and 19 others), uses cleaned scheme_name_raw as scheme_code_amc instead of unreliable sheet_name. Default behavior (sheet_name_is_code) preserved for all other AMCs. Dry-run reviewed and approved — pending --push. |
+| `merge_holdings.py` *(FI)* | v1.2 | ✅ Live | Transforms holdings_raw_4d_YYYY-MM.csv (13-col cell_4d_v2.py output) to canonical 18-col holdings_latest.csv format. AMC name expansion, ISIN validation, industry/rating split, instrument_type heuristic, embedded newline stripping (v1.1 fix). AMC_NAME_MAP commented out; get_amc_name_map() loads from amc_aliases WHERE source='portfolio_pipeline'. **v1.2 (20 Jun 2026):** reads amc_scheme_id_method per AMC. For 24 AMCs (Capitalmind, HDFC, UTI, ICICI Prudential, JM Financial, and 19 others), uses cleaned scheme_name_raw as scheme_code_amc instead of unreliable sheet_name. Default behavior (sheet_name_is_code) preserved for all other AMCs. Pushed — holdings_latest.csv live on GitHub. |
 
 ---
 
