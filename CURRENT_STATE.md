@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v65.0
+**Last updated:** 20 Jun 2026 · v66.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,17 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## parser_outliers — Dedup + UNIQUE Constraint ✅ (20 Jun 2026)
+
+**What was done:** Cleaned up the known two-run incident from 20 Jun 2026 (two pipeline runs — one full, one Ctrl+C — both inserted rows; no unique constraint existed to prevent it).
+
+- **Deduplicated:** 18 pending rows → 9 rows. Deleted the later-inserted duplicate of each pair (kept the earlier `created_at`). Verified 0 duplicate groups remain.
+- **UNIQUE constraint added:** `CONSTRAINT uq_parser_outliers_run UNIQUE (amc_name, sheet_name, reason, run_date)`. Prevents the same outlier being inserted twice within a single pipeline run. A later run_date re-logging the same unresolved outlier is still allowed (legitimate: sheet still unresolved on the next run).
+- **`cell_4d_v2.py` log_parser_outlier() updated:** Now captures the response and explicitly checks `status_code`. HTTP 409 (conflict = duplicate for this run_date) is silently skipped. Any other non-2xx logs a warning. Previously the 409 was already swallowed accidentally (requests.post() doesn't raise on 4xx), but intent is now explicit.
+- **Migration scripts:** `FundInsight/pipeline/dedup_outliers.py` and `check_outliers.py` (one-time use, can be deleted post-session).
 
 ---
 
