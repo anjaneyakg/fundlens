@@ -78,13 +78,16 @@ function extractBaseName(fullName) {
     .replace(/[-–](Regular|Direct)\s+Plan.*/i, '')
     .replace(/\s+(Regular|Direct)\s+Plan.*/i, '')
     .replace(/\s+(REGULAR|DIRECT)\s+(GROWTH|IDCW|INCOME|DIVIDEND|PAYOUT|REINVESTMENT).*/i, '')
+    .replace(/\s*[-–]\s*$/, '')        // Fix 3: strip trailing standalone dash left by pattern-4 strip
     .trim();
 }
 
 function normalizeForMatch(s) {
   return extractBaseName(s)
+    .replace(/\s+-\s+/g, ' ')          // Fix 1: " - " separator → space (UTI pattern)
     .toLowerCase()
     .replace(/[.,;:!?()\[\]]+$/, '')   // strip trailing punctuation
+    .replace(/\s+plan$/i, '')          // Fix 2: strip trailing sub-plan label (e.g. "Hybrid Aggressive Plan")
     .replace(/\s+/g, ' ')
     .trim();
 }
