@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 20 Jun 2026 (Part 4.7b DONE — Parsing Rules tab + outlier review UI + shared csvParser.js; next: cell_c_reconciler.py BRD §10.1)
+Last updated: 20 Jun 2026 (cell_c_reconciler DONE — frontend-triggered fuzzy matching, auto_fuzzy_pending proposals reviewable at /admin/scheme-mapping; next: run reconciler + review proposals + cell_c_upsert)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -112,16 +112,29 @@ All SQL already run manually before EB-Fix-3 session:
 
 ## Current priority (do this FIRST next session):
 
-### P0 — Cell C: Scheme Reconciler (BRD/FRD §10.1)
+### P0 — Run reconciler, review proposals, then cell_c_upsert (BRD/FRD §10.1)
 
-- `cell_c_reconciler.py`: fuzzy-match remaining unmapped `scheme_code_amc` values per AMC against `schemes` table
-- For `scheme_name_from_cell` AMCs (24): `scheme_code_amc` IS the scheme name → exact or near-exact match expected (Capitalmind, HDFC, UTI, ICICI Prudential, etc.)
-- For `sheet_name_is_code` AMCs (26): `scheme_code_amc` is an AMC-internal code → fuzzy match required
-- Use `rapidfuzz`. Match scoped per AMC (JOIN `schemes` + `amcs`). Check `former_name` (BRD/FRD §8.6). Trim trailing punctuation before exact match.
-- Writes `auto_exact`/`auto_fuzzy` rows to `scheme_code_map`. Manual rows (`mapped_by='manual'`) must NEVER be overwritten.
-- Confidence threshold for `auto_fuzzy` still to be decided (5.2 in BRD) — start session by agreeing on threshold before implementing.
-- Priority AMCs: Kotak, SBI, Axis, Bandhan, Aditya Birla Sun Life, DSP, Franklin Templeton, Mirae, Motilal Oswal
-- Trivial (scheme_code_amc = full scheme name, just confirm and save): Shriram, Trust, JM
+**Step 1 — Run the reconciler** (from /admin Coverage Dashboard):
+- Click "Run Scheme Code Reconciler" button
+- Wait ~5–10 seconds (server fetches AMC schemes per AMC in parallel, matches, inserts)
+- Note the summary: auto_exact count, auto_fuzzy_pending count, no_match count, elapsed_ms
+
+**Step 2 — Review proposals** (at /admin/scheme-mapping):
+- Filter "Mapped" to see all auto_exact + auto_fuzzy_pending rows
+- For each amber "Suggested (X%)" badge: read proposed AMFI name, Accept or Reject
+- Verify auto_exact rows look correct (score=100, no review needed — but sanity-check a few)
+- Track: how many auto_fuzzy_pending proposals exist? What % look correct?
+
+**Step 3 — Diagnose no_match cases** (check CURRENT_STATE.md notes):
+- Known: "UTI - Arbitrage Fund" has " - " formatting → normalizer scores 89, below 92 threshold
+- May need: `normalizeForMatch()` to strip leading ` - ` before Levenshtein (1-line fix in cell-c.js)
+- Decide: is threshold 92 correct, or should it be lowered for certain code patterns?
+
+**Step 4 — Build cell_c_upsert.py** (ONLY after proposals reviewed):
+- Purpose: promote accepted scheme_code_map rows into the live pipeline lookup
+- Trigger button: "Apply Accepted Mappings" in CoverageDashboard or SchemeMapping
+- Spec: UPDATE/INSERT into relevant pipeline output tables using accepted scheme_code_map rows
+- Do NOT build this until proposals have been reviewed — the upsert is irreversible at pipeline level
 
 ---
 

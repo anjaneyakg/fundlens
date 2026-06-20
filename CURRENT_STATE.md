@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v66.0
+**Last updated:** 20 Jun 2026 · v67.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,51 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## cell_c_reconciler — Scheme Code Matching, Frontend-Triggered ✅ (20 Jun 2026)
+
+**BRD/FRD §10.1.** Fuzzy-matches remaining unmapped `scheme_code_amc` values against AMFI `schemes` table, entirely from the admin UI — no terminal or SQL required to review/accept/reject proposals.
+
+### Architecture decision: pure JS Vercel serverless (`api/cell-c.js`)
+
+Python subprocess unavailable on Vercel. All existing API routes are Node.js. Levenshtein + token-sort implemented in ~60 lines of JS; no external library needed. The frontend sends distinct (amc_name, scheme_code_amc) pairs extracted from the already-loaded holdings CSV — this avoids downloading a 24 MB file inside the serverless function, which would exceed the 60-second timeout.
+
+### CONFIDENCE_THRESHOLD = 92 (named constant, easily changed)
+
+- score = 100 → `mapped_by='auto_exact'` (inserted directly — no review needed)
+- score 92–99 → `mapped_by='auto_fuzzy_pending'` (inserted as proposal for review)
+- score < 92 → no row written (no_match)
+
+### DB constraint update
+
+`scheme_code_map.mapped_by` CHECK constraint extended to include `'auto_fuzzy_pending'`. Migration run via psycopg2 on 20 Jun 2026.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `api/cell-c.js` (NEW) | GET `reconciler-status` + POST `run-reconciler`; per-AMC scheme fetch in parallel; `findBestMatch()` exits early at score=100 |
+| `api/amfi.js` | Added `id` to scheme-code-map select+meta; added `scheme-code-map-accept` (PATCH → `auto_fuzzy`) and `scheme-code-map-reject` (DELETE row) handlers |
+| `SchemeMapping.jsx` | Amber "Suggested (X%)" badge for `auto_fuzzy_pending`; Accept/Reject buttons with optimistic UI; `handleAccept`/`handleReject` functions |
+| `CoverageDashboard.jsx` | "Run Scheme Code Reconciler" button with spinner + result summary (exact/suggested/unmatched counts + "Review →" link); extracts distinct codes from loaded holdings before POST |
+| `vercel.json` | `maxDuration: 60` added for `api/cell-c.js` |
+
+### Manual step NOT needed (deliberately excluded)
+
+`cell_c_upsert.py` — promotes accepted proposals into the live pipeline. Excluded from this session per spec: "Do not build cell_c_upsert.py or its trigger button yet — that's next session, after reviewing and accepting/rejecting proposals."
+
+### End-to-end smoke test (20 Jun 2026)
+
+5 sample codes sent to deployed endpoint: 2 auto_exact matches (Nippon India Arbitrage Fund at 100, ICICI Prudential Active Momentum Fund at 100), 3 no_match (UTI "UTI - Arbitrage Fund" scores 89 due to the " - " formatting — below threshold). Elapsed: 3 seconds. ✓
+
+### Notes for next session
+
+- Run the reconciler via /admin (Coverage Dashboard) with the full holdings CSV — this will process ~3,700 distinct (amc, code) pairs
+- Review auto_fuzzy_pending proposals at /admin/scheme-mapping — use Accept/Reject buttons
+- "UTI - Arbitrage Fund" and similar codes with " - " formatting may need the normalizer to strip leading dashes (`replace(/^\s*-\s*/, '')`) — decide after seeing how many fall below threshold
+- Build `cell_c_upsert.py` + trigger button AFTER proposals have been reviewed
 
 ---
 
