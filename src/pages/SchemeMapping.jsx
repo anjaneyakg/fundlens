@@ -1,9 +1,11 @@
 // src/pages/SchemeMapping.jsx
-// Admin tool — maps AMC-internal scheme codes to canonical AMFI scheme names.
-// Reads/writes scheme_code_map Supabase table via /api/amfi?action=scheme-code-map.
+// Admin tool — two tabs:
+//   "Scheme Mapping"  — maps AMC-internal scheme codes → canonical AMFI scheme names
+//   "Parsing Rules"   — views/edits per-AMC scheme identification method (amc_scheme_id_method)
 // Route: /admin/scheme-mapping
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { parseCsvLine } from '../utils/csvParser.js'
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Syne:wght@400;600;700&display=swap');
@@ -19,10 +21,13 @@ const styles = `
   .sm-header {
     background: #fff;
     border-bottom: 1px solid rgba(99,91,255,0.1);
-    padding: 1.25rem 2rem;
-    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 2rem 0;
     position: sticky; top: 0; z-index: 100;
     box-shadow: 0 2px 12px rgba(99,91,255,0.05);
+  }
+  .sm-header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 1rem;
   }
   .sm-header-left { display: flex; align-items: center; gap: 14px; }
   .sm-header-pill {
@@ -46,6 +51,22 @@ const styles = `
   }
   .sm-save-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(99,91,255,0.35); }
   .sm-save-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── TOP-LEVEL TABS ── */
+  .sm-top-tabs {
+    display: flex; gap: 0; border-top: 1px solid rgba(99,91,255,0.06);
+  }
+  .sm-top-tab {
+    padding: 10px 20px;
+    font-family: 'DM Mono'; font-size: 11px; letter-spacing: 0.5px;
+    border: none; background: none; cursor: pointer;
+    color: #9aa0c8; text-transform: uppercase;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .sm-top-tab.active { color: #635bff; border-bottom-color: #635bff; }
+  .sm-top-tab:hover:not(.active) { color: #635bff; }
 
   /* ── STATS BAR ── */
   .sm-stats {
@@ -81,7 +102,7 @@ const styles = `
   .sm-progress-label { font-size: 10px; color: #9aa0c8; margin-top: 4px; letter-spacing: 0.3px; }
 
   /* ── LAYOUT ── */
-  .sm-body { display: flex; gap: 0; height: calc(100vh - 180px); margin-top: 1.25rem; }
+  .sm-body { display: flex; gap: 0; height: calc(100vh - 220px); margin-top: 1.25rem; }
 
   /* ── AMC SIDEBAR ── */
   .sm-amc-list {
@@ -211,7 +232,7 @@ const styles = `
   .sm-ac-item mark { background: rgba(99,91,255,0.15); color: #635bff; border-radius: 2px; padding: 0 1px; }
   .sm-ac-empty { padding: 10px 12px; font-size: 10px; color: #b0b8d8; font-style: italic; }
 
-  /* ── AUTO-MAPPING BADGE (shows mapped_by source beneath input) ── */
+  /* ── AUTO-MAPPING BADGE ── */
   .sm-auto-badge {
     display: inline-block; margin-top: 3px;
     font-size: 9px; letter-spacing: 0.4px; padding: 1px 7px;
@@ -269,42 +290,72 @@ const styles = `
   @keyframes spin { to { transform: rotate(360deg); } }
   .sm-loading-text { font-size: 11px; letter-spacing: 0.5px; }
 
+  /* ── PARSING RULES TAB ── */
+  .sm-rules-panel { padding: 1.5rem 2rem; max-width: 900px; }
+  .sm-rules-caption {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: rgba(99,91,255,0.05);
+    border: 1px solid rgba(99,91,255,0.15);
+    border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 1.25rem;
+  }
+  .sm-rules-caption-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .sm-rules-caption-text { font-size: 11px; color: #635bff; line-height: 1.6; letter-spacing: 0.2px; }
+  .sm-rules-caption-text code {
+    background: rgba(99,91,255,0.1); border-radius: 3px;
+    padding: 0 4px; font-size: 10px;
+  }
+  .sm-rules-count { font-size: 10px; color: #9aa0c8; letter-spacing: 0.3px; margin-bottom: 0.75rem; }
+  .sm-rules-table {
+    background: #fff; border-radius: 10px;
+    border: 1px solid rgba(99,91,255,0.1);
+    overflow: hidden;
+  }
+  .sm-rules-th {
+    display: grid; grid-template-columns: 1fr 230px 170px;
+    padding: 9px 16px;
+    background: #f7f6f3;
+    border-bottom: 1px solid rgba(99,91,255,0.08);
+    font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #9aa0c8;
+  }
+  .sm-rules-row {
+    display: grid; grid-template-columns: 1fr 230px 170px;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(99,91,255,0.05);
+    transition: background 0.1s;
+  }
+  .sm-rules-row:last-child { border-bottom: none; }
+  .sm-rules-row:hover { background: rgba(99,91,255,0.02); }
+  .sm-rules-amc { font-size: 11px; color: #2d2b4e; }
+  .sm-method-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .sm-method-select {
+    padding: 5px 10px; border-radius: 7px;
+    border: 1px solid rgba(99,91,255,0.2);
+    background: #f7f6f3; font-family: 'DM Mono'; font-size: 10px;
+    color: #2d2b4e; outline: none; cursor: pointer;
+    transition: all 0.15s; width: 210px;
+  }
+  .sm-method-select:focus { border-color: #635bff; background: #fff; }
+  .sm-method-select:disabled { opacity: 0.55; cursor: not-allowed; }
+  .sm-method-select.cell {
+    border-color: rgba(22,163,74,0.35);
+    background: rgba(22,163,74,0.04); color: #166534;
+  }
+  .sm-rules-saving { font-size: 9px; color: #635bff; letter-spacing: 0.3px; }
+  .sm-rules-updated { font-size: 10px; color: #b0b8d8; letter-spacing: 0.3px; }
+
   @media (max-width: 768px) {
     .sm-body { flex-direction: column; height: auto; }
     .sm-amc-list { width: 100%; height: 200px; border-right: none; border-bottom: 1px solid rgba(99,91,255,0.08); }
     .sm-stats { margin: 1rem 1rem 0; }
-    .sm-header { padding: 1rem; }
+    .sm-header { padding: 1rem 1rem 0; }
     .sm-progress-wrap { margin: 1rem 1rem 0; }
+    .sm-rules-panel { padding: 1rem; }
+    .sm-rules-th, .sm-rules-row { grid-template-columns: 1fr 180px; }
+    .sm-rules-row > :last-child, .sm-rules-th > :last-child { display: none; }
   }
 `
-
-// ── RFC 4180-aware CSV column parser ────────────────────────────────────────
-// Handles quoted fields with embedded commas (e.g. 'CMFCF_March 31, 2026').
-// Does not handle embedded newlines — row-splitting still uses split('\n'),
-// which is safe because merge_holdings.py v1.1 strips all embedded newlines.
-function parseCsvLine(line) {
-  const result = []
-  let current  = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"'
-        i++ // skip escaped quote
-      } else {
-        inQuotes = !inQuotes
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  result.push(current)
-  return result
-}
 
 // ── Highlight matching text in autocomplete ──────────────────────────────────
 function highlight(text, query) {
@@ -328,7 +379,6 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedB
   const inputRef              = useRef(null)
   const dropRef               = useRef(null)
 
-  // Keep in sync if parent mapping changes (e.g. on load)
   useEffect(() => { setQuery(currentName || '') }, [currentName])
 
   const filtered = query.length >= 1
@@ -403,39 +453,106 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedB
   )
 }
 
+// ── Parsing Rules tab ────────────────────────────────────────────────────────
+function ParsingRulesTab({ rules, loading, savingId, onMethodChange }) {
+  function fmtDate(iso) {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  if (loading) {
+    return (
+      <div className="sm-loading" style={{ height: 'calc(100vh - 220px)' }}>
+        <div className="sm-spinner" />
+        <div className="sm-loading-text">Loading parsing rules…</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="sm-rules-panel">
+      <div className="sm-rules-caption">
+        <span className="sm-rules-caption-icon">ℹ</span>
+        <div className="sm-rules-caption-text">
+          Changes take effect on the <strong>next <code>merge_holdings.py</code> run</strong> — not retroactively applied to existing data.
+          <br />
+          <strong>sheet_name_is_code</strong> — Excel sheet tab name is used as <code>scheme_code_amc</code> (default for 26 AMCs).
+          <br />
+          <strong>scheme_name_from_cell</strong> — Cell value extracted by <code>cell_4d_v2.py</code> is used instead (for 24 AMCs whose sheet names are date-stamps or generic labels).
+        </div>
+      </div>
+
+      <div className="sm-rules-count">{rules.length} AMCs configured</div>
+
+      <div className="sm-rules-table">
+        <div className="sm-rules-th">
+          <div>AMC</div>
+          <div>Method</div>
+          <div>Last Updated</div>
+        </div>
+        {rules.map(r => (
+          <div key={r.amc_id} className="sm-rules-row">
+            <div className="sm-rules-amc">{r.amc_name?.replace(' Mutual Fund', '')}</div>
+            <div className="sm-method-wrap">
+              <select
+                className={`sm-method-select ${r.method === 'scheme_name_from_cell' ? 'cell' : ''}`}
+                value={r.method}
+                disabled={savingId === r.amc_id}
+                onChange={e => onMethodChange(r.amc_id, e.target.value)}
+              >
+                <option value="sheet_name_is_code">sheet_name_is_code</option>
+                <option value="scheme_name_from_cell">scheme_name_from_cell</option>
+              </select>
+              {savingId === r.amc_id && <span className="sm-rules-saving">Saving…</span>}
+            </div>
+            <div className="sm-rules-updated">{fmtDate(r.updated_at)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 export default function SchemeMapping() {
-  const [holdings, setHoldings]     = useState([])   // [{amc_name, scheme_code_amc, rows}]
-  const [amfiMap, setAmfiMap]       = useState({})   // {amc_name: [scheme_name, ...]}
-  const [mapping, setMapping]       = useState({})   // {amc_name: {code: amfi_name}}
-  const [meta, setMeta]             = useState({})   // {amc_name: {code: {mapped_by, confidence}}}
+  // ── Scheme mapping state ─────────────────────────────────────────────────
+  const [holdings, setHoldings]     = useState([])
+  const [amfiMap, setAmfiMap]       = useState({})
+  const [mapping, setMapping]       = useState({})
+  const [meta, setMeta]             = useState({})
   const [selectedAmc, setSelected]  = useState(null)
-  const [filter, setFilter]         = useState('all') // all | unmapped | mapped
+  const [filter, setFilter]         = useState('all')
   const [amcSearch, setAmcSearch]   = useState('')
   const [loading, setLoading]       = useState(true)
   const [saving, setSaving]         = useState(false)
   const [toast, setToast]           = useState(null)
   const [dirty, setDirty]           = useState(false)
 
+  // ── Tab + parsing rules state ────────────────────────────────────────────
+  const [activeTab, setActiveTab]         = useState('mapping')
+  const [parsingRules, setParsingRules]   = useState([])
+  const [rulesLoading, setRulesLoading]   = useState(false)
+  const [rulesSavingId, setRulesSavingId] = useState(null)
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3500)
   }
 
-  // ── Load holdings CSV + AMFI master + existing mapping ──────────────────
+  // ── Load holdings CSV + AMFI master + existing mapping ───────────────────
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
-        // 1. Holdings CSV (via proxy)
         const csvRes = await fetch('/api/holdings-csv')
         const csv    = await csvRes.text()
         const rows   = csv.trim().split('\n')
-        const header = rows[0].split(',').map(h => h.trim())
+        const header = parseCsvLine(rows[0]).map(h => h.trim())
         const amcIdx  = header.indexOf('amc_name')
         const codeIdx = header.indexOf('scheme_code_amc')
 
-        const codeCount = {}  // {amc|code: count}
+        const codeCount = {}
         for (let i = 1; i < rows.length; i++) {
           const parts = parseCsvLine(rows[i])
           const amc   = parts[amcIdx]?.trim()
@@ -451,12 +568,10 @@ export default function SchemeMapping() {
         })
         setHoldings(holdingsList)
 
-        // 2. AMFI scheme master
         const amfiRes  = await fetch('/api/amfi?action=schemes-list')
         const amfiData = await amfiRes.json()
         setAmfiMap(amfiData.byAmc || {})
 
-        // 3. Existing mapping from Supabase
         const mapRes = await fetch('/api/amfi?action=scheme-code-map')
         if (mapRes.ok) {
           const { mapping: mapData, meta: metaData } = await mapRes.json()
@@ -472,6 +587,48 @@ export default function SchemeMapping() {
     load()
   }, [])
 
+  // ── Load parsing rules (lazy — on first tab visit) ───────────────────────
+  const loadRules = useCallback(async () => {
+    if (parsingRules.length > 0) return
+    setRulesLoading(true)
+    try {
+      const res  = await fetch('/api/amfi?action=amc-scheme-id-methods')
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error)
+      setParsingRules(data.rules || [])
+    } catch (err) {
+      console.error('Load rules error:', err)
+      showToast('Failed to load parsing rules: ' + err.message, 'error')
+    }
+    setRulesLoading(false)
+  }, [parsingRules.length])
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (tab === 'rules') loadRules()
+  }
+
+  // ── Parsing Rules: update one AMC's method inline ───────────────────────
+  const handleMethodChange = async (amcId, newMethod) => {
+    setRulesSavingId(amcId)
+    try {
+      const res = await fetch('/api/amfi?action=amc-scheme-id-methods', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ amc_id: amcId, method: newMethod }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      setParsingRules(prev => prev.map(r =>
+        r.amc_id === amcId ? { ...r, method: newMethod, updated_at: new Date().toISOString() } : r
+      ))
+      showToast('✓ Method updated')
+    } catch (err) {
+      console.error('Method change error:', err)
+      showToast('Failed to update method: ' + err.message, 'error')
+    }
+    setRulesSavingId(null)
+  }
+
   // ── Derived stats ────────────────────────────────────────────────────────
   const amcStats = () => {
     const amcs = [...new Set(holdings.map(h => h.amc_name))].sort()
@@ -480,22 +637,17 @@ export default function SchemeMapping() {
       const mapped   = codes.filter(h => mapping[amc]?.[h.scheme_code_amc]).length
       const total    = codes.length
       const status   = mapped === 0 ? 'none' : mapped === total ? 'done' : 'part'
-      const needsMap = total > 1  // single-code AMCs are fine
+      const needsMap = total > 1
       return { amc, total, mapped, status, needsMap }
     })
   }
 
-  const stats = amcStats()
-  const totalCodes  = holdings.length
-  const totalMapped = holdings.filter(h => mapping[h.amc_name]?.[h.scheme_code_amc]).length
-  const pct         = totalCodes > 0 ? Math.round((totalMapped / totalCodes) * 100) : 0
+  const stats         = amcStats()
+  const totalCodes    = holdings.length
+  const totalMapped   = holdings.filter(h => mapping[h.amc_name]?.[h.scheme_code_amc]).length
+  const pct           = totalCodes > 0 ? Math.round((totalMapped / totalCodes) * 100) : 0
+  const filteredAmcs  = stats.filter(s => s.amc.toLowerCase().includes(amcSearch.toLowerCase()))
 
-  // ── Filter AMC sidebar ───────────────────────────────────────────────────
-  const filteredAmcs = stats.filter(s =>
-    s.amc.toLowerCase().includes(amcSearch.toLowerCase())
-  )
-
-  // ── Current AMC data ─────────────────────────────────────────────────────
   const currentCodes = selectedAmc
     ? holdings
         .filter(h => h.amc_name === selectedAmc)
@@ -509,11 +661,8 @@ export default function SchemeMapping() {
     return true
   })
 
-  const amfiSchemes = selectedAmc
-    ? (amfiMap[selectedAmc] || [])
-    : []
+  const amfiSchemes = selectedAmc ? (amfiMap[selectedAmc] || []) : []
 
-  // ── Handle mapping change ────────────────────────────────────────────────
   const handleChange = useCallback((code, name) => {
     setMapping(prev => {
       const updated = { ...prev }
@@ -525,20 +674,17 @@ export default function SchemeMapping() {
     setDirty(true)
   }, [selectedAmc])
 
-  // ── Save mapping to GitHub via API ───────────────────────────────────────
   const handleSave = async () => {
     setSaving(true)
     try {
       const res = await fetch('/api/amfi?action=scheme-code-map', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapping })
+        body:    JSON.stringify({ mapping })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setDirty(false)
-      // After a manual save, clear auto-mapping badges for the affected AMC's codes
-      // (they are now mapped_by='manual' in Supabase)
       setMeta(prev => {
         const next = { ...prev }
         if (selectedAmc && next[selectedAmc]) {
@@ -558,8 +704,7 @@ export default function SchemeMapping() {
     setSaving(false)
   }
 
-  // ── Selected AMC stats ───────────────────────────────────────────────────
-  const selStat = stats.find(s => s.amc === selectedAmc)
+  const selStat      = stats.find(s => s.amc === selectedAmc)
   const unmappedCount = selStat ? selStat.total - selStat.mapped : 0
 
   return (
@@ -568,161 +713,195 @@ export default function SchemeMapping() {
 
       {/* Header */}
       <div className="sm-header">
-        <div className="sm-header-left">
-          <span className="sm-header-pill">Admin</span>
-          <div>
-            <div className="sm-header-title">Scheme Code Mapping</div>
-            <div className="sm-header-sub">Map AMC-internal codes → canonical AMFI scheme names</div>
+        <div className="sm-header-top">
+          <div className="sm-header-left">
+            <span className="sm-header-pill">Admin</span>
+            <div>
+              <div className="sm-header-title">Scheme Code Mapping</div>
+              <div className="sm-header-sub">
+                {activeTab === 'mapping'
+                  ? 'Map AMC-internal codes → canonical AMFI scheme names'
+                  : 'Configure per-AMC scheme identification method for merge_holdings.py'}
+              </div>
+            </div>
           </div>
-        </div>
-        <button
-          className="sm-save-btn"
-          onClick={handleSave}
-          disabled={saving || !dirty}
-        >
-          {saving ? '⏳ Saving…' : dirty ? '💾 Save Mappings' : '✓ Saved'}
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="sm-stats">
-        <div className="sm-stat">
-          <span className="sm-stat-val">{totalCodes.toLocaleString()}</span>
-          <span className="sm-stat-label">Total Codes</span>
-        </div>
-        <div className="sm-stat">
-          <span className={`sm-stat-val ${totalMapped > 0 ? 'green' : ''}`}>{totalMapped.toLocaleString()}</span>
-          <span className="sm-stat-label">Mapped</span>
-        </div>
-        <div className="sm-stat">
-          <span className={`sm-stat-val ${totalCodes - totalMapped > 0 ? 'amber' : 'green'}`}>
-            {(totalCodes - totalMapped).toLocaleString()}
-          </span>
-          <span className="sm-stat-label">Unmapped</span>
-        </div>
-        <div className="sm-stat">
-          <span className={`sm-stat-val ${pct === 100 ? 'green' : pct > 50 ? 'amber' : 'red'}`}>{pct}%</span>
-          <span className="sm-stat-label">Coverage</span>
-        </div>
-        <div className="sm-stat">
-          <span className="sm-stat-val">{stats.length}</span>
-          <span className="sm-stat-label">AMCs</span>
-        </div>
-      </div>
-
-      {/* Progress */}
-      <div className="sm-progress-wrap">
-        <div className="sm-progress-track">
-          <div className="sm-progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="sm-progress-label">{totalMapped} of {totalCodes} scheme codes mapped</div>
-      </div>
-
-      {/* Body */}
-      <div className="sm-body">
-
-        {/* AMC sidebar */}
-        <div className="sm-amc-list">
-          <input
-            className="sm-amc-search"
-            placeholder="Search AMC…"
-            value={amcSearch}
-            onChange={e => setAmcSearch(e.target.value)}
-          />
-          {filteredAmcs.map(({ amc, total, mapped, status, needsMap }) => (
-            <div
-              key={amc}
-              className={`sm-amc-item ${selectedAmc === amc ? 'active' : ''}`}
-              onClick={() => { setSelected(amc); setFilter('all') }}
+          {activeTab === 'mapping' && (
+            <button
+              className="sm-save-btn"
+              onClick={handleSave}
+              disabled={saving || !dirty}
             >
-              <div className="sm-amc-name">{amc.replace(' Mutual Fund', '')}</div>
-              <div className="sm-amc-badges">
-                {needsMap
-                  ? <span className={`sm-badge ${status}`}>
-                      {status === 'done' ? `${mapped}/${total} ✓` :
-                       status === 'part' ? `${mapped}/${total}` :
-                       `0/${total}`}
-                    </span>
-                  : <span className="sm-badge clean">auto</span>
-                }
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Main panel */}
-        <div className="sm-main">
-          {loading ? (
-            <div className="sm-loading">
-              <div className="sm-spinner" />
-              <div className="sm-loading-text">Loading holdings + AMFI data…</div>
-            </div>
-          ) : !selectedAmc ? (
-            <div className="sm-empty">
-              <div className="sm-empty-icon">←</div>
-              <div className="sm-empty-text">Select an AMC from the sidebar to begin mapping</div>
-            </div>
-          ) : (
-            <>
-              <div className="sm-amc-header">
-                <div>
-                  <div className="sm-amc-title">{selectedAmc}</div>
-                  <div className="sm-amc-meta">
-                    {selStat?.mapped}/{selStat?.total} mapped
-                    {unmappedCount > 0 && ` · ${unmappedCount} remaining`}
-                  </div>
-                </div>
-                <div className="sm-filter-tabs">
-                  {['all','unmapped','mapped'].map(f => (
-                    <button
-                      key={f}
-                      className={`sm-filter-tab ${filter === f ? 'active' : ''}`}
-                      onClick={() => setFilter(f)}
-                    >
-                      {f === 'all' ? `All (${currentCodes.length})` :
-                       f === 'unmapped' ? `Unmapped (${currentCodes.filter(h => !mapping[selectedAmc]?.[h.scheme_code_amc]).length})` :
-                       `Mapped (${currentCodes.filter(h => !!mapping[selectedAmc]?.[h.scheme_code_amc]).length})`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Column headers */}
-              <div style={{
-                display:'grid', gridTemplateColumns:'160px 1fr 32px',
-                padding:'6px 0', background:'#f7f6f3',
-                borderBottom:'1px solid rgba(99,91,255,0.08)',
-                position:'sticky', top:'57px', zIndex:9
-              }}>
-                <div style={{padding:'0 16px', fontSize:'9px', letterSpacing:'1px', textTransform:'uppercase', color:'#9aa0c8'}}>AMC Code</div>
-                <div style={{padding:'0 12px', fontSize:'9px', letterSpacing:'1px', textTransform:'uppercase', color:'#9aa0c8'}}>AMFI Scheme Name</div>
-              </div>
-
-              <div className="sm-scheme-list">
-                {filteredCodes.length === 0 ? (
-                  <div className="sm-empty" style={{height:'200px'}}>
-                    <div className="sm-empty-icon">✓</div>
-                    <div className="sm-empty-text">
-                      {filter === 'unmapped' ? 'All codes mapped for this AMC!' : 'No codes found'}
-                    </div>
-                  </div>
-                ) : filteredCodes.map(h => (
-                  <SchemeRow
-                    key={`${h.amc_name}|||${h.scheme_code_amc}`}
-                    code={h.scheme_code_amc}
-                    rowCount={h.rows}
-                    currentName={mapping[selectedAmc]?.[h.scheme_code_amc] || ''}
-                    amfiSchemes={amfiSchemes}
-                    onChange={handleChange}
-                    mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
-                    confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
-                  />
-                ))}
-              </div>
-            </>
+              {saving ? '⏳ Saving…' : dirty ? '💾 Save Mappings' : '✓ Saved'}
+            </button>
           )}
         </div>
+
+        {/* Top-level tab switcher */}
+        <div className="sm-top-tabs">
+          <button
+            className={`sm-top-tab ${activeTab === 'mapping' ? 'active' : ''}`}
+            onClick={() => handleTabChange('mapping')}
+          >
+            Scheme Mapping
+          </button>
+          <button
+            className={`sm-top-tab ${activeTab === 'rules' ? 'active' : ''}`}
+            onClick={() => handleTabChange('rules')}
+          >
+            Parsing Rules
+          </button>
+        </div>
       </div>
+
+      {/* ── Scheme Mapping tab ── */}
+      {activeTab === 'mapping' && (
+        <>
+          <div className="sm-stats">
+            <div className="sm-stat">
+              <span className="sm-stat-val">{totalCodes.toLocaleString()}</span>
+              <span className="sm-stat-label">Total Codes</span>
+            </div>
+            <div className="sm-stat">
+              <span className={`sm-stat-val ${totalMapped > 0 ? 'green' : ''}`}>{totalMapped.toLocaleString()}</span>
+              <span className="sm-stat-label">Mapped</span>
+            </div>
+            <div className="sm-stat">
+              <span className={`sm-stat-val ${totalCodes - totalMapped > 0 ? 'amber' : 'green'}`}>
+                {(totalCodes - totalMapped).toLocaleString()}
+              </span>
+              <span className="sm-stat-label">Unmapped</span>
+            </div>
+            <div className="sm-stat">
+              <span className={`sm-stat-val ${pct === 100 ? 'green' : pct > 50 ? 'amber' : 'red'}`}>{pct}%</span>
+              <span className="sm-stat-label">Coverage</span>
+            </div>
+            <div className="sm-stat">
+              <span className="sm-stat-val">{stats.length}</span>
+              <span className="sm-stat-label">AMCs</span>
+            </div>
+          </div>
+
+          <div className="sm-progress-wrap">
+            <div className="sm-progress-track">
+              <div className="sm-progress-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="sm-progress-label">{totalMapped} of {totalCodes} scheme codes mapped</div>
+          </div>
+
+          <div className="sm-body">
+            {/* AMC sidebar */}
+            <div className="sm-amc-list">
+              <input
+                className="sm-amc-search"
+                placeholder="Search AMC…"
+                value={amcSearch}
+                onChange={e => setAmcSearch(e.target.value)}
+              />
+              {filteredAmcs.map(({ amc, total, mapped, status, needsMap }) => (
+                <div
+                  key={amc}
+                  className={`sm-amc-item ${selectedAmc === amc ? 'active' : ''}`}
+                  onClick={() => { setSelected(amc); setFilter('all') }}
+                >
+                  <div className="sm-amc-name">{amc.replace(' Mutual Fund', '')}</div>
+                  <div className="sm-amc-badges">
+                    {needsMap
+                      ? <span className={`sm-badge ${status}`}>
+                          {status === 'done' ? `${mapped}/${total} ✓` :
+                           status === 'part' ? `${mapped}/${total}` :
+                           `0/${total}`}
+                        </span>
+                      : <span className="sm-badge clean">auto</span>
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Main panel */}
+            <div className="sm-main">
+              {loading ? (
+                <div className="sm-loading">
+                  <div className="sm-spinner" />
+                  <div className="sm-loading-text">Loading holdings + AMFI data…</div>
+                </div>
+              ) : !selectedAmc ? (
+                <div className="sm-empty">
+                  <div className="sm-empty-icon">←</div>
+                  <div className="sm-empty-text">Select an AMC from the sidebar to begin mapping</div>
+                </div>
+              ) : (
+                <>
+                  <div className="sm-amc-header">
+                    <div>
+                      <div className="sm-amc-title">{selectedAmc}</div>
+                      <div className="sm-amc-meta">
+                        {selStat?.mapped}/{selStat?.total} mapped
+                        {unmappedCount > 0 && ` · ${unmappedCount} remaining`}
+                      </div>
+                    </div>
+                    <div className="sm-filter-tabs">
+                      {['all','unmapped','mapped'].map(f => (
+                        <button
+                          key={f}
+                          className={`sm-filter-tab ${filter === f ? 'active' : ''}`}
+                          onClick={() => setFilter(f)}
+                        >
+                          {f === 'all' ? `All (${currentCodes.length})` :
+                           f === 'unmapped' ? `Unmapped (${currentCodes.filter(h => !mapping[selectedAmc]?.[h.scheme_code_amc]).length})` :
+                           `Mapped (${currentCodes.filter(h => !!mapping[selectedAmc]?.[h.scheme_code_amc]).length})`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    display:'grid', gridTemplateColumns:'160px 1fr 32px',
+                    padding:'6px 0', background:'#f7f6f3',
+                    borderBottom:'1px solid rgba(99,91,255,0.08)',
+                    position:'sticky', top:'57px', zIndex:9
+                  }}>
+                    <div style={{padding:'0 16px', fontSize:'9px', letterSpacing:'1px', textTransform:'uppercase', color:'#9aa0c8'}}>AMC Code</div>
+                    <div style={{padding:'0 12px', fontSize:'9px', letterSpacing:'1px', textTransform:'uppercase', color:'#9aa0c8'}}>AMFI Scheme Name</div>
+                  </div>
+
+                  <div className="sm-scheme-list">
+                    {filteredCodes.length === 0 ? (
+                      <div className="sm-empty" style={{height:'200px'}}>
+                        <div className="sm-empty-icon">✓</div>
+                        <div className="sm-empty-text">
+                          {filter === 'unmapped' ? 'All codes mapped for this AMC!' : 'No codes found'}
+                        </div>
+                      </div>
+                    ) : filteredCodes.map(h => (
+                      <SchemeRow
+                        key={`${h.amc_name}|||${h.scheme_code_amc}`}
+                        code={h.scheme_code_amc}
+                        rowCount={h.rows}
+                        currentName={mapping[selectedAmc]?.[h.scheme_code_amc] || ''}
+                        amfiSchemes={amfiSchemes}
+                        onChange={handleChange}
+                        mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
+                        confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Parsing Rules tab ── */}
+      {activeTab === 'rules' && (
+        <ParsingRulesTab
+          rules={parsingRules}
+          loading={rulesLoading}
+          savingId={rulesSavingId}
+          onMethodChange={handleMethodChange}
+        />
+      )}
 
       {/* Toast */}
       {toast && (

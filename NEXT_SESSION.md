@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 20 Jun 2026 (merge_holdings.py v1.2 LIVE — holdings_latest.csv pushed; Capitalmind re-mapped under corrected key; Part 4.7 admin UI is next)
+Last updated: 20 Jun 2026 (Part 4.7b DONE — Parsing Rules tab + outlier review UI + shared csvParser.js; next: cell_c_reconciler.py BRD §10.1)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -100,32 +100,28 @@ All SQL already run manually before EB-Fix-3 session:
 - Invesco: canonical="Invesco India Mutual Fund", amc_id=05460347 (amcs table has "Invesco Mutual Fund" — DEFAULTED, flagged)
 - Next pipeline table: scheme_code_map (BRD/FRD §8.4) → then cell_c_reconciler.py
 
+## Part 4.7b status: DONE ✅ (20 Jun 2026)
+
+- **SchemeMapping.jsx:** "Parsing Rules" tab added — inline method toggle for all 50 `amc_scheme_id_method` rows, last-updated column, lazy load on tab visit
+- **CoverageDashboard.jsx:** "Sheets Needing Review" section — pending outliers table, 3 action buttons (Ignore / Index Sheet / Map to Scheme), optimistic removal
+- **`src/utils/csvParser.js`:** new shared RFC 4180 parser — both SchemeMapping and CoverageDashboard import from here; 0 mismatches on 119,308-row holdings_latest.csv
+- **DB migration:** `parser_outliers` + `status/resolved_at/resolved_by`; `amc_scheme_id_method` + `updated_at` — already run
+- **Limitation:** "Mark as Index Sheet" updates status only — does NOT auto-update `cell_4d_v2.py`'s `sheets_skip`. Manual code edit required when/if that is needed.
+- **API:** 3 new actions in `api/amfi.js`: `amc-scheme-id-methods` (GET+POST), `parser-outliers` (GET), `parser-outliers-resolve` (POST)
+- **Build:** 969 modules, 0 errors
+
 ## Current priority (do this FIRST next session):
 
-### P0 — Part 4.7: Admin UI for amc_scheme_id_method
+### P0 — Cell C: Scheme Reconciler (BRD/FRD §10.1)
 
-- `amc_scheme_id_method` table already seeded (50 rows: 24 scheme_name_from_cell, 26 sheet_name_is_code)
-- Build admin UI to view/edit classifications per AMC in SchemeMapping admin — outlier/ignore-sheet tagging
-- Session scope only: UI reads and writes this table, no pipeline changes in this session
-
-### P0 — Scheme Mapping pass (after --push)
-
-`holdings_latest.csv` will have updated scheme_code_amc values. The mapping pass should now use the correct join keys.
-
-- For `sheet_name_is_code` AMCs (26): keys unchanged — continue existing mapping pass
-- For `scheme_name_from_cell` AMCs (24): keys are now scheme names — may be near-trivial or auto-matchable via cell_c_reconciler
-- Priority: Kotak, SBI, Axis, Bandhan, Aditya Birla Sun Life, DSP, Franklin Templeton, Mirae, Motilal Oswal
-- Trivial (scheme_code_amc = full scheme name): Shriram, Trust, JM — confirm and save
-- Re-map Capitalmind first (see above)
-
-### P0 — Cell C: Scheme Reconciler (after --push AND Part 4.7 admin UI)
-
-- `cell_c_reconciler.py` (BRD/FRD §10.1): fuzzy-match remaining unmapped scheme_code_amc values per AMC against schemes table
-- For `scheme_name_from_cell` AMCs: scheme_code_amc IS the scheme name → exact or near-exact match expected
-- For `sheet_name_is_code` AMCs: scheme_code_amc is an AMC-internal code → fuzzy match required
-- Use `rapidfuzz`. Scope matching per AMC (JOIN schemes + amcs).
-- Writes auto_exact/auto_fuzzy rows to scheme_code_map. Check former_name (BRD/FRD §8.6).
-- Manual rows (mapped_by='manual') must never be overwritten by reconciler.
+- `cell_c_reconciler.py`: fuzzy-match remaining unmapped `scheme_code_amc` values per AMC against `schemes` table
+- For `scheme_name_from_cell` AMCs (24): `scheme_code_amc` IS the scheme name → exact or near-exact match expected (Capitalmind, HDFC, UTI, ICICI Prudential, etc.)
+- For `sheet_name_is_code` AMCs (26): `scheme_code_amc` is an AMC-internal code → fuzzy match required
+- Use `rapidfuzz`. Match scoped per AMC (JOIN `schemes` + `amcs`). Check `former_name` (BRD/FRD §8.6). Trim trailing punctuation before exact match.
+- Writes `auto_exact`/`auto_fuzzy` rows to `scheme_code_map`. Manual rows (`mapped_by='manual'`) must NEVER be overwritten.
+- Confidence threshold for `auto_fuzzy` still to be decided (5.2 in BRD) — start session by agreeing on threshold before implementing.
+- Priority AMCs: Kotak, SBI, Axis, Bandhan, Aditya Birla Sun Life, DSP, Franklin Templeton, Mirae, Motilal Oswal
+- Trivial (scheme_code_amc = full scheme name, just confirm and save): Shriram, Trust, JM
 
 ---
 
@@ -160,4 +156,10 @@ All SQL already run manually before EB-Fix-3 session:
 - EB-Fix-3 CC reconcile to Log tab, CC settlement persistence, multi-currency FX (03 Jun 2026) ✅
 - EB-Fix-6 Income label + transfer_in FROM ACCOUNT row (03 Jun 2026) ✅
 - compute_returns.py v1.0 + daily_returns_sync.yml cron (03 Jun 2026) ✅
-- Next: Run compute_returns.py --dry-run, then full run; then Cell C — Scheme Reconciler
+- merge_holdings.py v1.1 embedded newline fix (18 Jun 2026) ✅
+- amc_aliases table seeded (19 Jun 2026) ✅
+- SchemeMapping Supabase migration (19 Jun 2026) ✅
+- merge_holdings.py v1.2 per-AMC scheme method (20 Jun 2026) ✅
+- cell_4d_v2.py outlier hook + parser_outliers table (20 Jun 2026) ✅ Part 4.7a
+- Part 4.7b Parsing Rules tab + outlier review UI + shared csvParser.js (20 Jun 2026) ✅
+- Next: cell_c_reconciler.py (BRD/FRD §10.1)

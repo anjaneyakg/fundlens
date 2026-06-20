@@ -8,15 +8,17 @@
 // No CORS issues — AMFI is fetched server-side via the API route.
 
 import { useState, useEffect, useMemo } from "react";
+import { parseCsvLine } from "../utils/csvParser.js";
 
 const HOLDINGS_URL = "/api/holdings-csv";
 
+// RFC 4180-safe CSV parser using shared utility.
 function parseCsv(text) {
   const lines = text.trim().split("\n");
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+  const headers = parseCsvLine(lines[0]).map(h => h.trim());
   return lines.slice(1).map(line => {
-    const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+    const vals = parseCsvLine(line).map(v => v.trim());
     return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
   });
 }
@@ -61,6 +63,12 @@ export default function CoverageDashboard() {
   const [search,   setSearch]   = useState("");
   const [expanded, setExpanded] = useState(null);
 
+  // ── Outlier state ──────────────────────────────────────────────────────────
+  const [outliers,        setOutliers]        = useState([]);
+  const [outliersLoading, setOutliersLoading] = useState(false);
+  const [outliersError,   setOutliersError]   = useState("");
+  const [resolvingId,     setResolvingId]     = useState(null);
+
   useEffect(() => {
     setLoading(true);
     setError("");
@@ -73,6 +81,32 @@ export default function CoverageDashboard() {
       .then(([amfi, rows]) => { setAmfiData(amfi); setHoldings(rows); setLoading(false); })
       .catch(err => { setError("Failed to load: " + err.message); setLoading(false); });
   }, []);
+
+  // Load all pending outliers once on mount (not month-filtered — run_date ≠ portfolio month)
+  useEffect(() => {
+    setOutliersLoading(true);
+    setOutliersError("");
+    fetch("/api/amfi?action=parser-outliers")
+      .then(r => r.json())
+      .then(d => { setOutliers(d.outliers || []); setOutliersLoading(false); })
+      .catch(err => { setOutliersError(err.message); setOutliersLoading(false); });
+  }, []);
+
+  async function resolveOutlier(id, status) {
+    setResolvingId(id);
+    try {
+      const r = await fetch("/api/amfi?action=parser-outliers-resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      if (!r.ok) throw new Error("Resolve failed");
+      setOutliers(prev => prev.filter(o => o.id !== id));
+    } catch (err) {
+      console.error("Resolve outlier error:", err);
+    }
+    setResolvingId(null);
+  }
 
   const coverage = useMemo(() => {
     if (!amfiData) return [];
@@ -245,6 +279,99 @@ export default function CoverageDashboard() {
               </div>
             </div>
           )}
+
+          {/* ── Sheets Needing Review ── */}
+          <div style={s.outlierCard}>
+            <div style={s.outlierHeader}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={s.outlierTitle}>Sheets Needing Review</div>
+                {outliers.length > 0 && (
+                  <span style={s.outlierBadge}>{outliers.length} pending</span>
+                )}
+              </div>
+              <div style={s.outlierSub}>
+                Parser outliers logged by <code style={s.code}>cell_4d_v2.py</code> — sheets that were not skip-listed and did not parse successfully.
+                Resolving here updates status only; adding a sheet to the skip list in code is a separate manual step.
+              </div>
+            </div>
+
+            {outliersLoading && (
+              <div style={{ padding: "1.5rem 0", color: "#9ca3af", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={s.spinner} />
+                Loading outliers…
+              </div>
+            )}
+
+            {outliersError && (
+              <div style={{ ...s.errorBar, marginTop: 0 }}>Failed to load outliers: {outliersError}</div>
+            )}
+
+            {!outliersLoading && !outliersError && outliers.length === 0 && (
+              <div style={s.outlierEmpty}>
+                <span style={{ fontSize: 22, opacity: 0.4 }}>✓</span>
+                <span>No pending outliers — all sheets reviewed</span>
+              </div>
+            )}
+
+            {!outliersLoading && outliers.length > 0 && (
+              <div style={{ overflowX: "auto" }}>
+                <div style={s.outlierTableHead}>
+                  <div style={{ flex: 2 }}>AMC</div>
+                  <div style={{ flex: 1 }}>Sheet</div>
+                  <div style={{ flex: 2 }}>Reason</div>
+                  <div style={{ flex: 3, textAlign: "right" }}>Actions</div>
+                </div>
+                {outliers.map(o => {
+                  const busy = resolvingId === o.id;
+                  return (
+                    <div key={o.id} style={s.outlierRow}>
+                      <div style={{ flex: 2, fontWeight: 500, color: "#374151", fontSize: 13 }}>{o.amc_name}</div>
+                      <div style={{ flex: 1, fontFamily: "monospace", fontSize: 12, color: "#6b7280" }}>{o.sheet_name}</div>
+                      <div style={{ flex: 2 }}>
+                        <span style={{
+                          ...s.reasonPill,
+                          ...(o.reason === "no_column_headers"
+                            ? { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" }
+                            : { background: "#fff5f5", color: "#dc2626", border: "1px solid #fecaca" }),
+                        }}>
+                          {o.reason}
+                        </span>
+                      </div>
+                      <div style={{ flex: 3, display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                        <button
+                          style={{ ...s.actionBtn, ...s.actionIgnore }}
+                          disabled={busy}
+                          onClick={() => resolveOutlier(o.id, "ignored")}
+                          title="Mark as reviewed — not expected to parse"
+                        >
+                          {busy ? "…" : "Ignore"}
+                        </button>
+                        <button
+                          style={{ ...s.actionBtn, ...s.actionIndex }}
+                          disabled={busy}
+                          onClick={() => resolveOutlier(o.id, "index_sheet")}
+                          title="Mark as index/summary sheet. Note: does NOT auto-add to cell_4d_v2.py skip list — that edit remains manual."
+                        >
+                          {busy ? "…" : "Index Sheet"}
+                        </button>
+                        <button
+                          style={{ ...s.actionBtn, ...s.actionMap }}
+                          disabled={busy}
+                          onClick={async () => {
+                            await resolveOutlier(o.id, "mapped");
+                            window.location.href = "/admin/scheme-mapping";
+                          }}
+                          title="Mark as needing mapping and go to Scheme Mapping"
+                        >
+                          {busy ? "…" : "Map to Scheme →"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -295,4 +422,20 @@ const s = {
   remainingGrid:  { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px,1fr))", gap: 6 },
   remainingItem:  { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 500, color: "#374151", background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 8, padding: "7px 10px" },
   remainingNum:   { fontSize: 10, fontWeight: 700, color: "#9ca3af", minWidth: 18 },
+
+  // ── Sheets Needing Review ──
+  outlierCard:      { background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 16, padding: "1.25rem 1.5rem", boxShadow: "0 1px 8px rgba(0,0,0,0.04)", marginTop: "1.5rem" },
+  outlierHeader:    { marginBottom: "1.25rem" },
+  outlierTitle:     { fontSize: 14, fontWeight: 700, color: "#374151" },
+  outlierBadge:     { background: "#fff5f5", border: "1px solid #fecaca", color: "#dc2626", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 12 },
+  outlierSub:       { fontSize: 12, color: "#6b7280", marginTop: 5, lineHeight: 1.6 },
+  outlierEmpty:     { display: "flex", alignItems: "center", gap: 8, padding: "1.5rem 0", color: "#9ca3af", fontSize: 13 },
+  outlierTableHead: { display: "flex", padding: "8px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 4, fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" },
+  outlierRow:       { display: "flex", padding: "11px 12px", borderBottom: "1px solid #f3f4f6", alignItems: "center", gap: 8 },
+  reasonPill:       { display: "inline-block", fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, fontFamily: "monospace" },
+  actionBtn:        { border: "none", borderRadius: 8, padding: "5px 11px", fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", transition: "all 0.12s", whiteSpace: "nowrap" },
+  actionIgnore:     { background: "#f3f4f6", color: "#6b7280" },
+  actionIndex:      { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" },
+  actionMap:        { background: "#f5f3ff", color: "#4f46e5", border: "1px solid #ddd6fe" },
+  code:             { fontFamily: "monospace", fontSize: 11, background: "#f3f4f6", borderRadius: 3, padding: "1px 4px" },
 };

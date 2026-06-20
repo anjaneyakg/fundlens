@@ -24,12 +24,15 @@ export default async function handler(req, res) {
 
   const { action } = req.query;
 
-  if (action === 'marketcap')       return handleMarketcap(req, res);
-  if (action === 'schemes')         return handleSchemes(req, res);
-  if (action === 'schemes-list')    return handleSchemesList(req, res);
-  if (action === 'scheme-code-map') return handleSchemeCodeMap(req, res);
+  if (action === 'marketcap')              return handleMarketcap(req, res);
+  if (action === 'schemes')                return handleSchemes(req, res);
+  if (action === 'schemes-list')           return handleSchemesList(req, res);
+  if (action === 'scheme-code-map')        return handleSchemeCodeMap(req, res);
+  if (action === 'amc-scheme-id-methods')  return handleAmcSchemeIdMethods(req, res);
+  if (action === 'parser-outliers')        return handleParserOutliersGet(req, res);
+  if (action === 'parser-outliers-resolve') return handleParserOutliersResolve(req, res);
 
-  return res.status(400).json({ error: 'Unknown action. Valid: marketcap, schemes, schemes-list, scheme-code-map' });
+  return res.status(400).json({ error: 'Unknown action. Valid: marketcap, schemes, schemes-list, scheme-code-map, amc-scheme-id-methods, parser-outliers, parser-outliers-resolve' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -742,4 +745,114 @@ async function handleSchemeCodeMap(req, res) {
   }
 
   return res.status(405).json({ ok: false, error: 'Method not allowed' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action=amc-scheme-id-methods — per-AMC parsing method classification (r/w)
+// GET  → { ok, rules: [{id, amc_id, amc_name, method, updated_at}] }
+// POST → { amc_id, method } → updates one AMC's method, sets updated_at=now()
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleAmcSchemeIdMethods(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (req.method === 'GET') {
+    try {
+      const rows = await sbFetch(
+        'amc_scheme_id_method?select=id,amc_id,method,updated_at,amcs!inner(name)'
+      );
+      const result = (rows || [])
+        .map(r => ({
+          id:         r.id,
+          amc_id:     r.amc_id,
+          amc_name:   r.amcs?.name || r.amc_id,
+          method:     r.method,
+          updated_at: r.updated_at || null,
+        }))
+        .sort((a, b) => a.amc_name.localeCompare(b.amc_name));
+      return res.status(200).json({ ok: true, rules: result });
+    } catch (err) {
+      console.error('[amfi?action=amc-scheme-id-methods] GET error:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { amc_id, method } = req.body;
+      if (!amc_id || !method) {
+        return res.status(400).json({ ok: false, error: 'amc_id and method required' });
+      }
+      const valid = ['sheet_name_is_code', 'scheme_name_from_cell'];
+      if (!valid.includes(method)) {
+        return res.status(400).json({ ok: false, error: `method must be one of: ${valid.join(', ')}` });
+      }
+      await sbFetch(`amc_scheme_id_method?amc_id=eq.${amc_id}`, 'PATCH', {
+        method,
+        updated_at: new Date().toISOString(),
+      });
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error('[amfi?action=amc-scheme-id-methods] POST error:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+
+  return res.status(405).json({ ok: false, error: 'Method not allowed' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action=parser-outliers — fetch pending parser_outliers rows
+// GET ?month=YYYY-MM → { ok, outliers: [...] }  (month filter optional)
+// If month omitted, returns ALL pending rows.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleParserOutliersGet(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  try {
+    const { month } = req.query;
+    let filter = 'parser_outliers?status=eq.pending&order=amc_name.asc,sheet_name.asc';
+
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [year, mo] = month.split('-').map(Number);
+      const start = `${month}-01`;
+      const end   = mo === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(mo + 1).padStart(2, '0')}-01`;
+      filter = `parser_outliers?status=eq.pending&run_date=gte.${start}&run_date=lt.${end}&order=amc_name.asc,sheet_name.asc`;
+    }
+
+    const rows = await sbFetch(filter);
+    return res.status(200).json({ ok: true, outliers: rows || [] });
+  } catch (err) {
+    console.error('[amfi?action=parser-outliers] GET error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action=parser-outliers-resolve — mark one parser_outliers row as resolved
+// POST { id, status, resolved_by? } → PATCH row, set resolved_at=now()
+//   status must be: 'ignored' | 'index_sheet' | 'mapped'
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleParserOutliersResolve(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  try {
+    const { id, status, resolved_by } = req.body;
+    const validStatuses = ['ignored', 'index_sheet', 'mapped'];
+    if (!id || !status || !validStatuses.includes(status)) {
+      return res.status(400).json({ ok: false, error: `id and status (${validStatuses.join('|')}) required` });
+    }
+    await sbFetch(`parser_outliers?id=eq.${id}`, 'PATCH', {
+      status,
+      resolved_at: new Date().toISOString(),
+      resolved_by: resolved_by || 'admin',
+    });
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[amfi?action=parser-outliers-resolve] POST error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 }

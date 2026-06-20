@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v64.0
+**Last updated:** 20 Jun 2026 · v65.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,59 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## Part 4.7b — Parsing Rules Tab + Outlier Review UI ✅ (20 Jun 2026)
+
+Two UI additions to existing admin pages. No new pages created.
+
+### 1. SchemeMapping.jsx — "Parsing Rules" tab
+
+- Second top-level tab added alongside existing scheme-code-mapping view
+- **Data source:** `amc_scheme_id_method` (50 rows: 24 `scheme_name_from_cell`, 26 `sheet_name_is_code`)
+- **Inline toggle:** per-row `<select>` to switch between `sheet_name_is_code` and `scheme_name_from_cell`; PATCH fires immediately, optimistic local update
+- **Last updated** column: `updated_at` timestamp shown per row (nullable — null shows "—")
+- **Caption:** "Changes take effect on the next `merge_holdings.py` run — not retroactively applied to existing data."
+- **Lazy loading:** `loadRules()` only fires once (guarded by `parsingRules.length > 0`), called on first tab visit
+- **API actions added to `api/amfi.js`:**
+  - `GET ?action=amc-scheme-id-methods` → 50 rows joined to `amcs!inner(name)`, sorted by AMC name
+  - `POST ?action=amc-scheme-id-methods` → PATCH `amc_scheme_id_method` by `amc_id`, sets `updated_at=now()`
+
+### 2. CoverageDashboard.jsx — "Sheets Needing Review" section
+
+- New section below existing AMC coverage table
+- **Data source:** `parser_outliers WHERE status='pending'` — loads on mount, no month filter (run_date is pipeline date, not portfolio month — all pending outliers shown regardless of selected month)
+- **Table:** AMC | Sheet | Reason | Actions
+- **Three action buttons:**
+  - "Ignore" → `status='ignored'` (grey)
+  - "Index Sheet" → `status='index_sheet'` (amber); tooltip: does NOT auto-update `cell_4d_v2.py`'s `sheets_skip` — manual code edit only
+  - "Map to Scheme →" → `status='mapped'` then `window.location.href='/admin/scheme-mapping'` (purple)
+- Optimistic removal: row disappears immediately on resolve, no re-fetch needed
+- **Reason pills:** amber for `no_column_headers`, red for `no_scheme_name`
+- **Empty state:** checkmark + "No pending outliers — all sheets reviewed"
+- **API actions added to `api/amfi.js`:**
+  - `GET ?action=parser-outliers` → pending outliers; accepts optional `month=YYYY-MM` (future use only — no UI uses it yet)
+  - `POST ?action=parser-outliers-resolve` → `{id, status}` → PATCH `parser_outliers` by uuid, sets `resolved_at=now()`, `resolved_by='admin'`
+
+### 3. Shared RFC 4180 CSV parser utility
+
+- **New file: `src/utils/csvParser.js`** — exports `parseCsvLine(line)` state-machine parser
+- Handles quoted fields with embedded commas (e.g. `"CMFCF_March 31, 2026"`); does NOT handle embedded newlines (safe because `merge_holdings.py` v1.1 strips all embedded newlines before CSV write)
+- Both `SchemeMapping.jsx` and `CoverageDashboard.jsx` import from here — eliminates the last duplicate CSV parser
+- **Verification (20 Jun 2026):** `holdings_latest.csv` (119,308 rows, 48 AMCs): 0 mismatches between old naive parser and new RFC 4180 parser on `amc_name` column. AMC count identical at 48. CoverageDashboard counts are unaffected by the swap.
+
+### DB migration (one-time, already run — 20 Jun 2026)
+
+`FundInsight/pipeline/migrate_4_7b.py`:
+- `parser_outliers`: + `status text NOT NULL DEFAULT 'pending'`, `resolved_at timestamptz`, `resolved_by text`
+- `amc_scheme_id_method`: + `updated_at timestamptz`
+
+### Build
+969 modules, 0 errors (was 968 before adding csvParser.js).
+
+### Known limitation
+"Mark as Index/Summary sheet" (`status='index_sheet'`) updates the Supabase row only. It does NOT automatically update `cell_4d_v2.py`'s `sheets_skip` list — that remains a manual code edit. Future enhancement, not blocking.
 
 ---
 
