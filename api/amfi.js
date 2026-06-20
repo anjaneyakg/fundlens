@@ -28,11 +28,13 @@ export default async function handler(req, res) {
   if (action === 'schemes')                return handleSchemes(req, res);
   if (action === 'schemes-list')           return handleSchemesList(req, res);
   if (action === 'scheme-code-map')        return handleSchemeCodeMap(req, res);
-  if (action === 'amc-scheme-id-methods')  return handleAmcSchemeIdMethods(req, res);
-  if (action === 'parser-outliers')        return handleParserOutliersGet(req, res);
+  if (action === 'amc-scheme-id-methods')   return handleAmcSchemeIdMethods(req, res);
+  if (action === 'parser-outliers')         return handleParserOutliersGet(req, res);
   if (action === 'parser-outliers-resolve') return handleParserOutliersResolve(req, res);
+  if (action === 'scheme-code-map-accept')  return handleSchemeCodeMapAccept(req, res);
+  if (action === 'scheme-code-map-reject')  return handleSchemeCodeMapReject(req, res);
 
-  return res.status(400).json({ error: 'Unknown action. Valid: marketcap, schemes, schemes-list, scheme-code-map, amc-scheme-id-methods, parser-outliers, parser-outliers-resolve' });
+  return res.status(400).json({ error: 'Unknown action. Valid: marketcap, schemes, schemes-list, scheme-code-map, amc-scheme-id-methods, parser-outliers, parser-outliers-resolve, scheme-code-map-accept, scheme-code-map-reject' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -623,7 +625,7 @@ async function handleSchemeCodeMap(req, res) {
     try {
       // Fetch all mapped rows; PostgREST resolves amc_id FK -> amcs.name
       const rows = await sbFetch(
-        'scheme_code_map?select=amc_id,scheme_code_amc,amfi_code,mapped_by,confidence,amcs!inner(name)'
+        'scheme_code_map?select=id,amc_id,scheme_code_amc,amfi_code,mapped_by,confidence,amcs!inner(name)'
       );
 
       if (!rows || rows.length === 0) {
@@ -649,6 +651,7 @@ async function handleSchemeCodeMap(req, res) {
         if (!mapping[amcName]) { mapping[amcName] = {}; meta[amcName] = {}; }
         mapping[amcName][row.scheme_code_amc] = extractBaseName(fullName);
         meta[amcName][row.scheme_code_amc]    = {
+          id:         row.id,
           mapped_by:  row.mapped_by,
           confidence: row.confidence ?? null,
         };
@@ -853,6 +856,42 @@ async function handleParserOutliersResolve(req, res) {
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('[amfi?action=parser-outliers-resolve] POST error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action=scheme-code-map-accept — promote auto_fuzzy_pending → auto_fuzzy
+// POST { id } → PATCH scheme_code_map row, set mapped_by='auto_fuzzy'
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleSchemeCodeMapAccept(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+    await sbFetch(`scheme_code_map?id=eq.${id}`, 'PATCH', { mapped_by: 'auto_fuzzy' });
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[amfi?action=scheme-code-map-accept] error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// action=scheme-code-map-reject — delete an auto_fuzzy_pending proposal row
+// POST { id } → DELETE scheme_code_map row (reverts code to unmapped)
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleSchemeCodeMapReject(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+    await sbFetch(`scheme_code_map?id=eq.${id}`, 'DELETE');
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[amfi?action=scheme-code-map-reject] error:', err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }

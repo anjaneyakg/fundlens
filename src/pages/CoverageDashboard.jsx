@@ -69,6 +69,10 @@ export default function CoverageDashboard() {
   const [outliersError,   setOutliersError]   = useState("");
   const [resolvingId,     setResolvingId]     = useState(null);
 
+  // ── Reconciler state ───────────────────────────────────────────────────────
+  const [reconcilerRunning, setReconcilerRunning] = useState(false);
+  const [reconcilerResult,  setReconcilerResult]  = useState(null);
+
   useEffect(() => {
     setLoading(true);
     setError("");
@@ -106,6 +110,20 @@ export default function CoverageDashboard() {
       console.error("Resolve outlier error:", err);
     }
     setResolvingId(null);
+  }
+
+  async function runReconciler() {
+    setReconcilerRunning(true);
+    setReconcilerResult(null);
+    try {
+      const r = await fetch("/api/cell-c?action=run-reconciler", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Reconciler failed");
+      setReconcilerResult({ ok: true, stats: d.stats, elapsed_ms: d.elapsed_ms });
+    } catch (err) {
+      setReconcilerResult({ ok: false, error: err.message });
+    }
+    setReconcilerRunning(false);
   }
 
   const coverage = useMemo(() => {
@@ -283,11 +301,42 @@ export default function CoverageDashboard() {
           {/* ── Sheets Needing Review ── */}
           <div style={s.outlierCard}>
             <div style={s.outlierHeader}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={s.outlierTitle}>Sheets Needing Review</div>
-                {outliers.length > 0 && (
-                  <span style={s.outlierBadge}>{outliers.length} pending</span>
-                )}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={s.outlierTitle}>Sheets Needing Review</div>
+                  {outliers.length > 0 && (
+                    <span style={s.outlierBadge}>{outliers.length} pending</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                  <button
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 8,
+                      border: "1.5px solid rgba(99,91,255,0.35)", background: reconcilerRunning ? "rgba(99,91,255,0.06)" : "rgba(99,91,255,0.04)",
+                      color: reconcilerRunning ? "#9aa0c8" : "#635bff", cursor: reconcilerRunning ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", gap: 7, transition: "all 0.15s",
+                    }}
+                    onClick={runReconciler}
+                    disabled={reconcilerRunning}
+                  >
+                    {reconcilerRunning && <div style={{ ...s.spinner, width: 12, height: 12, borderWidth: 2 }} />}
+                    {reconcilerRunning ? "Running — this may take up to 30 seconds…" : "Run Scheme Code Reconciler"}
+                  </button>
+                  {reconcilerResult && !reconcilerResult.ok && (
+                    <div style={{ fontSize: 11, color: "#dc2626" }}>Error: {reconcilerResult.error}</div>
+                  )}
+                  {reconcilerResult?.ok && (
+                    <div style={{ fontSize: 11, color: "#374151", textAlign: "right", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#16a34a" }}>{reconcilerResult.stats.auto_exact} exact</strong>
+                      {" · "}
+                      <strong style={{ color: "#b45309" }}>{reconcilerResult.stats.auto_fuzzy_pending} suggested</strong>
+                      {" · "}
+                      {reconcilerResult.stats.no_match} unmatched
+                      {" · "}
+                      <a href="/admin/scheme-mapping" style={{ color: "#635bff", textDecoration: "none", fontWeight: 600 }}>Review →</a>
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={s.outlierSub}>
                 Parser outliers logged by <code style={s.code}>cell_4d_v2.py</code> — sheets that were not skip-listed and did not parse successfully.

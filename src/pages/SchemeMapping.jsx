@@ -246,6 +246,28 @@ const styles = `
     background: rgba(217,119,6,0.08); color: #d97706;
     border: 1px solid rgba(217,119,6,0.2);
   }
+  .sm-auto-badge.pending {
+    background: rgba(180,83,9,0.08); color: #b45309;
+    border: 1px solid rgba(180,83,9,0.25);
+  }
+  .sm-pending-actions {
+    display: flex; gap: 6px; margin-top: 5px;
+  }
+  .sm-accept-btn, .sm-reject-btn {
+    font-size: 10px; padding: 2px 10px; border-radius: 6px;
+    cursor: pointer; border: 1px solid; transition: all 0.15s;
+    font-weight: 500; letter-spacing: 0.2px;
+  }
+  .sm-accept-btn {
+    background: rgba(22,163,74,0.07); color: #16a34a;
+    border-color: rgba(22,163,74,0.25);
+  }
+  .sm-accept-btn:hover { background: rgba(22,163,74,0.15); }
+  .sm-reject-btn {
+    background: rgba(220,38,38,0.06); color: #dc2626;
+    border-color: rgba(220,38,38,0.2);
+  }
+  .sm-reject-btn:hover { background: rgba(220,38,38,0.12); }
 
   .sm-clear-cell {
     display: flex; align-items: center; justify-content: center;
@@ -372,7 +394,7 @@ function highlight(text, query) {
 }
 
 // ── Single scheme row ────────────────────────────────────────────────────────
-function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedBy, confidence }) {
+function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedBy, confidence, rowId, onAccept, onReject }) {
   const [query, setQuery]     = useState(currentName || '')
   const [open, setOpen]       = useState(false)
   const [hiIdx, setHiIdx]     = useState(-1)
@@ -437,10 +459,21 @@ function SchemeRow({ code, rowCount, currentName, amfiSchemes, onChange, mappedB
               }
             </div>
           )}
-          {isMapped && mappedBy && mappedBy !== 'manual' && (
+          {isMapped && mappedBy && mappedBy !== 'manual' && mappedBy !== 'auto_fuzzy_pending' && (
             <span className={`sm-auto-badge ${mappedBy === 'auto_exact' ? 'exact' : 'fuzzy'}`}>
               {mappedBy === 'auto_exact' ? 'auto exact' : `auto fuzzy${confidence != null ? ` ${Math.round(confidence)}%` : ''}`}
             </span>
+          )}
+          {isMapped && mappedBy === 'auto_fuzzy_pending' && (
+            <>
+              <span className="sm-auto-badge pending">
+                Suggested{confidence != null ? ` (${Math.round(confidence)}%)` : ''}
+              </span>
+              <div className="sm-pending-actions">
+                <button className="sm-accept-btn" onClick={() => onAccept?.(rowId, code)}>Accept</button>
+                <button className="sm-reject-btn" onClick={() => onReject?.(rowId, code)}>Reject</button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -674,6 +707,59 @@ export default function SchemeMapping() {
     setDirty(true)
   }, [selectedAmc])
 
+  const handleAccept = useCallback(async (rowId, code) => {
+    // Optimistic: update meta to 'auto_fuzzy' so badge changes immediately
+    setMeta(prev => {
+      const next = { ...prev }
+      if (selectedAmc && next[selectedAmc]?.[code]) {
+        next[selectedAmc] = { ...next[selectedAmc], [code]: { ...next[selectedAmc][code], mapped_by: 'auto_fuzzy' } }
+      }
+      return next
+    })
+    try {
+      const res = await fetch('/api/amfi?action=scheme-code-map-accept', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: rowId }),
+      })
+      if (!res.ok) throw new Error('Accept failed')
+      showToast('✓ Proposal accepted')
+    } catch (err) {
+      showToast('Accept failed: ' + err.message, 'error')
+    }
+  }, [selectedAmc])
+
+  const handleReject = useCallback(async (rowId, code) => {
+    // Optimistic: clear mapping + meta so row reverts to unmapped
+    setMapping(prev => {
+      const next = { ...prev }
+      if (next[selectedAmc]) {
+        next[selectedAmc] = { ...next[selectedAmc] }
+        delete next[selectedAmc][code]
+      }
+      return next
+    })
+    setMeta(prev => {
+      const next = { ...prev }
+      if (next[selectedAmc]) {
+        next[selectedAmc] = { ...next[selectedAmc] }
+        delete next[selectedAmc][code]
+      }
+      return next
+    })
+    try {
+      const res = await fetch('/api/amfi?action=scheme-code-map-reject', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: rowId }),
+      })
+      if (!res.ok) throw new Error('Reject failed')
+      showToast('Proposal rejected — code reverted to unmapped')
+    } catch (err) {
+      showToast('Reject failed: ' + err.message, 'error')
+    }
+  }, [selectedAmc])
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -883,6 +969,9 @@ export default function SchemeMapping() {
                         onChange={handleChange}
                         mappedBy={meta[selectedAmc]?.[h.scheme_code_amc]?.mapped_by}
                         confidence={meta[selectedAmc]?.[h.scheme_code_amc]?.confidence}
+                        rowId={meta[selectedAmc]?.[h.scheme_code_amc]?.id}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
                       />
                     ))}
                   </div>

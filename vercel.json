@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/cell-c.js": { "maxDuration": 60 }
+  },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/[^.]+", "dest": "/", "status": 200 }
