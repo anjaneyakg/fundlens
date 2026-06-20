@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v68.0
+**Last updated:** 21 Jun 2026 · v69.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,58 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## Part 4.8 — AMC_CONFIG Fixes (Kotak, JM, Old Bridge) + Silent-Garbage Heuristic ✅ (21 Jun 2026)
+
+Three confirmed silent-failure bugs in `cell_4d_v2.py` AMC_CONFIG fixed, plus one new outlier detection heuristic.
+
+### Fix 1 — Kotak `col_override`
+
+**Root cause:** `col_override["Name of the Instrument"]` was `1` (wrong — actual instrument names at col3; col1 is empty for all data rows). `blank_streak` logic hit 4 consecutive Nones after rows 4–7 and exited early → 119 real schemes each produced 0 rows (silent; no error logged). Only 2 sheets (QOF/LTF) escaped, producing 4 garbage rows total. Also `"Rounded % to Net Assets"` mapped to col6 (Yield column); actual % to Net Assets is at col9.
+
+**Fix:** `"Name of the Instrument": 1 → 3`, `"Rounded % to Net Assets": 6 → 9`, added `"YTM Or Yield": 6`.
+
+**Result (local test):** 5,155 rows, **119 schemes** (was 4 rows, 2 garbage schemes).
+
+### Fix 2 — JM Financial `scheme_r1c1_alt`
+
+**Root cause:** 9 of 16 files have scheme name at R2C2 (e.g. `'JM Arbitrage Fund'`); config read only R2C1 (None in those files) → `no_scheme_name` error for 9 files. Also: `is_junk_row()` on the raw alt-cell value rejected scheme names containing "equity related" in their description text (e.g. "JM Aggressive Hybrid Fund (An open ended hybrid scheme... equity and equity related instruments.)") — `"equity related"` is a data-row junk phrase in `_SKIP_PHRASES`.
+
+**Fix:** Added `"scheme_r1c1_alt": (2, 2)` to JM config. In `process_sheet`, alt-cell check added between primary cell read and generic same-column scan. Removed `not is_junk_row(alt_v)` from alt-cell guard (was incorrectly filtering scheme names containing data-row phrases; `clean_scheme_name()` strips the description suffix, and `is_junk_row(scheme_clean)` then gates the cleaned value correctly).
+
+**Result (local zip test, all fixes):** **16 schemes**, 770 rows (was 7 schemes, 694 rows missing 9 files). Verification github run (started before is_junk_row fix) captured 15; the 16th confirmed via local test.
+
+### Fix 3 — Old Bridge Flexi Cap
+
+**Root cause:** Old Bridge has two variants:
+- Variant 1 (Arbitrage, Focused): scheme at R3C1, data col1=name, col2=ISIN — matched current config
+- Variant 2 (Flexi Cap): scheme at R3C2, data col2=name, col3=ISIN — col1 holds ticker code like 'GLPH03'; current config read col1 for instrument names → wrong data AND blank_streak exit risk
+
+Additionally, `col_override` was hardcoded to col1/col2, wrong for variant 2.
+
+**Fix:** Added `"scheme_r1c1_alt": (3, 2)` to Old Bridge config. Removed `col_override` (set to `None`) — `map_columns()` auto-detects columns per-sheet via header scan, correctly finding "Name of the Instrument" at col1 or col2 depending on variant. COL_ALIASES confirm "market/fair value (rs. in lakhs)" and "% to net assets" etc. are all covered.
+
+**Result (local zip test):** **3 schemes**, 281 rows (was 2 schemes, Flexi Cap missing).
+
+### Fix 4 — Unifi
+
+**Not needed.** All 3 Unifi `.xlsx` files parse correctly with current code (DAA: 427 rows, Flexi Cap: 93 rows). The third file (`MP-Unifi-Liquid-Fund-31032026.xls`) is a legacy `.xls` format — openpyxl cannot read it; xlrd fallback needed separately.
+
+### Fix 5 — `scheme_r1c1_alt` logic added to `process_sheet`
+
+New block between the primary cell read and the generic same-column scan (applies to all AMCs that have `"scheme_r1c1_alt"` in their config). Implementation detail: `is_junk_row` intentionally NOT applied to the alt-cell raw value (see JM note above).
+
+### Fix 6 — Silent-garbage sanity-check heuristic
+
+**New detector:** After `all_rows.extend(rows)` in `process_file`, fires `log_parser_outlier(..., reason="suspicious_low_rows_all_isin_missing")` when a sheet parses without error but produces ≤2 rows all with `ISIN=None`. Catches Kotak-style col-mismatch failures that previously produced zero logged errors. Does NOT exclude the rows from output.
+
+### Files changed (FundInsight repo)
+
+| File | Lines changed |
+|---|---|
+| `pipeline/cell_4d_v2.py` | AMC_CONFIG: Kotak col_override (3 values), JM +scheme_r1c1_alt, Old Bridge +scheme_r1c1_alt +col_override=None; process_sheet: alt-cell block; process_file: sanity-check block |
 
 ---
 
@@ -39,9 +91,9 @@ Both rows reset to `status='pending', resolved_at=NULL, resolved_by=NULL`. Confi
 
 **Fix (Fix C):** Cap raised to 50 in both the filtered and unfiltered paths.
 
-### Known issue (NOT fixed this session)
+### Known issue — RESOLVED ✅ (21 Jun 2026, see Part 4.8 below)
 
-**Kotak 2 codes:** `holdings_latest.csv` shows only 4 rows for Kotak (codes 'QOF' and 'LTF'). Investigation confirmed this is source data — the March 2026 Kotak Excel apparently only contained 2 relevant sheets. Not a pipeline bug. Tracked as a separate workstream.
+**Kotak 2 codes** was NOT source data — it was a pipeline bug (`col_override["Name of the Instrument"]` pointed to col1, actual data at col3; `blank_streak` hit 4 after empty rows and exited, producing 0 real rows per sheet). Fixed in Part 4.8.
 
 ### Build
 969 modules, 0 errors.

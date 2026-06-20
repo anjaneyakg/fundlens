@@ -1,5 +1,5 @@
 # NEXT SESSION — FundLens
-Last updated: 20 Jun 2026 (cell_c_reconciler DONE — frontend-triggered fuzzy matching, auto_fuzzy_pending proposals reviewable at /admin/scheme-mapping; next: run reconciler + review proposals + cell_c_upsert)
+Last updated: 21 Jun 2026 (Part 4.8 DONE — AMC_CONFIG fixes Kotak/JM/Old Bridge; holdings_raw updated via github run; next: merge_holdings → push holdings_latest → run reconciler → review proposals → cell_c_upsert)
 
 ## Fetch these at session start:
 - https://raw.githubusercontent.com/anjaneyakg/fundlens/main/CURRENT_STATE.md
@@ -112,29 +112,39 @@ All SQL already run manually before EB-Fix-3 session:
 
 ## Current priority (do this FIRST next session):
 
-### P0 — Run reconciler, review proposals, then cell_c_upsert (BRD/FRD §10.1)
+### P0 — Pipeline cascade: merge → push → reconciler → review → cell_c_upsert
 
-**Step 1 — Run the reconciler** (from /admin Coverage Dashboard):
-- Click "Run Scheme Code Reconciler" button
-- Wait ~5–10 seconds (server fetches AMC schemes per AMC in parallel, matches, inserts)
-- Note the summary: auto_exact count, auto_fuzzy_pending count, no_match count, elapsed_ms
+Part 4.8 fixed the AMC_CONFIG for Kotak (119 schemes), JM (16 schemes), Old Bridge (3 schemes). The `holdings_raw_4d_2026-03.csv` was updated by the github run (see Part 4.8). Now the cascade:
 
-**Step 2 — Review proposals** (at /admin/scheme-mapping):
-- Filter "Mapped" to see all auto_exact + auto_fuzzy_pending rows
-- For each amber "Suggested (X%)" badge: read proposed AMFI name, Accept or Reject
-- Verify auto_exact rows look correct (score=100, no review needed — but sanity-check a few)
-- Track: how many auto_fuzzy_pending proposals exist? What % look correct?
+**Step 1 — Re-run merge_holdings.py** (in FundInsight/):
+```
+python pipeline/merge_holdings.py --month 2026-03
+```
+- Reads the new `holdings_raw_4d_2026-03.csv` (now includes correct Kotak/JM/Old Bridge data)
+- Applies per-AMC scheme_id_method (Kotak=sheet_name_is_code, JM=scheme_name_from_cell, Old Bridge=scheme_name_from_cell)
+- Outputs updated `holdings_latest.csv`
 
-**Step 3 — Diagnose no_match cases** (check CURRENT_STATE.md notes):
-- Known: "UTI - Arbitrage Fund" has " - " formatting → normalizer scores 89, below 92 threshold
-- May need: `normalizeForMatch()` to strip leading ` - ` before Levenshtein (1-line fix in cell-c.js)
-- Decide: is threshold 92 correct, or should it be lowered for certain code patterns?
+**Step 2 — Push holdings_latest.csv to GitHub** (after verifying the new row/AMC counts look right):
+```
+python pipeline/push_holdings_latest.py   # or however it's pushed
+```
+- Confirm Kotak went from 4 rows → ~5,155 rows in the merged output
+- Confirm JM went from 7 schemes → 16 schemes
+- Confirm Old Bridge went from 2 schemes → 3 schemes
 
-**Step 4 — Build cell_c_upsert.py** (ONLY after proposals reviewed):
-- Purpose: promote accepted scheme_code_map rows into the live pipeline lookup
-- Trigger button: "Apply Accepted Mappings" in CoverageDashboard or SchemeMapping
-- Spec: UPDATE/INSERT into relevant pipeline output tables using accepted scheme_code_map rows
-- Do NOT build this until proposals have been reviewed — the upsert is irreversible at pipeline level
+**Step 3 — Run the reconciler** (from /admin Coverage Dashboard):
+- The new holdings_latest.csv has many new scheme_code_amc values (Kotak, JM, Old Bridge)
+- Click "Run Scheme Code Reconciler" button — will process all new unmapped codes
+- Wait ~5–10 seconds
+- Note: auto_exact count, auto_fuzzy_pending count, no_match count
+
+**Step 4 — Review proposals** (at /admin/scheme-mapping):
+- For each amber "Suggested (X%)" badge: Accept or Reject
+- Known: "UTI - Arbitrage Fund" with " - " formatting scores 89 (below 92 threshold) — may need `normalizeForMatch()` fix in cell-c.js to strip leading ` - `
+
+**Step 5 — Build cell_c_upsert.py** (ONLY after proposals reviewed):
+- Promote accepted scheme_code_map rows into the live pipeline lookup
+- Do NOT build until proposals are reviewed
 
 ---
 
@@ -175,4 +185,5 @@ All SQL already run manually before EB-Fix-3 session:
 - merge_holdings.py v1.2 per-AMC scheme method (20 Jun 2026) ✅
 - cell_4d_v2.py outlier hook + parser_outliers table (20 Jun 2026) ✅ Part 4.7a
 - Part 4.7b Parsing Rules tab + outlier review UI + shared csvParser.js (20 Jun 2026) ✅
-- Next: cell_c_reconciler.py (BRD/FRD §10.1)
+- Part 4.8 AMC_CONFIG fixes Kotak/JM/Old Bridge + scheme_r1c1_alt + sanity-check heuristic (21 Jun 2026) ✅
+- Next: merge_holdings → push holdings_latest → run reconciler → review proposals → cell_c_upsert
