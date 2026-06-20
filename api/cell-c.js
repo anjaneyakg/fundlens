@@ -137,28 +137,6 @@ function findBestMatch(code, candidates) {
   return best;
 }
 
-// ── CSV parser (RFC 4180 state machine) ──────────────────────────────────────
-
-function parseCsvLine(line) {
-  const result = [];
-  let current  = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current);
-  return result;
-}
-
 // ── GET reconciler-status ─────────────────────────────────────────────────────
 
 async function handleStatus(req, res) {
@@ -182,13 +160,12 @@ async function handleStatus(req, res) {
 
 // ── POST run-reconciler ───────────────────────────────────────────────────────
 //
-// Optimisations vs naive approach:
-//   1. CSV fetched through /api/holdings-csv (Vercel edge cache, 5-min TTL) — avoids
-//      re-downloading 24 MB from GitHub raw on every invocation.
-//   2. Schemes fetched per-AMC in parallel (only for AMCs that have unmapped codes),
-//      avoiding a single 16 K-row query that may hit PostgREST's db-max-rows cap.
-//   3. findBestMatch() exits early when score=100 — critical for scheme_name_from_cell
-//      AMCs where the code IS the base name and will match exactly on the first hit.
+// The frontend sends distinct {amc_name, scheme_code_amc} pairs extracted from
+// the already-loaded holdings CSV — this avoids a 24 MB download inside the
+// serverless function, which would exceed Vercel's Hobby plan timeout.
+//
+// Server-side work: resolve amc_id, skip already-mapped codes, fetch schemes
+// per relevant AMC in parallel, fuzzy-match each code, insert proposals.
 
 async function handleRunReconciler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -196,18 +173,17 @@ async function handleRunReconciler(req, res) {
   const startMs = Date.now();
 
   try {
-    // ── 1. Parallel fetch: CSV (via Vercel-cached proxy) + amcs + existing map ─
-    const csvProxyUrl = `https://${req.headers.host}/api/holdings-csv`;
-    const [csvText, allAmcs, existingMap] = await Promise.all([
-      fetch(csvProxyUrl).then(r => {
-        if (!r.ok) throw new Error(`holdings-csv proxy returned ${r.status}`);
-        return r.text();
-      }),
+    // ── 1. Read distinct codes from request body ──────────────────────────────
+    const { codes } = req.body || {};
+    if (!Array.isArray(codes) || codes.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Request body must include codes: [{amc_name, scheme_code_amc}]' });
+    }
+
+    // ── 2. Parallel fetch: amcs + existing map ────────────────────────────────
+    const [allAmcs, existingMap] = await Promise.all([
       sbFetch('amcs?select=id,name'),
       sbFetch('scheme_code_map?select=amc_id,scheme_code_amc,mapped_by&limit=10000'),
     ]);
-
-    // ── 2. Build lookup structures ────────────────────────────────────────────
 
     const amcIdByName = {};
     for (const a of (allAmcs || [])) amcIdByName[a.name] = a.id;
@@ -217,40 +193,25 @@ async function handleRunReconciler(req, res) {
       alreadyMapped.add(`${r.amc_id}|||${r.scheme_code_amc}`);
     }
 
-    // ── 3. Parse CSV → collect unmapped codes grouped by amc_id ──────────────
-    const lines    = csvText.trim().split('\n');
-    const header   = parseCsvLine(lines[0]).map(h => h.trim());
-    const amcIdx   = header.indexOf('amc_name');
-    const codeIdx  = header.indexOf('scheme_code_amc');
+    // ── 3. Resolve amc_id for each code, group unmapped codes by AMC ─────────
+    const unmappedByAmc = new Map();   // amc_id → Map(code → amc_name)
+    let totalDistinct   = 0;
 
-    if (amcIdx < 0 || codeIdx < 0) {
-      return res.status(500).json({ ok: false, error: 'CSV missing amc_name or scheme_code_amc column' });
-    }
-
-    const distinctCodes  = new Map();  // "amc_id|||code" → {amc_id, code, amc_name}
-    const unmappedByAmc  = new Map();  // amc_id          → Map(code → amc_name)
-
-    for (let i = 1; i < lines.length; i++) {
-      const parts   = parseCsvLine(lines[i]);
-      const amcName = parts[amcIdx]?.trim();
-      const code    = parts[codeIdx]?.trim();
-      if (!amcName || !code) continue;
-
-      const amcId = amcIdByName[amcName];
+    for (const { amc_name, scheme_code_amc: code } of codes) {
+      if (!amc_name || !code) continue;
+      const amcId = amcIdByName[amc_name];
       if (!amcId) continue;
+      totalDistinct++;
 
       const key = `${amcId}|||${code}`;
-      if (!distinctCodes.has(key)) {
-        distinctCodes.set(key, { amc_id: amcId, code, amc_name: amcName });
-      }
       if (!alreadyMapped.has(key)) {
         if (!unmappedByAmc.has(amcId)) unmappedByAmc.set(amcId, new Map());
-        unmappedByAmc.get(amcId).set(code, amcName);
+        unmappedByAmc.get(amcId).set(code, amc_name);
       }
     }
 
     // ── 4. Fetch schemes per AMC in parallel (only AMCs with unmapped codes) ──
-    const amcIdsNeeded = [...unmappedByAmc.keys()];
+    const amcIdsNeeded  = [...unmappedByAmc.keys()];
     const schemeResults = await Promise.all(
       amcIdsNeeded.map(amcId =>
         sbFetch(`schemes?select=amfi_code,name&amc_id=eq.${amcId}&is_active=eq.true&limit=5000`)
@@ -273,7 +234,6 @@ async function handleRunReconciler(req, res) {
         if (candidates.length === 0) { countNoMatch++; continue; }
 
         const match = findBestMatch(code, candidates);
-
         if (!match) { countNoMatch++; continue; }
 
         const mappedBy = match.score === 100 ? 'auto_exact' : 'auto_fuzzy_pending';
@@ -307,7 +267,7 @@ async function handleRunReconciler(req, res) {
       ok: true,
       inserted,
       stats: {
-        total_distinct_codes: distinctCodes.size,
+        total_distinct_codes: totalDistinct,
         already_mapped:       alreadyMapped.size,
         auto_exact:           countExact,
         auto_fuzzy_pending:   countFuzzy,

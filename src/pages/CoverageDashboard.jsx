@@ -116,7 +116,22 @@ export default function CoverageDashboard() {
     setReconcilerRunning(true);
     setReconcilerResult(null);
     try {
-      const r = await fetch("/api/cell-c?action=run-reconciler", { method: "POST" });
+      // Extract distinct (amc_name, scheme_code_amc) pairs from the already-loaded holdings.
+      // Sending these from the frontend avoids a 24 MB CSV download inside the serverless function.
+      const seen = new Set();
+      const codes = [];
+      for (const h of holdings) {
+        const key = `${h.amc_name}|||${h.scheme_code_amc}`;
+        if (h.amc_name && h.scheme_code_amc && !seen.has(key)) {
+          seen.add(key);
+          codes.push({ amc_name: h.amc_name, scheme_code_amc: h.scheme_code_amc });
+        }
+      }
+      const r = await fetch("/api/cell-c?action=run-reconciler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes }),
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Reconciler failed");
       setReconcilerResult({ ok: true, stats: d.stats, elapsed_ms: d.elapsed_ms });
