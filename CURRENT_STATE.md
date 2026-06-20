@@ -1,7 +1,7 @@
 # FundLens — Current State (Pipeline, Data & Build Track)
 
 **Owner:** Claude Code
-**Last updated:** 20 Jun 2026 · v63.1
+**Last updated:** 20 Jun 2026 · v64.0
 **Companion file:** `PLATFORM_STATE.md` — design, auth decisions, go-live plan
 
 > **Session protocol:**
@@ -11,6 +11,25 @@
 >
 > Update ONLY `CURRENT_STATE.md` at session close. Never touch `PLATFORM_STATE.md`.
 > Always: update file → `git add` → `git commit` → `git push` before ending session.
+
+---
+
+## cell_4d_v2.py — Outlier Detection Hook (Part 4.7a) ✅ (20 Jun 2026)
+
+**What was done:** Added `log_parser_outlier()` hook to `cell_4d_v2.py` — the one agreed exception to the "don't touch this file" rule. No existing parsing logic was changed. Version bumped to v2.5.
+
+- **New function `log_parser_outlier(amc_name, filename, sheet_name, reason)`** — inserted at top of section 9 (before `process_file`). Non-fatal: a failed Supabase insert prints a warning and is swallowed. Called only in the `if err:` branch of `process_file()`, so only category (c) sheets (not skip-listed, not successfully parsed) are logged.
+- **New Supabase table `parser_outliers`** — `(id serial PK, run_date date, amc_name text, filename text, sheet_name text, reason text, created_at timestamptz DEFAULT now())`. No unique constraint — diagnostic table; duplicate runs produce duplicate rows.
+- **First run (20 Jun 2026) — 9 distinct outlier combinations found:**
+  - SBI × 6: SMIF, SMMDF, SMUSD, SMCMF, SMGF, SMLDF — `no_scheme_name` (scheme cell R3C4 is empty in these scheme sheets)
+  - Edelweiss: EDGSEC — `no_scheme_name`
+  - Groww: NI — `no_scheme_name`
+  - jioblackrock: Index — `no_column_headers` (Index sheet not in skip list)
+- **34 `amc_not_identified` file-level errors** correctly excluded — sheet="", triggered by `infer_amc_name()` returning None before the sheet loop; `log_parser_outlier()` is never called for them. They remain in `exclusion_log_4d_2026-03.csv` only. Confirmed: 0 rows with `reason='amc_not_identified'` in `parser_outliers`.
+
+**KNOWN ISSUE — RESOLVED ✅ (20 Jun 2026):** `holdings_raw_4d_2026-03.csv` was briefly degraded to 68,027 rows / 24 AMCs by an accidental `--source local` diagnostic run during Part 4.7a testing. Restored to 119,308 rows / 48 AMCs via `git checkout -- data/processed/holdings_raw_4d_2026-03.csv`. `holdings_latest.csv` on GitHub was never affected — local mode does not push.
+
+**Operational note:** `--source local` should only be used for quick isolated testing, never for a real monthly data run. It relies on `infer_amc_name()` filename pattern matching which has known gaps (identifies ~24 of 48 AMCs for 2026-03 files). `--source github` (using `amc_map.json`) is the correct mode for any run that matters.
 
 ---
 
@@ -1231,6 +1250,7 @@ features never activated.
 | `nav_history` | 22.7M local CSV rows · ~26.5M in Supabase (2024+2025 gap repair 03 Jun 2026) | ✅ Gap repair complete | 2024: 1,896,696 rows (366d) · 2025: 2,092,229 rows (365d) · all years 2006–2026 complete |
 | `bse_index_data` | 264,628 | ✅ Complete | BSE index data |
 | `scrip_master` | 5,158 | ✅ Complete | Securities master |
+| `parser_outliers` | 17 (9 distinct) | ✅ First run complete | Part 4.7a — sheet-level outliers from cell_4d_v2.py category (c) sheets. 17 raw rows (9 distinct amc/sheet/reason combinations); duplicates from 2 overlapping test runs. No unique constraint by design. |
 | `scheme_returns` | 0 | ⏳ Pending first run | Run `python pipeline/compute_returns.py` from FundInsight/ to populate |
 
 **Storage:** 12 GB autoscaled · ~6.3 GB used · Supabase key migrated to sb_secret format (legacy JWT disabled)
@@ -1251,7 +1271,7 @@ features never activated.
 | Script | Version | Status | Notes |
 |---|---|---|---|
 | `cell_a_fetcher.py` | v1.1 | ✅ Live | Auto-fetches Groups 1/2/3. Writes amc_map.json. |
-| `cell_4d_v2.py` | v2.5 | ✅ Live | All 50 AMCs configured. Nippon 110/110. All P0 issues resolved. _COMMIT_AMC_MAP commented out; get_commit_amc_map() loads from amc_aliases WHERE amc_config_key IS NOT NULL (19 Jun 2026). |
+| `cell_4d_v2.py` | v2.5 | ✅ Live | All 50 AMCs configured. Nippon 110/110. All P0 issues resolved. _COMMIT_AMC_MAP commented out; get_commit_amc_map() loads from amc_aliases WHERE amc_config_key IS NOT NULL (19 Jun 2026). **v2.5 (20 Jun 2026):** `log_parser_outlier()` hook added — category (c) sheets (not skip-listed, not successfully parsed) now logged to `parser_outliers` table. No existing parsing logic changed. 9 distinct sheet-level outliers found on first run: SBI ×6 `no_scheme_name`, Edelweiss EDGSEC `no_scheme_name`, Groww NI `no_scheme_name`, jioblackrock Index `no_column_headers`. |
 | `backfill_amc_map.py` | v3 | ✅ Live | One-time per historical month. |
 | `bulk_upload.py` | v1 | ✅ Live | Emergency batch upload only. |
 | `backfill_nav_history.py` | v1.4.1 | ✅ Live | SUPABASE_KEY fallback chain (SERVICE_ROLE_KEY → KEY → SERVICE_KEY) · all prior v1.4.0 fixes |
