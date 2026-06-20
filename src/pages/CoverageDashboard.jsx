@@ -72,6 +72,8 @@ export default function CoverageDashboard() {
   // ── Reconciler state ───────────────────────────────────────────────────────
   const [reconcilerRunning, setReconcilerRunning] = useState(false);
   const [reconcilerResult,  setReconcilerResult]  = useState(null);
+  const [diagRunning,       setDiagRunning]        = useState(false);
+  const [diagResult,        setDiagResult]         = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -139,6 +141,33 @@ export default function CoverageDashboard() {
       setReconcilerResult({ ok: false, error: err.message });
     }
     setReconcilerRunning(false);
+  }
+
+  async function runDiagnose() {
+    setDiagRunning(true);
+    setDiagResult(null);
+    try {
+      const seen = new Set();
+      const codes = [];
+      for (const h of holdings) {
+        const key = `${h.amc_name}|||${h.scheme_code_amc}`;
+        if (h.amc_name && h.scheme_code_amc && !seen.has(key)) {
+          seen.add(key);
+          codes.push({ amc_name: h.amc_name, scheme_code_amc: h.scheme_code_amc });
+        }
+      }
+      const r = await fetch("/api/cell-c?action=dry-run-reconciler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Diagnose failed");
+      setDiagResult({ ok: true, ...d });
+    } catch (err) {
+      setDiagResult({ ok: false, error: err.message });
+    }
+    setDiagRunning(false);
   }
 
   const coverage = useMemo(() => {
@@ -337,6 +366,20 @@ export default function CoverageDashboard() {
                     {reconcilerRunning && <div style={{ ...s.spinner, width: 12, height: 12, borderWidth: 2 }} />}
                     {reconcilerRunning ? "Running — this may take up to 30 seconds…" : "Run Scheme Code Reconciler"}
                   </button>
+                  <button
+                    style={{
+                      fontSize: 11, fontWeight: 500, padding: "4px 12px", borderRadius: 7,
+                      border: "1px dashed rgba(99,91,255,0.3)", background: "transparent",
+                      color: (diagRunning || reconcilerRunning) ? "#9aa0c8" : "#635bff",
+                      cursor: (diagRunning || reconcilerRunning) ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s",
+                    }}
+                    onClick={runDiagnose}
+                    disabled={diagRunning || reconcilerRunning}
+                  >
+                    {diagRunning && <div style={{ ...s.spinner, width: 10, height: 10, borderWidth: 2 }} />}
+                    {diagRunning ? "Analysing scores…" : "Check Score Distribution (dry run)"}
+                  </button>
                   {reconcilerResult && !reconcilerResult.ok && (
                     <div style={{ fontSize: 11, color: "#dc2626" }}>Error: {reconcilerResult.error}</div>
                   )}
@@ -358,6 +401,88 @@ export default function CoverageDashboard() {
                 Resolving here updates status only; adding a sheet to the skip list in code is a separate manual step.
               </div>
             </div>
+
+            {/* ── Diagnostic result (dry run) ── */}
+            {diagResult && (
+              <div style={{ borderTop: "1px solid rgba(99,91,255,0.08)", padding: "1rem 0 0.5rem", marginBottom: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>Score Distribution — Dry Run</div>
+                  <button onClick={() => setDiagResult(null)} style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer" }}>
+                    ✕ dismiss
+                  </button>
+                </div>
+                {!diagResult.ok ? (
+                  <div style={{ fontSize: 12, color: "#dc2626" }}>Error: {diagResult.error}</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+                      {diagResult.totals.distinct_codes} distinct codes · {diagResult.totals.already_mapped} already mapped · <strong>{diagResult.totals.to_process} to process</strong>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                      {[
+                        { label: "95–100", val: diagResult.distribution.score_95_100, color: "#16a34a", bg: "rgba(22,163,74,0.07)" },
+                        { label: "92–94",  val: diagResult.distribution.score_92_94,  color: "#d97706", bg: "rgba(217,119,6,0.07)" },
+                        { label: "85–91 ⚠", val: diagResult.distribution.score_85_91, color: "#b45309", bg: "rgba(180,83,9,0.1)", bold: true },
+                        { label: "70–84",  val: diagResult.distribution.score_70_84,  color: "#6b7280", bg: "rgba(107,114,128,0.07)" },
+                        { label: "<70",    val: diagResult.distribution.below_70,     color: "#9ca3af", bg: "rgba(156,163,175,0.07)" },
+                      ].map(b => (
+                        <div key={b.label} style={{
+                          padding: "3px 10px", borderRadius: 6,
+                          background: b.bg, color: b.color,
+                          fontSize: 12, fontWeight: b.bold ? 700 : 500,
+                          border: b.bold ? `1px solid rgba(180,83,9,0.25)` : "1px solid transparent",
+                        }}>
+                          {b.label}: <strong>{b.val}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    {diagResult.near_miss_amcs.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#16a34a" }}>✓ No near-misses — all codes either score ≥92 or clearly below 85</div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#b45309", marginBottom: 6 }}>
+                          {diagResult.near_miss_amcs.length} AMC{diagResult.near_miss_amcs.length > 1 ? "s" : ""} with near-misses (85–91, just under threshold):
+                        </div>
+                        {diagResult.near_miss_amcs.map(amc => (
+                          <div key={amc.amc} style={{
+                            marginBottom: 10, padding: "8px 10px", borderRadius: 8,
+                            background: "rgba(180,83,9,0.04)", border: "1px solid rgba(180,83,9,0.12)",
+                          }}>
+                            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>{amc.amc}</span>
+                              <span style={{ fontSize: 11, color: "#16a34a" }}>{amc.codes_92_plus} pass (≥92)</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#b45309" }}>{amc.codes_85_91} near-miss (85–91)</span>
+                              {amc.codes_below_85 > 0 && <span style={{ fontSize: 11, color: "#9ca3af" }}>{amc.codes_below_85} below 85</span>}
+                            </div>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                              <thead>
+                                <tr style={{ color: "#9ca3af" }}>
+                                  <th style={{ textAlign: "left", fontWeight: 500, paddingBottom: 3 }}>scheme_code_amc</th>
+                                  <th style={{ textAlign: "left", fontWeight: 500, paddingBottom: 3, paddingLeft: 8 }}>Best AMFI match (base name)</th>
+                                  <th style={{ textAlign: "right", fontWeight: 500, paddingBottom: 3 }}>Score</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {amc.samples_85_91.map((s, i) => (
+                                  <tr key={i} style={{ borderTop: "1px solid rgba(180,83,9,0.08)" }}>
+                                    <td style={{ padding: "3px 0", color: "#374151", fontFamily: "monospace", fontSize: 10 }}>{s.code}</td>
+                                    <td style={{ padding: "3px 8px", color: "#6b7280" }}>{s.best_match}</td>
+                                    <td style={{ padding: "3px 0", textAlign: "right", color: "#b45309", fontWeight: 700 }}>{s.score}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                      Would insert: {diagResult.totals.would_auto_exact} auto-exact + {diagResult.totals.would_fuzzy_pending} suggested · {diagResult.elapsed_ms}ms
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {outliersLoading && (
               <div style={{ padding: "1.5rem 0", color: "#9ca3af", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>

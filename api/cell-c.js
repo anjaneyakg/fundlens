@@ -8,9 +8,10 @@
 // here in ~60 lines of JS and handles 16K schemes in well under 1 second.
 //
 // Actions (POST):
-//   run-reconciler    — fetch CSV + schemes → fuzzy match → insert auto_fuzzy_pending proposals
+//   run-reconciler      — fuzzy match codes from request body → insert proposals
+//   dry-run-reconciler  — same matching, NO writes; returns full score distribution + near-miss breakdown
 // Actions (GET):
-//   reconciler-status — counts of pending proposals + total unmapped codes
+//   reconciler-status   — counts of pending proposals + total mapped
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -33,10 +34,11 @@ export default async function handler(req, res) {
 
   const { action } = req.query;
 
-  if (action === 'reconciler-status') return handleStatus(req, res);
-  if (action === 'run-reconciler')    return handleRunReconciler(req, res);
+  if (action === 'reconciler-status')  return handleStatus(req, res);
+  if (action === 'run-reconciler')     return handleRunReconciler(req, res);
+  if (action === 'dry-run-reconciler') return handleDryRunReconciler(req, res);
 
-  return res.status(400).json({ ok: false, error: 'Unknown action. Valid: reconciler-status, run-reconciler' });
+  return res.status(400).json({ ok: false, error: 'Unknown action. Valid: reconciler-status, run-reconciler, dry-run-reconciler' });
 }
 
 // ── Supabase helper ───────────────────────────────────────────────────────────
@@ -280,6 +282,155 @@ async function handleRunReconciler(req, res) {
 
   } catch (err) {
     console.error('[cell-c?action=run-reconciler]', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+// ── POST dry-run-reconciler ───────────────────────────────────────────────────
+//
+// Identical setup to run-reconciler but NO inserts.
+// Scores every unmapped code without the CONFIDENCE_THRESHOLD filter so we can
+// see the full distribution and identify near-misses just below the threshold.
+//
+// Returns:
+//   distribution  — counts by score bucket (95-100, 92-94, 85-91, 70-84, <70)
+//   totals        — would_auto_exact, would_fuzzy_pending, would_no_match
+//   near_miss_amcs — AMCs with ≥1 code in the 85-91 range, with sample triples
+
+async function handleDryRunReconciler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const startMs = Date.now();
+
+  try {
+    const { codes } = req.body || {};
+    if (!Array.isArray(codes) || codes.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Request body must include codes: [{amc_name, scheme_code_amc}]' });
+    }
+
+    const [allAmcs, existingMap] = await Promise.all([
+      sbFetch('amcs?select=id,name'),
+      sbFetch('scheme_code_map?select=amc_id,scheme_code_amc,mapped_by&limit=10000'),
+    ]);
+
+    const amcIdByName = {};
+    const amcNameById = {};
+    for (const a of (allAmcs || [])) { amcIdByName[a.name] = a.id; amcNameById[a.id] = a.name; }
+
+    const alreadyMapped = new Set();
+    for (const r of (existingMap || [])) alreadyMapped.add(`${r.amc_id}|||${r.scheme_code_amc}`);
+
+    const unmappedByAmc   = new Map();
+    let totalDistinct     = 0;
+    let alreadyMappedCount = 0;
+
+    for (const { amc_name, scheme_code_amc: code } of codes) {
+      if (!amc_name || !code) continue;
+      const amcId = amcIdByName[amc_name];
+      if (!amcId) continue;
+      totalDistinct++;
+      const key = `${amcId}|||${code}`;
+      if (alreadyMapped.has(key)) { alreadyMappedCount++; continue; }
+      if (!unmappedByAmc.has(amcId)) unmappedByAmc.set(amcId, new Map());
+      unmappedByAmc.get(amcId).set(code, amc_name);
+    }
+
+    const amcIdsNeeded  = [...unmappedByAmc.keys()];
+    const schemeResults = await Promise.all(
+      amcIdsNeeded.map(amcId =>
+        sbFetch(`schemes?select=amfi_code,name&amc_id=eq.${amcId}&is_active=eq.true&limit=5000`)
+      )
+    );
+    const schemesByAmc = {};
+    amcIdsNeeded.forEach((amcId, i) => { schemesByAmc[amcId] = schemeResults[i] || []; });
+
+    // ── Score every code (no threshold filter) ────────────────────────────────
+    const dist   = { s95_100: 0, s92_94: 0, s85_91: 0, s70_84: 0, below_70: 0, no_candidates: 0 };
+    let wExact   = 0, wFuzzy = 0, wNoMatch = 0;
+
+    // per-AMC tracking — only populated for AMCs with near-miss codes
+    const amcData = {};  // amcName → { above92, near85_91, below85, samples }
+
+    for (const [amcId, codesMap] of unmappedByAmc) {
+      const candidates = schemesByAmc[amcId] || [];
+      const amcName    = amcNameById[amcId] || String(amcId);
+
+      for (const [code] of codesMap) {
+        if (candidates.length === 0) { dist.no_candidates++; wNoMatch++; continue; }
+
+        // Find the single best-scoring candidate — no threshold gate
+        let bestScore = -1;
+        let bestName  = null;
+        for (const c of candidates) {
+          const s = fuzzyScore(code, c.name);
+          if (s > bestScore) { bestScore = s; bestName = c.name; if (s === 100) break; }
+        }
+
+        // Distribution bucket
+        if      (bestScore >= 95) dist.s95_100++;
+        else if (bestScore >= 92) dist.s92_94++;
+        else if (bestScore >= 85) dist.s85_91++;
+        else if (bestScore >= 70) dist.s70_84++;
+        else                      dist.below_70++;
+
+        // Would-be outcome under CONFIDENCE_THRESHOLD=92
+        if      (bestScore === 100)                    wExact++;
+        else if (bestScore >= CONFIDENCE_THRESHOLD)    wFuzzy++;
+        else                                           wNoMatch++;
+
+        // Track near-misses (85-91) with samples
+        if (bestScore >= 85 && bestScore < 92) {
+          if (!amcData[amcName]) amcData[amcName] = { above92: 0, near85_91: 0, below85: 0, samples: [] };
+          amcData[amcName].near85_91++;
+          if (amcData[amcName].samples.length < 5) {
+            amcData[amcName].samples.push({ code, best_match: extractBaseName(bestName), score: bestScore });
+          }
+        } else if (bestScore >= 92) {
+          if (!amcData[amcName]) amcData[amcName] = { above92: 0, near85_91: 0, below85: 0, samples: [] };
+          amcData[amcName].above92++;
+        } else {
+          if (!amcData[amcName]) amcData[amcName] = { above92: 0, near85_91: 0, below85: 0, samples: [] };
+          amcData[amcName].below85++;
+        }
+      }
+    }
+
+    // Only report AMCs that have at least 1 near-miss; sort by near-miss count desc
+    const nearMissAmcs = Object.entries(amcData)
+      .filter(([, v]) => v.near85_91 > 0)
+      .sort((a, b) => b[1].near85_91 - a[1].near85_91)
+      .map(([amc, v]) => ({
+        amc,
+        codes_92_plus: v.above92,
+        codes_85_91:   v.near85_91,
+        codes_below_85: v.below85,
+        samples_85_91: v.samples,
+      }));
+
+    return res.status(200).json({
+      ok: true,
+      distribution: {
+        score_95_100:  dist.s95_100,
+        score_92_94:   dist.s92_94,
+        score_85_91:   dist.s85_91,
+        score_70_84:   dist.s70_84,
+        below_70:      dist.below_70,
+        no_candidates: dist.no_candidates,
+      },
+      totals: {
+        distinct_codes:        totalDistinct,
+        already_mapped:        alreadyMappedCount,
+        to_process:            totalDistinct - alreadyMappedCount,
+        would_auto_exact:      wExact,
+        would_fuzzy_pending:   wFuzzy,
+        would_no_match:        wNoMatch,
+      },
+      near_miss_amcs: nearMissAmcs,
+      elapsed_ms: Date.now() - startMs,
+    });
+
+  } catch (err) {
+    console.error('[cell-c?action=dry-run-reconciler]', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
