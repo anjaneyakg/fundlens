@@ -14,8 +14,6 @@
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GITHUB_PAT           = process.env.VITE_GITHUB_PAT;
-const HOLDINGS_CSV_URL     = 'https://raw.githubusercontent.com/anjaneyakg/FundInsight/main/data/processed/holdings_latest.csv';
 
 const CONFIDENCE_THRESHOLD = 92;   // scores below this produce no proposal
 
@@ -133,6 +131,7 @@ function findBestMatch(code, candidates) {
     const score = fuzzyScore(code, c.name);
     if (score >= CONFIDENCE_THRESHOLD && (!best || score > best.score)) {
       best = { amfi_code: c.amfi_code, score, matchedName: c.name };
+      if (score === 100) break;   // perfect match — no need to check further
     }
   }
   return best;
@@ -182,6 +181,14 @@ async function handleStatus(req, res) {
 }
 
 // ── POST run-reconciler ───────────────────────────────────────────────────────
+//
+// Optimisations vs naive approach:
+//   1. CSV fetched through /api/holdings-csv (Vercel edge cache, 5-min TTL) — avoids
+//      re-downloading 24 MB from GitHub raw on every invocation.
+//   2. Schemes fetched per-AMC in parallel (only for AMCs that have unmapped codes),
+//      avoiding a single 16 K-row query that may hit PostgREST's db-max-rows cap.
+//   3. findBestMatch() exits early when score=100 — critical for scheme_name_from_cell
+//      AMCs where the code IS the base name and will match exactly on the first hit.
 
 async function handleRunReconciler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -189,56 +196,40 @@ async function handleRunReconciler(req, res) {
   const startMs = Date.now();
 
   try {
-    // ── 1. Parallel fetch: CSV + all schemes + amcs + existing map ────────────
-    const [csvText, allSchemes, allAmcs, existingMap] = await Promise.all([
-      fetch(HOLDINGS_CSV_URL, {
-        headers: {
-          Authorization: `token ${GITHUB_PAT}`,
-          Accept:        'application/vnd.github.v3.raw',
-        },
-      }).then(r => {
-        if (!r.ok) throw new Error(`GitHub CSV ${r.status}`);
+    // ── 1. Parallel fetch: CSV (via Vercel-cached proxy) + amcs + existing map ─
+    const csvProxyUrl = `https://${req.headers.host}/api/holdings-csv`;
+    const [csvText, allAmcs, existingMap] = await Promise.all([
+      fetch(csvProxyUrl).then(r => {
+        if (!r.ok) throw new Error(`holdings-csv proxy returned ${r.status}`);
         return r.text();
       }),
-      sbFetch('schemes?select=amfi_code,name,amc_id&is_active=eq.true&limit=20000'),
       sbFetch('amcs?select=id,name'),
       sbFetch('scheme_code_map?select=amc_id,scheme_code_amc,mapped_by&limit=10000'),
     ]);
 
     // ── 2. Build lookup structures ────────────────────────────────────────────
 
-    // amc name → id and amc id → name
-    const amcIdByName   = {};
-    const amcNameById   = {};
-    for (const a of (allAmcs || [])) {
-      amcIdByName[a.name] = a.id;
-      amcNameById[a.id]   = a.name;
-    }
+    const amcIdByName = {};
+    for (const a of (allAmcs || [])) amcIdByName[a.name] = a.id;
 
-    // already-mapped set: skip these (any mapped_by)
     const alreadyMapped = new Set();
     for (const r of (existingMap || [])) {
       alreadyMapped.add(`${r.amc_id}|||${r.scheme_code_amc}`);
     }
 
-    // schemes grouped by amc_id: {amc_id: [{amfi_code, name}]}
-    const schemesByAmc = {};
-    for (const s of (allSchemes || [])) {
-      if (!schemesByAmc[s.amc_id]) schemesByAmc[s.amc_id] = [];
-      schemesByAmc[s.amc_id].push({ amfi_code: s.amfi_code, name: s.name });
-    }
-
-    // ── 3. Parse CSV → distinct (amc_id, scheme_code_amc) pairs ──────────────
-    const lines     = csvText.trim().split('\n');
-    const header    = parseCsvLine(lines[0]).map(h => h.trim());
-    const amcIdx    = header.indexOf('amc_name');
-    const codeIdx   = header.indexOf('scheme_code_amc');
+    // ── 3. Parse CSV → collect unmapped codes grouped by amc_id ──────────────
+    const lines    = csvText.trim().split('\n');
+    const header   = parseCsvLine(lines[0]).map(h => h.trim());
+    const amcIdx   = header.indexOf('amc_name');
+    const codeIdx  = header.indexOf('scheme_code_amc');
 
     if (amcIdx < 0 || codeIdx < 0) {
       return res.status(500).json({ ok: false, error: 'CSV missing amc_name or scheme_code_amc column' });
     }
 
-    const distinctCodes = new Map(); // "amc_id|||code" → {amc_id, code, amc_name}
+    const distinctCodes  = new Map();  // "amc_id|||code" → {amc_id, code, amc_name}
+    const unmappedByAmc  = new Map();  // amc_id          → Map(code → amc_name)
+
     for (let i = 1; i < lines.length; i++) {
       const parts   = parseCsvLine(lines[i]);
       const amcName = parts[amcIdx]?.trim();
@@ -249,82 +240,82 @@ async function handleRunReconciler(req, res) {
       if (!amcId) continue;
 
       const key = `${amcId}|||${code}`;
-      if (!distinctCodes.has(key)) distinctCodes.set(key, { amc_id: amcId, code, amc_name: amcName });
+      if (!distinctCodes.has(key)) {
+        distinctCodes.set(key, { amc_id: amcId, code, amc_name: amcName });
+      }
+      if (!alreadyMapped.has(key)) {
+        if (!unmappedByAmc.has(amcId)) unmappedByAmc.set(amcId, new Map());
+        unmappedByAmc.get(amcId).set(code, amcName);
+      }
     }
 
-    // ── 4. Match each unmapped code against its AMC's schemes ────────────────
-    const proposals    = [];
-    let countExact     = 0;
-    let countFuzzy     = 0;
-    let countNoMatch   = 0;
-    const examples     = [];   // up to 10 for the summary report
+    // ── 4. Fetch schemes per AMC in parallel (only AMCs with unmapped codes) ──
+    const amcIdsNeeded = [...unmappedByAmc.keys()];
+    const schemeResults = await Promise.all(
+      amcIdsNeeded.map(amcId =>
+        sbFetch(`schemes?select=amfi_code,name&amc_id=eq.${amcId}&is_active=eq.true&limit=5000`)
+      )
+    );
+    const schemesByAmc = {};
+    amcIdsNeeded.forEach((amcId, i) => { schemesByAmc[amcId] = schemeResults[i] || []; });
 
-    const now = new Date().toISOString();
+    // ── 5. Match each unmapped code against its AMC's schemes ────────────────
+    const proposals  = [];
+    let countExact   = 0;
+    let countFuzzy   = 0;
+    let countNoMatch = 0;
+    const examples   = [];
+    const now        = new Date().toISOString();
 
-    for (const [key, { amc_id, code, amc_name }] of distinctCodes) {
-      if (alreadyMapped.has(key)) continue;
+    for (const [amcId, codesMap] of unmappedByAmc) {
+      const candidates = schemesByAmc[amcId] || [];
+      for (const [code, amc_name] of codesMap) {
+        if (candidates.length === 0) { countNoMatch++; continue; }
 
-      const candidates = schemesByAmc[amc_id] || [];
-      if (candidates.length === 0) { countNoMatch++; continue; }
+        const match = findBestMatch(code, candidates);
 
-      const match = findBestMatch(code, candidates);
+        if (!match) { countNoMatch++; continue; }
 
-      if (!match) {
-        countNoMatch++;
-        continue;
-      }
+        const mappedBy = match.score === 100 ? 'auto_exact' : 'auto_fuzzy_pending';
+        if (match.score === 100) countExact++;
+        else countFuzzy++;
 
-      const mappedBy = match.score === 100 ? 'auto_exact' : 'auto_fuzzy_pending';
-      if (match.score === 100) countExact++;
-      else countFuzzy++;
-
-      proposals.push({
-        amc_id,
-        scheme_code_amc: code,
-        amfi_code:       match.amfi_code,
-        mapped_by:       mappedBy,
-        confidence:      match.score,
-        mapped_at:       now,
-      });
-
-      if (examples.length < 10) {
-        examples.push({
-          amc:          amc_name,
-          code,
-          matched_name: extractBaseName(match.matchedName),
-          score:        match.score,
-          mapped_by:    mappedBy,
+        proposals.push({
+          amc_id:          amcId,
+          scheme_code_amc: code,
+          amfi_code:       match.amfi_code,
+          mapped_by:       mappedBy,
+          confidence:      match.score,
+          mapped_at:       now,
         });
+
+        if (examples.length < 10) {
+          examples.push({ amc: amc_name, code, matched_name: extractBaseName(match.matchedName), score: match.score, mapped_by: mappedBy });
+        }
       }
     }
 
-    // ── 5. Insert proposals in batches (ignore conflicts = already mapped) ───
+    // ── 6. Insert proposals in batches (ignore conflicts = already mapped) ───
     const BATCH = 200;
     let inserted = 0;
     for (let i = 0; i < proposals.length; i += BATCH) {
-      await sbFetch(
-        'scheme_code_map?on_conflict=amc_id,scheme_code_amc',
-        'POST',
-        proposals.slice(i, i + BATCH)
-      );
+      await sbFetch('scheme_code_map?on_conflict=amc_id,scheme_code_amc', 'POST', proposals.slice(i, i + BATCH));
       inserted += Math.min(BATCH, proposals.length - i);
     }
 
-    const elapsedMs = Date.now() - startMs;
-
     return res.status(200).json({
-      ok:              true,
+      ok: true,
       inserted,
       stats: {
         total_distinct_codes: distinctCodes.size,
-        already_mapped:       (existingMap || []).length,
+        already_mapped:       alreadyMapped.size,
         auto_exact:           countExact,
         auto_fuzzy_pending:   countFuzzy,
         no_match:             countNoMatch,
-        schemes_in_db:        (allSchemes || []).length,
+        amcs_processed:       amcIdsNeeded.length,
       },
       examples,
-      elapsed_ms: elapsedMs,
+      elapsed_ms: Date.now() - startMs,
     });
 
   } catch (err) {
