@@ -5,9 +5,8 @@
 // GitHub backup done client-side via VITE_GITHUB_PAT
 
 import { useState, useEffect, useRef } from 'react';
-
-const GITHUB_PAT  = import.meta.env.VITE_GITHUB_PAT;
-const GITHUB_REPO = 'anjaneyakg/FundInsight';
+import { getIdToken } from 'firebase/auth';
+import { auth } from '../../firebase';
 
 const fmtDate = s => {
   if (!s) return '—';
@@ -86,10 +85,12 @@ async function parseXlsx(file) {
   return rows;
 }
 
-// ── GitHub backup — client-side via VITE_GITHUB_PAT ──────────────────────────
+// ── GitHub backup — server-side via /api/github-upload ───────────────────────
 async function backupToGitHub(file) {
-  const path   = `data/amfi-marketcap/${file.name}`;
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`;
+  const path = `data/amfi-marketcap/${file.name}`;
+
+  const token = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+  if (!token) throw new Error('Not signed in');
 
   // Read file as base64
   const b64 = await new Promise((resolve, reject) => {
@@ -99,30 +100,40 @@ async function backupToGitHub(file) {
     reader.readAsDataURL(file);
   });
 
+  // Check raw size: proxy body limit is 3 MB; AMFI xlsx files are ~0.5 MB in practice
+  const rawBytes = Math.round(b64.length * 0.75);
+  if (rawBytes > 3 * 1024 * 1024) {
+    throw new Error(
+      `File is ${(rawBytes / 1048576).toFixed(1)} MB — too large to back up via proxy (limit 3 MB). ` +
+      'The Supabase upload succeeded. Back up this file manually if needed.',
+    );
+  }
+
+  const apiCall = async (action, body) => {
+    const r = await fetch(`/api/github-upload?action=${action}`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `API error ${r.status}`);
+    return d;
+  };
+
   // Check if file already exists (get SHA)
   let sha;
   try {
-    const check = await fetch(apiUrl, {
-      headers: { 'Authorization':`Bearer ${GITHUB_PAT}`, 'Accept':'application/vnd.github.v3+json' },
-    });
-    if (check.ok) sha = (await check.json()).sha;
-  } catch (_) {}
+    const existing = await apiCall('gh-get', { path });
+    sha = existing.sha;
+  } catch (_) { /* new file */ }
 
-  const res = await fetch(apiUrl, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${GITHUB_PAT}`,
-      'Accept':        'application/vnd.github.v3+json',
-      'Content-Type':  'application/json',
-    },
-    body: JSON.stringify({
-      message: `Add AMFI market cap file: ${file.name}`,
-      content: b64,
-      ...(sha ? { sha } : {}),
-    }),
+  await apiCall('gh-put-amfi', {
+    path,
+    content: b64,
+    message: `Add AMFI market cap file: ${file.name}`,
+    ...(sha ? { sha } : {}),
   });
 
-  if (!res.ok) throw new Error(`GitHub backup: ${res.status}`);
   return path;
 }
 

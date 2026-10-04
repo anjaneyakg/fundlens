@@ -7,7 +7,7 @@
 // Used by: CoverageDashboard.jsx → fetch('/api/holdings-csv')
 //
 // Environment variable required (already in Vercel):
-//   VITE_GITHUB_PAT — personal access token with repo scope
+//   GITHUB_PAT — personal access token with repo scope (server-side only)
 
 export default async function handler(req, res) {
   // CORS — restrict to FundLens origin only
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const token = process.env.VITE_GITHUB_PAT;
+  const token = process.env.GITHUB_PAT;
   if (!token) {
     return res.status(500).json({ ok: false, error: "GitHub token not configured" });
   }

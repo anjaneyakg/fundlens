@@ -1,11 +1,8 @@
 // src/pages/PortfolioUpload.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
+import { getIdToken } from "firebase/auth";
+import { auth } from "../firebase";
 import { AMC_LIST, CAT_LABELS, CAT_DESCRIPTIONS } from "../data/amcList";
-
-const GITHUB_OWNER  = "anjaneyakg";
-const GITHUB_REPO   = "FundInsight";
-const GITHUB_BRANCH = "main";
-const GITHUB_TOKEN  = import.meta.env.VITE_GITHUB_PAT;
 
 // amc_config_key → friendly AMC name, for right-panel labels
 const AMC_KEY_TO_NAME = AMC_LIST.reduce((acc, a) => {
@@ -13,64 +10,78 @@ const AMC_KEY_TO_NAME = AMC_LIST.reduce((acc, a) => {
   return acc;
 }, {});
 
-// ── GitHub helpers ────────────────────────────────────────────────────────────
+// ── Server-side GitHub proxy helpers ─────────────────────────────────────────
+// All GitHub operations go through /api/github-upload (admin + RS256-verified).
 
-async function ghGet(path) {
-  const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
-    { headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
-  );
-  return res.ok ? res.json() : null;
-}
-
-async function ghPut(path, buffer, message, sha = null) {
-  const base64 = btoa(new Uint8Array(buffer).reduce((d, b) => d + String.fromCharCode(b), ""));
-  const body = { message, content: base64, branch: GITHUB_BRANCH, ...(sha ? { sha } : {}) };
-  const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
-    { method: "PUT", headers: { Authorization: `token ${GITHUB_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }
-  );
-  if (!res.ok) { const e = await res.json(); throw new Error(e.message || `GitHub ${res.status}`); }
-  return res.json();
-}
-
-async function ghDelete(path, sha, message) {
-  const body = { message, sha, branch: GITHUB_BRANCH };
-  const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
-    { method: "DELETE", headers: { Authorization: `token ${GITHUB_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }
-  );
-  if (!res.ok) { const e = await res.json(); throw new Error(e.message || `GitHub ${res.status}`); }
-  return res.json();
+async function ghApi(action, body) {
+  const token = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+  if (!token) throw new Error("Not signed in");
+  const res = await fetch(`/api/github-upload?action=${action}`, {
+    method:  "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  return data;
 }
 
 async function fetchAmcMap(month) {
-  const data = await ghGet(`data/raw/${month}/amc_map.json`);
+  const data = await ghApi("gh-get", { path: `data/raw/${month}/amc_map.json` }).catch(() => null);
   if (!data) return { map: {}, sha: null };
   const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
-  const text = new TextDecoder().decode(bytes);
+  const text  = new TextDecoder().decode(bytes);
   return { map: JSON.parse(text), sha: data.sha };
 }
 
 async function putAmcMap(month, map, sha, message) {
   const json = JSON.stringify(map, null, 2);
-  const buf = new TextEncoder().encode(json).buffer;
-  return ghPut(`data/raw/${month}/amc_map.json`, buf, message, sha);
+  const b64  = btoa(Array.from(new TextEncoder().encode(json), b => String.fromCharCode(b)).join(""));
+  return ghApi("gh-put-small", {
+    path: `data/raw/${month}/amc_map.json`,
+    content: b64,
+    message,
+    ...(sha ? { sha } : {}),
+  });
 }
 
 async function listMonthFiles(month) {
-  const items = await ghGet(`data/raw/${month}`);
-  if (!Array.isArray(items)) return [];
-  return items
-    .filter(f => f.type === "file" && f.name !== "amc_map.json" &&
-      [".xlsx", ".xls", ".zip"].some(ext => f.name.toLowerCase().endsWith(ext)))
-    .map(f => ({ name: f.name, path: f.path, sha: f.sha, size: f.size }));
+  const data = await ghApi("gh-list-dir", { path: `data/raw/${month}` }).catch(() => ({ items: [] }));
+  return (data.items ?? []).filter(
+    f => f.name !== "amc_map.json" &&
+         [".xlsx", ".xls", ".zip"].some(ext => f.name.toLowerCase().endsWith(ext)),
+  );
 }
 
 async function saveFile(path, buffer, commitMessage) {
-  const existing = await ghGet(path);
-  const sha = existing?.sha || null;
-  return ghPut(path, buffer, commitMessage, sha);
+  // Large files bypass the 4.5 MB Vercel body limit via Supabase Storage intermediary.
+  // Flow: get signed upload URL → PUT binary directly to storage → server copies to GitHub.
+
+  // Step 1: get a signed Supabase Storage upload URL and a temp storage path
+  const { uploadUrl, storagePath } = await ghApi("gh-get-upload-url", { githubPath: path });
+
+  // Step 2: get existing SHA (needed by GitHub when updating an existing file)
+  let sha = null;
+  try {
+    const existing = await ghApi("gh-get", { path });
+    sha = existing?.sha || null;
+  } catch { /* file is new — no SHA needed */ }
+
+  // Step 3: PUT raw binary directly to Supabase Storage (no Vercel involved)
+  const storageRes = await fetch(uploadUrl, {
+    method:  "PUT",
+    headers: { "Content-Type": "application/octet-stream" },
+    body:    buffer,
+  });
+  if (!storageRes.ok) throw new Error(`Storage upload failed: ${storageRes.status}`);
+
+  // Step 4: server downloads from storage, PUTs to GitHub, deletes temp object
+  return ghApi("gh-put-from-storage", {
+    storagePath,
+    githubPath: path,
+    message: commitMessage,
+    ...(sha ? { sha } : {}),
+  });
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -198,8 +209,6 @@ export default function PortfolioUpload() {
 
   async function handleUpload() {
     if (!selectedAmc || !month || !files.length || uploading) return;
-    if (!GITHUB_TOKEN) { alert("VITE_GITHUB_PAT not set."); return; }
-
     setUploading(true);
     setUploadResults([]);
     const results = [];
@@ -234,7 +243,7 @@ export default function PortfolioUpload() {
     if (!confirm(`Delete "${file.name}" from GitHub?\n\nThis cannot be undone.`)) return;
     setDeletingFile(file.name);
     try {
-      await ghDelete(file.path, file.sha, `cleanup: remove ${file.name} from data/raw/${month}`);
+      await ghApi("gh-delete", { path: file.path, sha: file.sha, message: `cleanup: remove ${file.name} from data/raw/${month}` });
       // Remove entry from amc_map.json (best-effort)
       try {
         const { map, sha } = await fetchAmcMap(month);

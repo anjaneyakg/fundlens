@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "jose": "^5.0.0",
     "exceljs": "^4.4.0",
     "firebase": "^12.13.0",
     "html2canvas": "^1.4.1",
