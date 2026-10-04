@@ -13,6 +13,8 @@
 //
 // Table: public.profiles (id TEXT = Firebase UID, email, role, plan_tier)
 
+import { verifyAdminToken, verifyFirebaseUser } from './_lib/verifyFirebaseToken.js';
+
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const CORS_ORIGIN   = 'https://fundlens-six.vercel.app';
@@ -49,15 +51,6 @@ export default async function handler(req, res) {
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function decodeJwtPayload(token) {
-  try {
-    const part = token.split('.')[1];
-    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
-  } catch {
-    return null;
-  }
-}
-
 // Service-role Supabase fetch — bypasses RLS.
 async function sb(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -75,38 +68,13 @@ async function sb(path, opts = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-// Verify caller is admin via profiles table.
-async function requireAdmin(authHeader) {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const payload = decodeJwtPayload(authHeader.slice(7));
-  if (!payload?.sub) return null;
-  try {
-    const rows = await sb(
-      `profiles?id=eq.${encodeURIComponent(payload.sub)}&select=role`,
-      { headers: { Prefer: '' } },
-    );
-    if (rows?.[0]?.role !== 'admin') return null;
-    return payload.sub;
-  } catch (err) {
-    console.error('[requireAdmin] error:', err);
-    return null;
-  }
-}
-
-// Verify any authenticated user (non-admin actions).
-function requireAuth(authHeader) {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const payload = decodeJwtPayload(authHeader.slice(7));
-  return payload?.sub || null;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // action=get-users
 // ─────────────────────────────────────────────────────────────────────────────
 async function handleGetUsers(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   try {
@@ -145,7 +113,7 @@ const VALID_ROLES = ['individual', 'advisor', 'admin'];
 async function handleSetRole(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { targetUserId, newRole } = req.body || {};
@@ -172,6 +140,9 @@ async function handleSetRole(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function handleSetFlag(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { flagId, enabled } = req.body || {};
   if (!flagId || typeof enabled !== 'boolean')
@@ -217,6 +188,9 @@ const ROLE_IDS = {
 
 async function handleSetUserTier(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { userId, tier } = req.body || {};
   if (!userId || !TIER_IDS[tier])
@@ -265,7 +239,8 @@ const VALID_NOTIF_TYPES = ['new_advisor_application', 'new_investor_registration
 async function handleNotifyRegistration(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerUid = requireAuth(req.headers.authorization);
+  const caller = await verifyFirebaseUser(req.headers.authorization);
+  const callerUid = caller?.uid;
   if (!callerUid) return res.status(401).json({ error: 'Authentication required' });
 
   const { type, message, metadata, promoCode } = req.body || {};
@@ -319,7 +294,7 @@ async function handleNotifyRegistration(req, res) {
 async function handleApproveAdvisor(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { uid, registration_type } = req.body || {};
@@ -370,7 +345,7 @@ async function handleApproveAdvisor(req, res) {
 async function handleRejectAdvisor(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { uid, reason } = req.body || {};
@@ -415,7 +390,7 @@ async function handleRejectAdvisor(req, res) {
 async function handleGetNotifications(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '10', 10)));
@@ -438,7 +413,7 @@ async function handleGetNotifications(req, res) {
 async function handleMarkNotificationRead(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const { id, all } = req.body || {};
@@ -471,7 +446,7 @@ async function handleMarkNotificationRead(req, res) {
 async function handleAdminRegisterAdvisor(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const callerId = await requireAdmin(req.headers.authorization);
+  const callerId = await verifyAdminToken(req.headers.authorization);
   if (!callerId) return res.status(403).json({ error: 'Admin access required' });
 
   const {

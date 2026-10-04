@@ -9,6 +9,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getIdToken } from 'firebase/auth'
+import { auth } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
 
 const pageStyle = `
@@ -113,11 +115,12 @@ export default function AcceptInvite() {
   async function acceptInvite() {
     setStatus('accepting')
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res  = await fetch('/api/advisor?action=accept-invite', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({ invite_token: inviteToken }),
       })

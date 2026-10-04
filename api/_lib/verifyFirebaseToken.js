@@ -1,14 +1,15 @@
 // api/_lib/verifyFirebaseToken.js
 // Underscore prefix — Vercel does NOT count this as a serverless function.
 //
-// Verifies a Firebase ID token (RS256) against Google's public JWKS,
-// then confirms profiles.role = 'admin' in Supabase.
-// Returns the Firebase UID on success, null on any failure.
+// Two exports:
+//   verifyFirebaseUser(authHeader)  — RS256 verify only; returns {uid, email} or null
+//   verifyAdminToken(authHeader)    — RS256 verify + profiles.role='admin' check; returns uid or null
+//
 // Never throws — all errors are logged and null is returned.
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-const PROJECT_ID  = 'fundlens-prod';
+const PROJECT_ID   = 'fundlens-prod';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -17,27 +18,34 @@ const JWKS = createRemoteJWKSet(
   { cacheMaxAge: 600_000 }, // cache JWKS for 10 minutes
 );
 
-export async function verifyAdminToken(authHeader) {
+// Verify RS256 signature, issuer, audience and expiry.
+// Returns {uid, email} on success; null on any failure.
+// No role check — callers supply their own.
+export async function verifyFirebaseUser(authHeader) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
-
-  let payload;
   try {
-    ({ payload } = await jwtVerify(token, JWKS, {
+    const { payload } = await jwtVerify(token, JWKS, {
       issuer:     `https://securetoken.google.com/${PROJECT_ID}`,
       audience:   PROJECT_ID,
       algorithms: ['RS256'],
-    }));
+    });
+    if (!payload?.sub) return null;
+    return { uid: payload.sub, email: payload.email ?? null };
   } catch (err) {
-    console.error('[verifyAdminToken] JWT verification failed:', err.code ?? err.message);
+    console.error('[verifyFirebaseUser] JWT verification failed:', err.code ?? err.message);
     return null;
   }
+}
 
-  if (!payload?.sub) return null;
-
+// Verify RS256 JWT + confirm profiles.role = 'admin' in Supabase.
+// Returns the Firebase UID on success; null on any failure.
+export async function verifyAdminToken(authHeader) {
+  const user = await verifyFirebaseUser(authHeader);
+  if (!user) return null;
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(payload.sub)}&select=role`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.uid)}&select=role`,
       {
         headers: {
           apikey:         SERVICE_KEY,
@@ -53,7 +61,7 @@ export async function verifyAdminToken(authHeader) {
     }
     const rows = await res.json();
     if (rows?.[0]?.role !== 'admin') return null;
-    return payload.sub;
+    return user.uid;
   } catch (err) {
     console.error('[verifyAdminToken] Supabase lookup error:', err.message);
     return null;

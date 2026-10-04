@@ -3,6 +3,8 @@
 // admin-direct registration form (collapsed by default).
 
 import { useState, useEffect, useCallback } from 'react'
+import { getIdToken } from 'firebase/auth'
+import { auth } from '../../firebase'
 import { createSupabaseClient } from '../../lib/supabaseClient'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -154,11 +156,12 @@ export default function AdvisorApplications() {
     if (!token) return
     setActionStatus(p => ({ ...p, [uid]: 'approving' }))
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res = await fetch('/api/admin?action=approve-advisor', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({ uid, registration_type: regType }),
       })
@@ -184,11 +187,12 @@ export default function AdvisorApplications() {
     const reason = rejectForms[uid] || ''
     setActionStatus(p => ({ ...p, [uid]: 'rejecting' }))
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res = await fetch('/api/admin?action=reject-advisor', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({ uid, reason }),
       })
@@ -214,11 +218,12 @@ export default function AdvisorApplications() {
     }
     setDirectStatus('saving')
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res = await fetch('/api/admin?action=admin-register-advisor', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify(directForm),
       })

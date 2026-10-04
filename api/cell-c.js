@@ -13,6 +13,8 @@
 // Actions (GET):
 //   reconciler-status   — counts of pending proposals + total mapped
 
+import { verifyAdminToken } from './_lib/verifyFirebaseToken.js';
+
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -175,6 +177,9 @@ async function handleStatus(req, res) {
 async function handleRunReconciler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
+
   const startMs = Date.now();
 
   try {
@@ -302,6 +307,9 @@ async function handleRunReconciler(req, res) {
 
 async function handleDryRunReconciler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
 
   const startMs = Date.now();
 

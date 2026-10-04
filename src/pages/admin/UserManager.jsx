@@ -4,6 +4,8 @@
 // Role changes call /api/admin?action=set-role.
 
 import { useState, useEffect, useCallback } from 'react';
+import { getIdToken } from 'firebase/auth';
+import { auth } from '../../firebase';
 import { useAuth } from '../../hooks/useAuth';
 
 const ROLES = ['individual', 'advisor', 'admin'];
@@ -54,8 +56,9 @@ export default function UserManager() {
     setLoading(true);
     setError('');
     try {
+      const idToken = await getIdToken(auth.currentUser);
       const res = await fetch(`/api/admin?action=get-users&page=${pageNum}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -82,10 +85,11 @@ export default function UserManager() {
     if (!token) return;
     setSaving(userId);
     try {
+      const idToken = await getIdToken(auth.currentUser);
       const res = await fetch('/api/admin?action=set-role', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ targetUserId: userId, newRole }),

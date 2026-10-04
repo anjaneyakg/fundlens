@@ -4,10 +4,12 @@
 // Proxies holdings_latest.csv from the private FundInsight GitHub repo.
 // Token is kept server-side — never exposed to the browser.
 //
-// Used by: CoverageDashboard.jsx → fetch('/api/holdings-csv')
+// Used by: CoverageDashboard.jsx, SchemeMapping.jsx
 //
 // Environment variable required (already in Vercel):
 //   GITHUB_PAT — personal access token with repo scope (server-side only)
+
+import { verifyFirebaseUser } from './_lib/verifyFirebaseToken.js';
 
 export default async function handler(req, res) {
   // CORS — restrict to FundLens origin only
@@ -20,6 +22,11 @@ export default async function handler(req, res) {
 
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
+  const user = await verifyFirebaseUser(req.headers.authorization);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: "Authentication required" });
   }
 
   const token = process.env.GITHUB_PAT;

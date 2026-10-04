@@ -5,6 +5,8 @@
 // Route: /admin/scheme-mapping
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getIdToken } from 'firebase/auth'
+import { auth } from '../firebase'
 import { parseCsvLine } from '../utils/csvParser.js'
 
 const styles = `
@@ -589,7 +591,13 @@ export default function SchemeMapping() {
     async function load() {
       setLoading(true)
       try {
-        const csvRes = await fetch('/api/holdings-csv')
+        const smIdToken = auth.currentUser ? await getIdToken(auth.currentUser) : null
+        if (!smIdToken) throw new Error('not signed in')
+        const csvRes = await fetch('/api/holdings-csv', { headers: { Authorization: `Bearer ${smIdToken}` } })
+        if (!csvRes.ok) {
+          const d = await csvRes.json().catch(() => ({}))
+          throw new Error(d.error || `Holdings CSV error ${csvRes.status}`)
+        }
         const csv    = await csvRes.text()
         const rows   = csv.trim().split('\n')
         const header = parseCsvLine(rows[0]).map(h => h.trim())
@@ -657,9 +665,11 @@ export default function SchemeMapping() {
   const handleMethodChange = async (amcId, newMethod) => {
     setRulesSavingId(amcId)
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null
+      if (!idToken) { console.error('[SchemeMapping] No logged-in user for handleMethodChange'); showToast('Not signed in', 'error'); setRulesSavingId(null); return; }
       const res = await fetch('/api/amfi?action=amc-scheme-id-methods', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body:    JSON.stringify({ amc_id: amcId, method: newMethod }),
       })
       if (!res.ok) throw new Error('Save failed')
@@ -729,9 +739,11 @@ export default function SchemeMapping() {
       return next
     })
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null
+      if (!idToken) { showToast('Not signed in', 'error'); return; }
       const res = await fetch('/api/amfi?action=scheme-code-map-accept', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body:    JSON.stringify({ id: rowId }),
       })
       if (!res.ok) throw new Error('Accept failed')
@@ -760,9 +772,11 @@ export default function SchemeMapping() {
       return next
     })
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null
+      if (!idToken) { showToast('Not signed in', 'error'); return; }
       const res = await fetch('/api/amfi?action=scheme-code-map-reject', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body:    JSON.stringify({ id: rowId }),
       })
       if (!res.ok) throw new Error('Reject failed')
@@ -781,9 +795,11 @@ export default function SchemeMapping() {
   const handleSave = async () => {
     setSaving(true)
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null
+      if (!idToken) { showToast('Not signed in', 'error'); setSaving(false); return; }
       const res = await fetch('/api/amfi?action=scheme-code-map', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body:    JSON.stringify({ mapping })
       })
       const data = await res.json()
@@ -804,9 +820,9 @@ export default function SchemeMapping() {
       if (urlOutlierId && urlCode && selectedAmc === urlAmc && mapping[selectedAmc]?.[urlCode]) {
         fetch('/api/amfi?action=parser-outliers-resolve', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
           body: JSON.stringify({ id: parseInt(urlOutlierId, 10), status: 'mapped' }),
-        }).catch(() => {})
+        }).catch(err => console.error('[SchemeMapping] parser-outliers-resolve failed:', err.message))
       }
     } catch (err) {
       console.error('Save error:', err)

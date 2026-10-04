@@ -246,9 +246,11 @@ export default function AmfiMarketCapUpload() {
 
     try {
       // Step 1 — send parsed rows to API (no base64, no xlsx)
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+      if (!idToken) throw new Error('Not signed in — please reload and try again.');
       const res = await fetch('/api/amfi?action=marketcap', {
         method:  'POST',
-        headers: { 'Content-Type':'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({
           rows:           parsedRows,
           effective_from: effectiveFrom,

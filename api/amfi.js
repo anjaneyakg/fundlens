@@ -5,6 +5,8 @@
 //   ?action=schemes-list   — scheme names grouped by AMC (was api/amfi-schemes-list.js)
 //   ?action=scheme-code-map — scheme code mapping r/w (was api/scheme-code-map.js)
 
+import { verifyAdminToken } from './_lib/verifyFirebaseToken.js';
+
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CORS_ORIGIN          = 'https://fundlens-six.vercel.app';
@@ -131,6 +133,9 @@ async function handleMarketcap(req, res) {
   }
 
   if (req.method === 'POST') {
+    const callerId = await verifyAdminToken(req.headers.authorization);
+    if (!callerId) return res.status(403).json({ error: 'Admin access required' });
+
     try {
       const { rows, effective_from, effective_to } = req.body;
 
@@ -670,6 +675,9 @@ async function handleSchemeCodeMap(req, res) {
   // Resolves base names to amfi_codes, upserts with mapped_by='manual'.
   // Deletes cleared manual entries (codes absent from this save for a given AMC).
   if (req.method === 'POST') {
+    const callerId = await verifyAdminToken(req.headers.authorization);
+    if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
+
     try {
       const { mapping } = req.body;
       if (!mapping || typeof mapping !== 'object') {
@@ -780,6 +788,9 @@ async function handleAmcSchemeIdMethods(req, res) {
   }
 
   if (req.method === 'POST') {
+    const callerId = await verifyAdminToken(req.headers.authorization);
+    if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
+
     try {
       const { amc_id, method } = req.body;
       if (!amc_id || !method) {
@@ -842,6 +853,9 @@ async function handleParserOutliersResolve(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
+
   try {
     const { id, status, resolved_by } = req.body;
     const validStatuses = ['ignored', 'index_sheet', 'mapped'];
@@ -867,6 +881,8 @@ async function handleParserOutliersResolve(req, res) {
 async function handleSchemeCodeMapAccept(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ ok: false, error: 'id required' });
@@ -885,6 +901,8 @@ async function handleSchemeCodeMapAccept(req, res) {
 async function handleSchemeCodeMapReject(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  const callerId = await verifyAdminToken(req.headers.authorization);
+  if (!callerId) return res.status(403).json({ ok: false, error: 'Admin access required' });
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ ok: false, error: 'id required' });

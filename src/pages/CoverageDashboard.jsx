@@ -8,6 +8,8 @@
 // No CORS issues — AMFI is fetched server-side via the API route.
 
 import { useState, useEffect, useMemo } from "react";
+import { getIdToken } from "firebase/auth";
+import { auth } from "../firebase";
 import { parseCsvLine } from "../utils/csvParser.js";
 
 const HOLDINGS_URL = "/api/holdings-csv";
@@ -78,14 +80,35 @@ export default function CoverageDashboard() {
   useEffect(() => {
     setLoading(true);
     setError("");
-    Promise.all([
-      fetch("/api/amfi?action=schemes")
-        .then(r => r.json())
-        .then(d => { if (!d.ok) throw new Error(d.error || "AMFI fetch failed"); return d.amcs; }),
-      fetch(HOLDINGS_URL).then(r => r.text()).then(parseCsv),
-    ])
-      .then(([amfi, rows]) => { setAmfiData(amfi); setHoldings(rows); setLoading(false); })
-      .catch(err => { setError("Failed to load: " + err.message); setLoading(false); });
+    async function load() {
+      try {
+        const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+        if (!idToken) {
+          console.error('[CoverageDashboard] No logged-in user for holdings-csv');
+          setError("Failed to load: not signed in");
+          setLoading(false);
+          return;
+        }
+        const [amfiRes, csvRes] = await Promise.all([
+          fetch("/api/amfi?action=schemes"),
+          fetch(HOLDINGS_URL, { headers: { Authorization: `Bearer ${idToken}` } }),
+        ]);
+        const amfiData = await amfiRes.json();
+        if (!amfiData.ok) throw new Error(amfiData.error || "AMFI fetch failed");
+        if (!csvRes.ok) {
+          const d = await csvRes.json().catch(() => ({}));
+          throw new Error(d.error || `Holdings CSV error ${csvRes.status}`);
+        }
+        const csvText = await csvRes.text();
+        setAmfiData(amfiData.amcs);
+        setHoldings(parseCsv(csvText));
+        setLoading(false);
+      } catch (err) {
+        setError("Failed to load: " + err.message);
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   // Load all pending outliers once on mount (not month-filtered — run_date ≠ portfolio month)
@@ -101,9 +124,11 @@ export default function CoverageDashboard() {
   async function resolveOutlier(id, status) {
     setResolvingId(id);
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+      if (!idToken) { console.error('[CoverageDashboard] No logged-in user for resolveOutlier'); setResolvingId(null); return; }
       const r = await fetch("/api/amfi?action=parser-outliers-resolve", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ id, status }),
       });
       if (!r.ok) throw new Error("Resolve failed");
@@ -129,9 +154,11 @@ export default function CoverageDashboard() {
           codes.push({ amc_name: h.amc_name, scheme_code_amc: h.scheme_code_amc });
         }
       }
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+      if (!idToken) { setReconcilerResult({ ok: false, error: 'Not signed in' }); setReconcilerRunning(false); return; }
       const r = await fetch("/api/cell-c?action=run-reconciler", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ codes }),
       });
       const d = await r.json();
@@ -156,9 +183,11 @@ export default function CoverageDashboard() {
           codes.push({ amc_name: h.amc_name, scheme_code_amc: h.scheme_code_amc });
         }
       }
+      const idToken2 = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+      if (!idToken2) { setDiagResult({ ok: false, error: 'Not signed in' }); setDiagRunning(false); return; }
       const r = await fetch("/api/cell-c?action=dry-run-reconciler", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken2}` },
         body: JSON.stringify({ codes }),
       });
       const d = await r.json();

@@ -4,6 +4,8 @@
 // Reads from feature_flags. Writes via serverless /api/admin?action=set-flag.
 
 import { useState, useEffect } from 'react';
+import { getIdToken } from 'firebase/auth';
+import { auth } from '../../firebase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -146,9 +148,17 @@ export default function ToolAccessMatrix() {
     setFlags(prev => ({ ...prev, [slot]: { ...current, enabled: newVal } }));
 
     try {
+      const idToken = auth.currentUser ? await getIdToken(auth.currentUser) : null;
+      if (!idToken) {
+        console.error('[ToolAccessMatrix] No logged-in user when toggling flag');
+        setFlags(prev => ({ ...prev, [slot]: current }));
+        showToast('Error — not signed in');
+        setSaving(null);
+        return;
+      }
       const res = await fetch('/api/admin?action=set-flag', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ flagId: current.id, enabled: newVal }),
       });
       if (!res.ok) throw new Error('Failed');

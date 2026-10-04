@@ -6,6 +6,7 @@
 //   ?action=add-client-direct   — add placeholder client without invite (advisor only)
 
 import { randomUUID } from 'crypto';
+import { verifyFirebaseUser } from './_lib/verifyFirebaseToken.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -37,15 +38,6 @@ export default async function handler(req, res) {
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function decodeJwtPayload(token) {
-  try {
-    const part = token.split('.')[1];
-    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
-  } catch {
-    return null;
-  }
-}
-
 // Service-role Supabase fetch — bypasses RLS.
 async function sb(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -63,29 +55,28 @@ async function sb(path, opts = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-// Verify any authenticated Firebase user.
-function requireAuth(authHeader) {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const payload = decodeJwtPayload(authHeader.slice(7));
-  return payload?.sub || null;
-}
-
-// Verify caller is advisor or admin.
+// Verify caller is advisor or admin — RS256-verified token + profiles role check.
 async function requireAdvisor(authHeader) {
-  const uid = requireAuth(authHeader);
-  if (!uid) return null;
+  const user = await verifyFirebaseUser(authHeader);
+  if (!user) return null;
   try {
     const rows = await sb(
-      `profiles?id=eq.${encodeURIComponent(uid)}&select=role`,
+      `profiles?id=eq.${encodeURIComponent(user.uid)}&select=role`,
       { headers: { Prefer: '' } },
     );
     const role = rows?.[0]?.role;
     if (role !== 'advisor' && role !== 'admin') return null;
-    return uid;
+    return user.uid;
   } catch (err) {
     console.error('[advisor] requireAdvisor error:', err);
     return null;
   }
+}
+
+// Verify any authenticated Firebase user (RS256-verified).
+async function requireAuth(authHeader) {
+  const user = await verifyFirebaseUser(authHeader);
+  return user?.uid || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,7 +169,7 @@ async function handleGetMyClients(req, res) {
 async function handleAcceptInvite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const clientId = requireAuth(req.headers.authorization);
+  const clientId = await requireAuth(req.headers.authorization);
   if (!clientId) return res.status(401).json({ error: 'Authentication required' });
 
   const { invite_token } = req.body || {};

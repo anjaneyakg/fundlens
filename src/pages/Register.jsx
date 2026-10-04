@@ -7,6 +7,8 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getIdToken } from 'firebase/auth'
+import { auth } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
 import { supabase, createSupabaseClient } from '../lib/supabaseClient'
 import useWindowWidth from '../hooks/useWindowWidth'
@@ -452,11 +454,12 @@ export default function Register() {
         ? form.applicantName.trim()
         : form.displayName.trim() || user.email
       try {
+        const notifToken = await getIdToken(auth.currentUser)
         await fetch('/api/admin?action=notify-registration', {
           method: 'POST',
           headers: {
             'Content-Type':  'application/json',
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${notifToken}`,
           },
           body: JSON.stringify({
             type:     regType === 'advisor' ? 'new_advisor_application' : 'new_investor_registration',
@@ -482,11 +485,12 @@ export default function Register() {
       // 6. Accept invite if coming from an invite link (PH3-S5)
       if (inviteToken) {
         try {
+          const inviteIdToken = await getIdToken(auth.currentUser)
           const inviteRes = await fetch('/api/advisor?action=accept-invite', {
             method: 'POST',
             headers: {
               'Content-Type':  'application/json',
-              'Authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${inviteIdToken}`,
             },
             body: JSON.stringify({ invite_token: inviteToken }),
           })

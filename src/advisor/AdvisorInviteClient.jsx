@@ -4,6 +4,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getIdToken } from 'firebase/auth'
+import { auth } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import useWindowWidth from '../hooks/useWindowWidth'
@@ -247,11 +249,12 @@ export default function AdvisorInviteClient() {
     setCurrentInvite(null)
 
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res = await fetch('/api/advisor?action=create-invite', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           client_label:  clientLabel.trim(),
@@ -335,11 +338,12 @@ export default function AdvisorInviteClient() {
     setPlaceholderSaving(true)
 
     try {
+      const idToken = await getIdToken(auth.currentUser)
       const res = await fetch('/api/advisor?action=add-client-direct', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({ client_label: placeholderLabel.trim() }),
       })
