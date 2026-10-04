@@ -1,16 +1,16 @@
 """
-backfill_nav_history.py  —  v1.5.0
+backfill_nav_history.py  —  v1.5.1
 
 Fetches NAV history from AMFI and inserts into Supabase nav_history table.
 
-AMFI response columns (semicolon-delimited):
+AMFI response columns (semicolon-delimited) — format as of Aug 2026:
   0: Scheme Code
-  1: ISIN Div Payout
-  2: ISIN Div Reinvestment
-  3: Scheme Name
-  4: Net Asset Value
-  5: Repurchase Price
-  6: Sale Price
+  1: NAV Name
+  2: Plan
+  3: Option
+  4: ISIN Div Payout / ISIN Growth
+  5: ISIN Div Reinvestment
+  6: Net Asset Value
   7: Date
 
 Usage:
@@ -23,6 +23,8 @@ Usage:
     python backfill_nav_history.py --auto-resume --dry-run
 
 Changelog:
+  v1.5.1  Fix _parse_amfi_response: AMFI changed column layout (Aug 2026).
+          NAV was at col 4; now at col 6. Old code parsed ISIN as float → 0 rows.
   v1.5.0  Custom --from/--to range: no T-1 cap applied (exact user dates used).
           Warning emitted when --to is today or in the future (AMFI may not have
           published NAV yet), but fetch is still attempted — do NOT skip.
@@ -252,14 +254,14 @@ def _parse_amfi_response(text: str) -> list[dict]:
     """
     Parse AMFI semicolon-delimited NAV history.
 
-    Column layout (8 fields):
+    Column layout (8 fields) — format as of Aug 2026:
         0  Scheme Code
-        1  ISIN Div Payout
-        2  ISIN Div Reinvestment
-        3  Scheme Name
-        4  Net Asset Value
-        5  Repurchase Price
-        6  Sale Price
+        1  NAV Name
+        2  Plan
+        3  Option
+        4  ISIN Div Payout / ISIN Growth
+        5  ISIN Div Reinvestment
+        6  Net Asset Value
         7  Date                  ← DD-Mon-YYYY
     """
     records: list[dict] = []
@@ -272,7 +274,7 @@ def _parse_amfi_response(text: str) -> list[dict]:
             continue
         try:
             amfi_code = int(parts[0].strip())
-            nav_val   = float(parts[4].strip())            # skip N.A. / non-numeric
+            nav_val   = float(parts[6].strip())            # col 6 = NAV; skip N.A. / non-numeric
             nav_date  = (
                 datetime.strptime(parts[7].strip(), "%d-%b-%Y")
                 .date()
@@ -525,7 +527,7 @@ def main() -> None:
     else:
         start, end = resolve_date_range(args)
 
-    log.info("backfill_nav_history.py  v1.5.0  starting")
+    log.info("backfill_nav_history.py  v1.5.1  starting")
     log.info(
         "  Mode     : %s",
         "auto-resume" if args.auto_resume

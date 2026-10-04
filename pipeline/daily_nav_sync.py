@@ -1,8 +1,14 @@
 """
-daily_nav_sync.py  —  v2.0
+daily_nav_sync.py  —  v2.1
 
 Fetches today's NAV from AMFI NAVAll.txt and writes to Supabase nav_history.
 Updates schemes.last_nav_date and is_active on every run.
+
+New in v2.1:
+  - parse_nav_all reads column positions BY NAME from the CSV header line, not
+    by fixed index. Survives future AMFI column-layout changes automatically.
+  - Exits non-zero if the header is missing, required columns are absent, zero
+    rows are parsed, or more than 50% of data lines fail.
 
 New in v2.0:
   - Tracks the 4-level AMFI header hierarchy (Nature / Type / Category / AMC).
@@ -15,15 +21,11 @@ AMFI NAVAll.txt structure:
 
   Open Ended Schemes(Debt Scheme - Banking and PSU Fund)   ← Nature/Type/Category header
   Aditya Birla Sun Life Mutual Fund                         ← AMC header
-  108272;INF209K01LX6;...;Aditya Birla...;148.26;18-Jun-2026  ← data row
+  Scheme Code;...;Scheme Name;Plan;Option;Net Asset Value;Date  ← CSV header (read dynamically)
+  108272;INF209K01LX6;...;Aditya Birla...;Direct Plan;Growth;148.26;01-Oct-2026  ← data row
 
-NAVAll.txt column layout (semicolon-separated, 6 fields):
-    0  Scheme Code
-    1  ISIN Div Payout / ISIN Growth
-    2  ISIN Div Reinvestment
-    3  Scheme Name
-    4  Net Asset Value
-    5  Date                     ← DD-MMM-YYYY  e.g. 18-Jun-2026
+Column layout is read from the CSV header at parse time. Required column names:
+    "Scheme Code", "Scheme Name", "Net Asset Value", "Date"
 
 Usage:
     python pipeline/daily_nav_sync.py
@@ -459,19 +461,24 @@ def parse_nav_all(text: str) -> tuple[list[dict], int, int]:
     """
     Parse AMFI NAVAll.txt, tracking the 4-level header hierarchy.
 
-    Header lines (fewer than 6 semicolon-separated fields):
-      - Lines matching NATURE_HEADER_RE → update current_nature / current_type /
-        current_category. Inner content split on first " - " to separate Type
-        from Category; if no " - " present, Type and Category are set to the
-        same value.
-      - All other non-empty lines → treated as AMC name headers → update
-        current_amc.
+    Column positions are derived at runtime from the CSV header line
+    ("Scheme Code;...") rather than hardcoded. Required columns:
+        "Scheme Code", "Scheme Name", "Net Asset Value", "Date"
 
-    Data rows (>= 6 semicolon-separated fields, first field numeric):
+    Header lines (fewer fields than the CSV header):
+      - Lines matching NATURE_HEADER_RE → update current_nature / current_type /
+        current_category.
+      - All other short lines → treated as AMC name headers.
+
+    Data rows (fields == CSV header width, first field numeric):
       - Parsed for amfi_code, scheme_name_raw, nav, nav_date.
       - scheme_name_raw is cleaned by clean_scheme_name() to strip any
         "(formerly known as ...)" tag.
-      - The current nature / type / category / amc context is attached.
+
+    Exits non-zero if:
+      - The CSV header line is missing or required columns are absent.
+      - Zero rows are parsed.
+      - More than 50% of data lines fail to parse.
 
     Returns:
         rows          — list of dicts with keys:
@@ -481,9 +488,50 @@ def parse_nav_all(text: str) -> tuple[list[dict], int, int]:
         skipped_na    — rows skipped for N.A. nav or empty date
         skipped_parse — rows skipped for parse errors
     """
+    REQUIRED_COLS = {"Scheme Code", "Scheme Name", "Net Asset Value", "Date"}
+
+    # ---- Step 1: locate the CSV header line and build column-name → index map ----
+    col_idx: dict[str, int] = {}
+    n_data_cols = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Scheme Code;"):
+            parts_h = stripped.split(";")
+            col_idx = {name.strip(): i for i, name in enumerate(parts_h)}
+            n_data_cols = len(parts_h)
+            break
+
+    missing = REQUIRED_COLS - col_idx.keys()
+    if missing:
+        if col_idx:
+            log.error(
+                "NAVAll.txt header found but missing required columns: %s  "
+                "Columns found: %s",
+                sorted(missing), sorted(col_idx.keys()),
+            )
+        else:
+            log.error(
+                "NAVAll.txt column header line not found. "
+                "Expected a line starting with 'Scheme Code;'. "
+                "AMFI may have changed the file format."
+            )
+        sys.exit(1)
+
+    col_scheme_code = col_idx["Scheme Code"]
+    col_scheme_name = col_idx["Scheme Name"]
+    col_nav         = col_idx["Net Asset Value"]
+    col_date        = col_idx["Date"]
+    log.info(
+        "NAVAll.txt column map: Scheme Code=%d  Scheme Name=%d  "
+        "Net Asset Value=%d  Date=%d  (total cols=%d)",
+        col_scheme_code, col_scheme_name, col_nav, col_date, n_data_cols,
+    )
+
+    # ---- Step 2: parse data rows ----
     rows: list[dict] = []
     skipped_na    = 0
     skipped_parse = 0
+    data_lines    = 0
 
     current_nature   = ""
     current_type     = ""
@@ -494,11 +542,13 @@ def parse_nav_all(text: str) -> tuple[list[dict], int, int]:
         stripped = line.strip()
         if not stripped:
             continue
+        if stripped.startswith("Scheme Code;"):
+            continue  # skip the CSV header itself
 
         parts = stripped.split(";")
 
-        if len(parts) < 6:
-            # Header line — update hierarchy state
+        if len(parts) < n_data_cols:
+            # Hierarchy header line — update state
             m = NATURE_HEADER_RE.match(stripped)
             if m:
                 current_nature = m.group(1).strip()
@@ -510,23 +560,21 @@ def parse_nav_all(text: str) -> tuple[list[dict], int, int]:
                 else:
                     current_type = current_category = inner
             else:
-                # AMC name header (includes the CSV column-header line which
-                # has semicolons and won't reach here, and edge cases like
-                # "IL&FS Mutual Fund (IDF)" which don't match NATURE_HEADER_RE)
+                # AMC name header or other short line
                 current_amc = stripped
             continue
 
-        # Data row
-        nav_str  = parts[4].strip()
-        date_str = parts[5].strip()
+        data_lines += 1
+        nav_str  = parts[col_nav].strip()
+        date_str = parts[col_date].strip()
 
         if not nav_str or nav_str.upper() == "N.A." or not date_str:
             skipped_na += 1
             continue
 
         try:
-            amfi_code       = int(parts[0].strip())
-            scheme_name_raw = parts[3].strip()
+            amfi_code       = int(parts[col_scheme_code].strip())
+            scheme_name_raw = parts[col_scheme_name].strip()
             nav_val         = float(nav_str)
             nav_date        = datetime.strptime(date_str, "%d-%b-%Y").date().isoformat()
         except (ValueError, IndexError):
@@ -547,6 +595,29 @@ def parse_nav_all(text: str) -> tuple[list[dict], int, int]:
             "category":          current_category,
             "amc_name":          current_amc,
         })
+
+    # ---- Step 3: guard — never finish silently with nothing ----
+    log.info(
+        "Parse summary: data_lines=%d  parsed=%d  skipped_na=%d  skipped_parse=%d",
+        data_lines, len(rows), skipped_na, skipped_parse,
+    )
+
+    if len(rows) == 0:
+        log.error(
+            "Parsed 0 rows from %d data lines. "
+            "Column map: %s",
+            data_lines, col_idx,
+        )
+        sys.exit(1)
+
+    failed = skipped_na + skipped_parse
+    if data_lines > 0 and failed / data_lines > 0.5:
+        log.error(
+            "More than 50%% of data lines failed: %d/%d failed "
+            "(skipped_na=%d  skipped_parse=%d). Aborting.",
+            failed, data_lines, skipped_na, skipped_parse,
+        )
+        sys.exit(1)
 
     return rows, skipped_na, skipped_parse
 
@@ -583,7 +654,7 @@ def run_sync(dry_run: bool, target_date: str | None) -> None:
     t_start   = time.monotonic()
     today_str = target_date or date.today().isoformat()
 
-    log.info("daily_nav_sync.py  v2.0  starting")
+    log.info("daily_nav_sync.py  v2.1  starting")
     log.info("  Target date : %s", today_str)
     log.info("  Dry run     : %s", dry_run)
 

@@ -1665,6 +1665,17 @@ FROM nav_history;
 
 ---
 
+## 2026-10-04 — NAV gap backfilled; AMFI column layout fix
+
+- **NAV gap (2026-08-18 → 2026-10-03)**: GitHub Actions auto-disabled fundlens workflows after 60 days of inactivity (last push 2026-06-21). NAV backfill restored 281,905 rows via `pipeline/backfill_nav_history.py --from 2026-08-18 --to 2026-10-03`. 0 duplicates; MAX(nav_date) = 2026-10-03.
+- **AMFI column layout change (Aug 2026)**: Both `NAVAll.txt` and `DownloadNAVHistoryReport_Po.aspx` gained two new columns (Plan, Option) at positions 4 & 5. NAV moved col 4 → col 6, Date moved col 5 → col 7. This silently returned 0 rows in both scripts.
+- **`backfill_nav_history.py` v1.5.1**: `_parse_amfi_response` fixed — reads NAV from `parts[6]` (was `parts[4]`). Date still at `parts[7]`.
+- **`daily_nav_sync.py` v2.1**: `parse_nav_all` now reads column positions **by name** from the CSV header line at runtime (not hardcoded). Required columns: "Scheme Code", "Scheme Name", "Net Asset Value", "Date". Exits non-zero if header missing, required columns absent, 0 rows parsed, or >50% data lines fail. Column map logged on every run.
+- **Flagged market holidays verified**: 2026-08-26 (partial, Janmashtami), 2026-09-14 (Anant Chaturdashi), 2026-10-02 (Gandhi Jayanti).
+- **Next**: daily_nav_sync.py will auto-run next weekday (Mon–Fri 11:30 PM IST). fundlens daily_nav_sync.yml also uses `secrets.SUPABASE_SERVICE_ROLE_KEY` — verify this secret name exists in fundlens repo secrets (same mismatch fixed earlier in FundInsight).
+
+---
+
 ## Key Coordinates
 
 | Item | Value |
